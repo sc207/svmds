@@ -118,6 +118,7 @@ router.post('/:id/roles', adminTier, async (req, res, next) => {
 
     const u = await getUser(parseInt(req.params.id, 10));
     if (!u) return res.status(404).json({ error: 'User not found' });
+    assertCanTouchUser(req.user, u);          // an admin cannot alter an admin/superadmin account
     await assertSingleSuperadmin(role, u.id);
 
     if (!u.roles.includes(role)) {
@@ -138,6 +139,7 @@ router.delete('/:id/roles/:role', adminTier, async (req, res, next) => {
 
     const u = await getUser(parseInt(req.params.id, 10));
     if (!u) return res.status(404).json({ error: 'User not found' });
+    assertCanTouchUser(req.user, u);          // an admin cannot alter an admin/superadmin account
     if (role === 'superadmin') assertRootOwnerSafe(u, 'revoke-superadmin');
 
     await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [u.id, role]);

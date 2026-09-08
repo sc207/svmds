@@ -72,7 +72,8 @@
           var editBtn = '<button class="btn btn-outline mg-btn-xs" onclick="accEditProfile(\'' + u.id + '\')">Edit</button> ';
           var actions;
           if (u.rootOwner) {
-            actions = editBtn +
+            // only the superadmin may touch the superadmin account; an admin cannot
+            actions = (superOnly ? editBtn : '') +
                       '<span class="badge badge-maroon">🔒 ' + esc(T('acc_owner', 'Primary owner')) + '</span>' +
                       ' <span class="mg-muted-xs">' + esc(T('acc_owner_note', 'protected — cannot be disabled or removed')) + '</span>';
           } else if (lockRow) {
@@ -211,6 +212,8 @@
   window.accEditProfile = function (id) {
     var u = USERS.filter(function (x) { return String(x.id) === String(id); })[0];
     if (!u || typeof openSheet !== 'function') { toast('UI not ready'); return; }
+    var priv = (u.roles || []).some(function (r) { return PRIVILEGED[r]; });
+    if (priv && !iAmSuper()) { toast('Only a superadmin can edit an admin / superadmin account'); return; }
     openSheet({
       title: 'Edit profile — ' + esc(u.name || u.email),
       body: '<form id="accProfileForm">' +
