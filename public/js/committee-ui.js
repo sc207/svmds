@@ -62,7 +62,7 @@ function setCmtSession(role, leaderId, announce) {
   if (role === 'admin') {
     CMT.session = { role:'admin', userId:'DEV-001', userName:'Administrator' };
   } else {
-    const l = cmtLeadById(leaderId) || CMT.leaders[0];
+    const l = cmtLeadById(leaderId) || CMT.leaders[0] || { id: leaderId || '', name: 'Committee Leader' };
     CMT.session = { role:'leader', userId:l.id, userName:l.name };
     if (speak) cmtToast('Context: ' + l.name + ' (Committee Leader)');
   }
@@ -76,10 +76,12 @@ function setCmtSession(role, leaderId, announce) {
 function populateCmtRoleOptions() {
   const grp = document.getElementById('roleCmtGroup');
   if (!grp) return;
-  grp.innerHTML = CMT.leaders.map(l => {
-    const owns = CMT.committees.filter(c => c.leaderId === l.id);
-    if (!owns.length) return '';
-    return `<option value="cmt:${l.id}">${esc(l.name)} — ${esc(owns.map(c => c.name).join(', '))}</option>`;
+  const leaderIds = [...new Set(CMT.committees.map(c => c.leaderId).filter(Boolean))];
+  grp.innerHTML = leaderIds.map(id => {
+    const l = cmtLeadById(id);
+    const owns = CMT.committees.filter(c => c.leaderId === id);
+    if (!l || !owns.length) return '';
+    return `<option value="cmt:${id}">${esc(l.name)} — ${esc(owns.map(c => tData ? tData(c.name) : c.name).join(', '))}</option>`;
   }).join('');
 }
 
@@ -486,7 +488,9 @@ function paneCmtWhatsApp(c) {
 
 function paneCmtSettings(c) {
   const admin = isCmtAdmin();
-  const leadOpts = CMT.leaders.map(l => `<option value="${l.id}" ${l.id === c.leaderId ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
+  const leadOpts = (typeof personOptions === 'function')
+    ? personOptions(c.leaderId, '— ' + window.t('cmt_select_leader', 'Select leader') + ' —')
+    : CMT.leaders.map(l => `<option value="${l.id}" ${l.id === c.leaderId ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
   const colorOpts = CMT.palette.map(p => `<option value="${p.hex}" ${p.hex === c.color ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
   return `
   <div class="flex justify-between items-center mg-pane-head"><div><h2 class="mg-pane-title">${window.t('cmt_settings', 'Committee Settings')}</h2>

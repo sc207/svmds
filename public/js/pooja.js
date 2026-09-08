@@ -101,21 +101,24 @@ function peopleOf(p) {
 }
 function personName(x) { return x ? (x.firstName + ' ' + (x.lastName || '')).trim() : 'Unknown'; }
 
-/** Coordinator lookup — pool first, then fall back to Management leads. */
+/** Coordinator lookup — the shared people picker, then the local pool. */
 function coordinatorById(id) {
-  return POOJA.coordinators.find(c => c.id === id)
+  return (typeof personById === 'function' ? personById(id) : null)
+      || POOJA.coordinators.find(c => c.id === id)
       || (typeof leadById === 'function' ? leadById(id) : null)
       || null;
 }
 
-/** Everyone who may be granted access to a pooja. */
+/** Everyone who may be granted access to a pooja — real people from the
+    shared picker (devotees / committee / management members), plus any
+    locally-added pool entries. */
 function coordinatorPool() {
   const seen = {};
   const out = [];
-  POOJA.coordinators.forEach(c => { seen[c.id] = true; out.push(c); });
-  if (typeof MG !== 'undefined' && Array.isArray(MG.leads)) {
-    MG.leads.forEach(l => { if (!seen[l.id]) { seen[l.id] = true; out.push({ id:l.id, name:l.name, mobile:l.mobile, city:l.city }); } });
+  if (typeof templePeople === 'function') {
+    templePeople().forEach(p => { seen[p.id] = true; out.push(p); });
   }
+  (POOJA.coordinators || []).forEach(c => { if (!seen[c.id]) { seen[c.id] = true; out.push(c); } });
   return out;
 }
 

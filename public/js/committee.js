@@ -81,7 +81,7 @@ function cmtToast(m) { if (typeof showToast === 'function') showToast(m); }
 
 const cmtById       = id => CMT.committees.find(c => c.id === id);
 const cmtMemberById = id => CMT.members.find(m => m.id === id);
-const cmtLeadById   = id => CMT.leaders.find(l => l.id === id);
+const cmtLeadById   = id => (typeof personById === 'function' ? personById(id) : null) || CMT.leaders.find(l => l.id === id);
 const cmtCommById   = id => CMT.communication.find(x => x.committeeId === id);
 const meetingById   = id => CMT.meetings.find(x => x.id === id);
 

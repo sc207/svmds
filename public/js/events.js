@@ -26,12 +26,7 @@ const EV = {
     { name:'Deep Plum', hex:'#7A3B62' }, { name:'Indigo', hex:'#3B5C8A' }
   ],
 
-  incharges: [
-    { id:'DEV-001', name:'Rajesh Patel',    mobile:'9876500001' },
-    { id:'DEV-010', name:'Amit Shah',       mobile:'9876500002' },
-    { id:'DEV-011', name:'Kiran Patel',     mobile:'9876500003' },
-    { id:'DEV-021', name:'Manjula Ben',     mobile:'9876500022' }
-  ],
+  incharges: [],   // in-charge options now come from the shared people picker (js/people-picker.js)
 
   eventTypes: [],
 
@@ -47,7 +42,9 @@ function evToast(m) { if (typeof showToast === 'function') showToast(m); }
 
 const evTypeById  = id => EV.eventTypes.find(t => t.id === id);
 const eventById    = id => EV.events.find(e => e.id === id);
-const evInchargeById = id => EV.incharges.find(i => i.id === id) || (typeof cmtLeadById === 'function' ? cmtLeadById(id) : null);
+const evInchargeById = id => (typeof personById === 'function' ? personById(id) : null)
+  || EV.incharges.find(i => i.id === id)
+  || (typeof cmtLeadById === 'function' ? cmtLeadById(id) : null);
 
 function evDays(ev) {
   return (ev && ev.days ? ev.days.slice() : []).sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));

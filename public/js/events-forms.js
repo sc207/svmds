@@ -79,6 +79,7 @@ function evTypeOptions(sel) {
     EV.eventTypes.map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${esc((t.icon || '') + ' ' + t.name)}</option>`).join('');
 }
 function evInchargeOptions(sel) {
+  if (typeof personOptions === 'function') return personOptions(sel, '— ' + window.t('ev_select_incharge', 'Select in-charge') + ' —');
   return `<option value="">— ${window.t('ev_select_incharge', 'Select in-charge')} —</option>` +
     EV.incharges.map(i => `<option value="${i.id}" ${i.id === sel ? 'selected' : ''}>${esc(i.name)} · ${esc(i.mobile || '')}</option>`).join('');
 }

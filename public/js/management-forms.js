@@ -420,6 +420,7 @@ function openEditManagement(id) {
 }
 
 function leadOptionsHTML(selected) {
+  if (typeof personOptions === 'function') return personOptions(selected, '— ' + (window.t ? window.t('mg_select_lead', 'Select Management Lead') : 'Select Management Lead') + ' —');
   return `<option value="">— Select Management Lead —</option>` +
     MG.leads.map(l => {
       const owns = MG.managements.filter(m => m.leadId === l.id).length;

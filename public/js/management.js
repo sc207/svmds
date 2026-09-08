@@ -133,7 +133,7 @@ const jsq = s => esc(String(s == null ? '' : s)).replace(/\\/g,'\\\\').replace(/
 
 const mgmtById   = id => MG.managements.find(m => m.id === id);
 const memberById = id => MG.members.find(m => m.id === id);
-const leadById   = id => MG.leads.find(l => l.id === id);
+const leadById   = id => (typeof personById === 'function' ? personById(id) : null) || MG.leads.find(l => l.id === id);
 const commById   = id => MG.communication.find(c => c.managementId === id);
 const sessionById= id => MG.volunteering.find(v => v.id === id);
 

@@ -135,6 +135,7 @@
 
 /* ---- committee ---- */
 function cmtLeadOptions(sel) {
+  if (typeof personOptions === 'function') return personOptions(sel, '— ' + window.t('cmt_select_leader', 'Select leader') + ' —');
   return `<option value="">— ${window.t('cmt_select_leader', 'Select leader')} —</option>` +
     CMT.leaders.map(l => `<option value="${l.id}" ${l.id === sel ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
 }

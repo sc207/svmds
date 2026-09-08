@@ -97,7 +97,7 @@ function setMgSession(role, leadId, announce) {
     MG.session = { role:'admin', userId:'DEV-001', userName:'Administrator' };
     if (speak) mgToast('Context switched to: Super Admin (Full Platform)');
   } else {
-    const l = leadById(leadId) || MG.leads[0];
+    const l = leadById(leadId) || MG.leads[0] || { id: leadId || '', name: 'Management Lead' };
     MG.session = { role:'lead', userId:l.id, userName:l.name };
     if (speak) mgToast(`Context switched to: ${l.name} (Management Lead)`);
   }
@@ -120,10 +120,12 @@ function setMgSession(role, leadId, announce) {
 function populateLeadRoleOptions() {
   const grp = document.getElementById('roleLeadGroup');
   if (!grp) return;
-  grp.innerHTML = MG.leads.map(l => {
-    const owns = MG.managements.filter(m => m.leadId === l.id);
-    if (!owns.length) return '';
-    return `<option value="lead:${l.id}">${esc(l.name)} — ${esc(owns.map(m => m.name).join(', '))}</option>`;
+  const ids = [...new Set(MG.managements.map(m => m.leadId).filter(Boolean))];
+  grp.innerHTML = ids.map(id => {
+    const l = leadById(id);
+    const owns = MG.managements.filter(m => m.leadId === id);
+    if (!l || !owns.length) return '';
+    return `<option value="lead:${id}">${esc(l.name)} — ${esc(owns.map(m => m.name).join(', '))}</option>`;
   }).join('');
 }
 
@@ -1575,7 +1577,9 @@ function openWhatsAppLink(link) {
    ------------------------------------------------------------ */
 function paneSettings(m) {
   const team = membersOf(m.id).length;
-  const leadOpts = MG.leads.map(l => `<option value="${l.id}" ${l.id===m.leadId?'selected':''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
+  const leadOpts = (typeof personOptions === 'function')
+    ? personOptions(m.leadId, '— ' + (window.t ? window.t('mg_select_lead', 'Select Management Lead') : 'Select Management Lead') + ' —')
+    : MG.leads.map(l => `<option value="${l.id}" ${l.id===m.leadId?'selected':''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
   const colorOpts = MG.palette.map(p => `<option value="${p.hex}" ${p.hex===m.color?'selected':''}>${esc(p.name)}</option>`).join('');
   const lockLead = !isAdmin();
 
