@@ -91,6 +91,8 @@
         }).join('') +
         '</tbody></table></div></div></div>' +
 
+      (typeof window.accRoleReferenceCard === 'function' ? window.accRoleReferenceCard() : '') +
+
       '<div class="card mg-mt"><div class="card-header"><div class="card-title">Active sessions <span class="mg-muted-xs">(' + SESSIONS.length + ')</span></div></div>' +
         '<div class="card-body" style="padding:0"><div class="mg-table-scroll"><table class="custom-table acc-table acc-table-sm">' +
         '<thead><tr><th>Signed-in device</th><th style="text-align:right">Action</th></tr></thead><tbody>' +

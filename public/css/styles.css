@@ -3361,6 +3361,34 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 }
 .acc-table .mg-muted-xs { line-height: 1.45; }
 
+/* Roles & access reference — stacked rows (no table-layout headaches) */
+.acc-ref-list { display: flex; flex-direction: column; }
+.acc-ref-item {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 0.75rem 1.25rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--warm-border);
+}
+.acc-ref-item:first-child { border-top: none; }
+.acc-ref-role .badge { white-space: nowrap; }
+.acc-ref-lines { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.acc-ref-lines > div { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.acc-ref-k {
+  flex: 0 0 130px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--muted-brown);
+  padding-top: 1px;
+}
+.acc-ref-v { flex: 1 1 240px; min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .acc-ref-item { grid-template-columns: 1fr; gap: 0.5rem; }
+  .acc-ref-k { flex-basis: 100%; }
+}
+
 /* Reports — downloadable-register cards */
 .rep-mod-grid {
   display: grid; gap: 0.85rem;

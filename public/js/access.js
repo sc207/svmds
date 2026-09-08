@@ -15,6 +15,47 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
    ------------------------------------------------------------ */
 function accRoleList() { return (typeof accountRoles === 'function') ? accountRoles() : []; }
 
+/* Fixed role model — Role → pages it may open → dashboard it sees.
+   Rendered only inside Accounts & Access, which is already a superadmin/
+   admin-only page (accGuard → canOpenPage('admin')). Shared by the seed
+   renderer here and the API renderer in access-api.js. */
+var ACC_DASH_NOTE = {
+  superadmin:        'Full cockpit — KPIs, every module tile, “needs attention”, today across the temple, activity feed',
+  admin:             'Same full cockpit as superadmin (cannot grant/revoke admin·superadmin or impersonate)',
+  management_lead:   'Scoped mini-dashboard — only the team(s) assigned to this lead',
+  pooja_coordinator: 'Scoped mini-dashboard — only the pooja(s) assigned to this coordinator',
+  committee_leader:  'Scoped mini-dashboard — only the committee(s) this leader runs',
+  event_incharge:    'Full cockpit for now — a scoped “my events” view is not built yet',
+  accountant:        'Full cockpit for now — a scoped “my ledger” view is not built yet'
+};
+function accRoleReferenceCard() {
+  var roles = accRoleList();
+  if (!roles.length && typeof ROLE_META !== 'undefined') roles = Object.keys(ROLE_META);
+  var navCount = document.querySelectorAll('.sidebar-nav .nav-item[data-page]').length || 14;
+  var openLbl = esc(window.t('acc_ref_open', 'Pages it may open'));
+  var dashLbl = esc(window.t('acc_ref_dash', 'Dashboard it sees'));
+  var items = roles.map(function (r) {
+    var pages = (typeof rolePages === 'function' ? rolePages(r) : []) || [];
+    var pagesTxt = (pages[0] === '*')
+      ? esc(window.t('acc_everything', 'everything')) + ' (' + navCount + ' ' + esc(window.t('acc_ref_pages', 'pages')) + ')'
+      : esc(pages.join(', '));
+    var dash = esc(window.t('acc_ref_dash_' + r, ACC_DASH_NOTE[r] || '—'));
+    return '<div class="acc-ref-item">' +
+      '<div class="acc-ref-role"><span class="badge badge-maroon">' + roleIcon(r) + ' ' + esc(roleLabel(r)) + '</span></div>' +
+      '<div class="acc-ref-lines">' +
+        '<div><span class="acc-ref-k">' + openLbl + '</span><span class="acc-ref-v">' + pagesTxt + '</span></div>' +
+        '<div><span class="acc-ref-k">' + dashLbl + '</span><span class="acc-ref-v mg-muted-xs">' + dash + '</span></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  return '<div class="card mg-mt">' +
+    '<div class="card-header"><div class="card-title">' + esc(window.t('acc_ref_title', 'Roles & access reference')) + '</div></div>' +
+    '<div class="card-body"><p class="mg-page-sub" style="margin-top:0">' +
+      esc(window.t('acc_ref_sub', 'The fixed role model. Only superadmin and admin see this.')) + '</p>' +
+      '<div class="acc-ref-list">' + items + '</div></div></div>';
+}
+window.accRoleReferenceCard = accRoleReferenceCard;
+
 /** Build the flat rows the export service serialises. */
 function accAccountsExport() {
   const accts = (typeof ACCOUNTS !== 'undefined') ? ACCOUNTS : [];
@@ -94,6 +135,8 @@ function renderAccess() {
       }).join('')}
     </div></div>
   </div>
+
+  ${typeof accRoleReferenceCard === 'function' ? accRoleReferenceCard() : ''}
 
   <div class="card mg-mt">
     <div class="card-header flex justify-between items-center">
