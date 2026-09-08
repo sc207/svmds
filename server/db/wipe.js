@@ -4,8 +4,20 @@
    Reference catalogs are NOT restored — run `npm run seed` afterwards if you
    want the sample pooja types / donation categories / event types back.
 
-   Usage:  npm run wipe            (asks for confirmation)
-           npm run wipe -- --yes   (no prompt)
+   ── SAFETY POLICY (do not weaken) ────────────────────────────────────────
+   This script is NEVER part of a deploy or app boot. render.yaml runs only
+   `npm install` + `node server/index.js`; server/index.js boot runs only
+   migrations + idempotent seeds + ensureAdminUser — none of which delete
+   rows. wipe.js is a LOCAL-DEV convenience only:
+     • Hard-blocked when NODE_ENV=production (Render always sets this) — no
+       override exists.
+     • Otherwise still refuses to touch a remote Turso DB (TURSO_* set)
+       unless --force-remote is passed.
+   It never drops tables/views and never deletes Turso database files.
+
+   Usage (local dev, local data/svmds.db only):
+     npm run wipe            (asks for confirmation)
+     npm run wipe -- --yes   (no prompt)
 */
 const readline = require('readline');
 const { run, queryAll } = require('./connection');
@@ -43,24 +55,32 @@ async function wipe() {
   console.log(`✔ done — database is clean (${users} user: ${config.adminEmail || 'no ADMIN_EMAIL set'})`);
 }
 
-/* Refuse to wipe a REMOTE database (Turso / libsql) unless the caller very
-   explicitly opts in with --force-remote. Protects production data from an
-   accidental `npm run wipe`. */
-function guardRemote() {
+/* Guardrails so this can never erase real data on a deploy or a prod shell. */
+function guard() {
+  // 1. Absolute block in production — no flag can override this.
+  if ((process.env.NODE_ENV || '').toLowerCase() === 'production') {
+    console.error(
+      '✗ Refusing to wipe: NODE_ENV=production.\n' +
+      '  This script is a local-dev convenience only. It is never run on a\n' +
+      '  deploy and must never touch the production database.'
+    );
+    process.exit(1);
+  }
+  // 2. Outside production, still refuse a REMOTE (Turso) DB without --force-remote.
   const remote = !!(process.env.TURSO_DATABASE_URL || process.env.TURSO_AUTH_TOKEN);
   if (remote && !process.argv.includes('--force-remote')) {
     console.error(
-      '✗ Refusing to wipe: TURSO_DATABASE_URL is set, so this would erase the REMOTE\n' +
-      '  (production) database. If that is truly what you want, re-run with:\n' +
-      '      node server/db/wipe.js --yes --force-remote\n' +
-      '  To wipe only a local data/svmds.db, unset TURSO_* first.'
+      '✗ Refusing to wipe: TURSO_DATABASE_URL is set, so this would erase a REMOTE\n' +
+      '  database. To wipe only a local data/svmds.db, unset TURSO_* first.\n' +
+      '  (A remote wipe would need: node server/db/wipe.js --yes --force-remote,\n' +
+      '   and is still blocked entirely when NODE_ENV=production.)'
     );
     process.exit(1);
   }
 }
 
 async function main() {
-  guardRemote();
+  guard();
   if (process.argv.includes('--yes')) return wipe();
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   rl.question('This ERASES all devotees, donations, poojas, committees, teams, events, visits,\nexpenses, inventory, accounts and sessions. Type "wipe" to continue: ', async (ans) => {

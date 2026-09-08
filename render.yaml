@@ -1,13 +1,19 @@
 # Render Blueprint — Shri Vihat Meldi Mata Mandir (SVMDS)
 # New → Blueprint → pick this repo. Fill the `sync: false` vars in the dashboard.
+#
+# DATA-SAFETY POLICY — do not change buildCommand / startCommand to run any of:
+#   npm run wipe · npm run seed · node server/db/wipe.js · migrations with data
+# A deploy must ONLY install deps and start the server. The server's own boot
+# (server/index.js) runs forward-only migrations + idempotent seeds that never
+# delete rows. `wipe.js` is hard-blocked when NODE_ENV=production anyway.
 services:
   - type: web
     name: svmds
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npm install
-    startCommand: node server/index.js
+    buildCommand: npm install          # deps only — never a data script
+    startCommand: node server/index.js  # server boot: migrate + idempotent seed, no deletes
     healthCheckPath: /health
     autoDeploy: true
     envVars:
