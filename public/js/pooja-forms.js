@@ -58,6 +58,24 @@
 
         <div class="form-group">
           <div class="flex justify-between items-center">
+            <label class="form-label" style="margin:0;">Sevarthi(s) — who sponsors &amp; runs this seva</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" onclick="pjAddPerson('sevarthi')">+ Add new Devotee</button>
+          </div>
+          <div class="mg-muted-xs" style="margin-bottom:0.4rem;">Pick from the register, or add a new devotee.</div>
+          <div id="pjSevarthiPicker"></div>
+        </div>
+
+        <div class="form-group">
+          <div class="flex justify-between items-center">
+            <label class="form-label" style="margin:0;">Coordinator(s) — who runs this pooja day-to-day</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" onclick="pjAddPerson('coord')">+ Add new Devotee</button>
+          </div>
+          <div class="mg-muted-xs" style="margin-bottom:0.4rem;">Pick from the register, or add a new devotee.</div>
+          <div id="pjCoordPicker"></div>
+        </div>
+
+        <div class="form-group">
+          <div class="flex justify-between items-center">
             <label class="form-label" style="margin:0;">Guests</label>
             <button class="btn btn-outline mg-btn-xs" type="button" onclick="openAddGuest('poojaForm')">+ Add new Guest</button>
           </div>
@@ -381,6 +399,30 @@ function refreshGuestPicker(addId) {
   box.innerHTML = guestPickerHTML(checked);
 }
 
+/* ---- Sevarthi & Coordinator pickers inside the Pooja form (devotee-backed) ---- */
+function pjRenderPeoplePickers(sevIds, coordIds) {
+  const people = (typeof allPeople === 'function') ? allPeople() : [];
+  const s = document.getElementById('pjSevarthiPicker');
+  const c = document.getElementById('pjCoordPicker');
+  if (s) s.innerHTML = personCheckList(people, sevIds || [], 'pj-sev-check');
+  if (c) c.innerHTML = personCheckList(people, coordIds || [], 'pj-coord-check');
+}
+/** "+ Add new Devotee" from either picker — reuse the shared devotee sheet,
+    then re-render with the new person ticked. */
+function pjAddPerson(kind) {
+  const box = kind === 'coord' ? 'pjCoordPicker' : 'pjSevarthiPicker';
+  const checkCls = kind === 'coord' ? 'pj-coord-check' : 'pj-sev-check';
+  const keepSev = checkedIds('pjSevarthiPicker', 'pj-sev-check');
+  const keepCoord = checkedIds('pjCoordPicker', 'pj-coord-check');
+  openDevoteeSheet({
+    title: kind === 'coord' ? 'Add a new Coordinator (devotee)' : 'Add a new Sevarthi (devotee)',
+    onSaved: function (dev) {
+      if (kind === 'coord') keepCoord.push(dev.id); else keepSev.push(dev.id);
+      pjRenderPeoplePickers(keepSev, keepCoord);
+    }
+  });
+}
+
 function poojaCustomRowsHTML(list) {
   return (list || []).map(c => `
     <div class="pj-custom-row">
@@ -411,6 +453,7 @@ function openAddPooja() {
   document.getElementById('pjFieldNotes').value = '';
   renderSessionRows([]);
   renderGuestPicker([]);
+  pjRenderPeoplePickers([], []);
   document.getElementById('pjCustomRows').innerHTML = '';
   onPoojaTypeChange();
   openModal('modalPooja');
@@ -432,6 +475,7 @@ function openEditPooja(id) {
   document.getElementById('pjFieldNotes').value = p.notes || '';
   renderSessionRows(poojaSessions(p));
   renderGuestPicker(p.guestIds || []);
+  pjRenderPeoplePickers(p.sevarthiIds || [], p.coordinatorIds || []);
   document.getElementById('pjCustomRows').innerHTML = poojaCustomRowsHTML(p.custom || []);
   onPoojaTypeChange();
   openModal('modalPooja');
@@ -469,6 +513,8 @@ function handleSavePooja(e) {
   if (mode === 'single') sessions = [sessions[0]];
 
   const guestIds = Array.from(document.querySelectorAll('#pjGuestPicker .pj-guest-check:checked')).map(c => c.value);
+  const sevarthiIds = checkedIds('pjSevarthiPicker', 'pj-sev-check');
+  const coordinatorIds = checkedIds('pjCoordPicker', 'pj-coord-check');
   const custom = Array.from(document.querySelectorAll('#pjCustomRows .pj-custom-row'))
     .map(r => ({ label: r.querySelector('.pj-cf-label').value.trim(), value: r.querySelector('.pj-cf-value').value.trim() }))
     .filter(c => c.label);
@@ -483,7 +529,7 @@ function handleSavePooja(e) {
       label: s.label || `Session ${i + 1}`, date: s.date, startTime: s.startTime, endTime: s.endTime, venue: s.venue
     }));
     Object.assign(p, {
-      name, defaultVenue, color: accent, notes, guestIds, custom,
+      name, defaultVenue, color: accent, notes, guestIds, sevarthiIds, coordinatorIds, custom,
       scheduleMode: mode,
       typeId: isPoojaAdmin() ? typeId : p.typeId,
       estimatedSevaAmount: isNaN(sevaAmount) ? 0 : sevaAmount
@@ -498,7 +544,7 @@ function handleSavePooja(e) {
         id: mintSession(),
         label: s.label || `Session ${i + 1}`, date: s.date, startTime: s.startTime, endTime: s.endTime, venue: s.venue
       })),
-      guestIds, sevarthiIds: [], coordinatorIds: [],
+      guestIds, sevarthiIds, coordinatorIds,
       status: null, color: accent, estimatedSevaAmount: isNaN(sevaAmount) ? 0 : sevaAmount, notes, custom,
       invitation: {
         template: 'royal', accent, headline: '',
@@ -509,7 +555,13 @@ function handleSavePooja(e) {
       createdDate: pjToday()
     });
     logPoojaActivity(id, `Pooja "${name}" created`);
-    pjToast(`${name} created. Open it to add sevarthis.`);
+    // best-effort DB persist
+    if (window.API && window.API.online) {
+      window.API.post('/poojas', { name, scheduleMode: mode, defaultVenue,
+        sessions: sessions.map(x => ({ label: x.label, date: x.date, startTime: x.startTime, endTime: x.endTime, venue: x.venue })),
+        notes }).catch(function(){});
+    }
+    pjToast(`${name} created.`);
   }
 
   const f = firstSession(poojaById(POOJA.editingPoojaId || POOJA.poojas[POOJA.poojas.length - 1].id));
