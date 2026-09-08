@@ -19,6 +19,8 @@ function viewEventsDirectory() {
   const upcoming = list.filter(e => evDays(e).some(d => (d.date + ' ' + d.endTime) >= nowKey)).length;
   const footfall = list.filter(e => (evFirstDay(e) || {}).date && (evFirstDay(e).date.indexOf(monthKey) === 0)).reduce((s, e) => s + (e.expectedFootfall || 0), 0);
 
+  const hasFestivals = list.length > 0 || EV.eventTypes.length > 0;
+
   return `
   <div class="flex justify-between items-center mg-page-head">
     <div>
@@ -34,6 +36,17 @@ function viewEventsDirectory() {
     </div>
   </div>
 
+  ${typeof annualEventsSection === 'function' ? annualEventsSection() : ''}
+
+  <div class="section-title mg-mt"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>${window.t('ev_festival_title', 'Festival programmes & mahotsavs')}</span></div>
+  <p class="mg-page-sub" style="margin-top:-.4rem">${window.t('ev_festival_sub', 'One-off multi-day programmes with a venue, in-charge, budget and expected footfall — separate from the recurring Tithi calendar above.')}</p>
+
+  ${!hasFestivals ? `
+  <div class="card mg-mt"><div class="card-body" style="text-align:center;padding:2rem 1rem">
+    <div style="font-size:1.8rem">🎪</div>
+    <p class="mg-page-sub">${window.t('ev_festival_empty', 'No festival programmes yet. Use “Add Event” to plan a mahotsav, dayro or seva programme.')}</p>
+    <button class="btn btn-primary mg-btn-xs" onclick="openAddEvent()">+ ${window.t('ev_add', 'Add Event')}</button>
+  </div></div>` : `
   <div class="stats-grid">
     ${kpiCard(window.t('ev_kpi_total', 'Total Events'), list.length, window.t('ev_kpi_total_meta', 'On the calendar'), '📅')}
     ${kpiCard(window.t('ev_kpi_upcoming', 'Upcoming'), upcoming, window.t('ev_kpi_upcoming_meta', 'Still to come'), '⏭️')}
@@ -41,17 +54,14 @@ function viewEventsDirectory() {
     ${kpiCard(window.t('ev_kpi_types', 'Event Types'), EV.eventTypes.length, window.t('ev_kpi_types_meta', 'Master list'), '📜')}
   </div>
 
-  <div class="section-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>${window.t('ev_open_ws', 'Open an Event')}</span></div>
-  <div class="mg-card-grid">${list.map(e => eventCard(e)).join('')}</div>
-
-  ${typeof annualEventsSection === 'function' ? annualEventsSection() : ''}
+  ${list.length ? `<div class="mg-card-grid">${list.map(e => eventCard(e)).join('')}</div>` : ''}
 
   <div class="card mg-mt">
     <div class="card-header flex justify-between items-center">
       <div class="card-title">${window.t('ev_type_catalog', 'Event Type Master List')} (${EV.eventTypes.length})</div>
       <button class="btn btn-primary mg-btn-xs" onclick="openAddEventType()">+ ${window.t('ev_type', 'Type')}</button>
     </div>
-    <div class="card-body"><div class="pj-type-grid">${EV.eventTypes.map(t => {
+    <div class="card-body">${EV.eventTypes.length ? `<div class="pj-type-grid">${EV.eventTypes.map(t => {
       const used = EV.events.filter(e => e.typeId === t.id).length;
       return `<div class="pj-type-card">
         <div class="pj-type-top"><span class="pj-type-icon">${esc(t.icon || '📅')}</span>
@@ -61,8 +71,8 @@ function viewEventsDirectory() {
           <span class="flex gap-1"><button class="btn btn-outline mg-btn-xs" onclick="openEditEventType('${t.id}')">${window.t('edit')}</button>
           <button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="confirmDeleteEventType('${t.id}')">${window.t('delete')}</button></span></div>
       </div>`;
-    }).join('')}</div></div>
-  </div>`;
+    }).join('')}</div>` : `<p class="mg-muted-xs">${window.t('ev_type_empty', 'Optional — add reusable categories (Navratri, Annakut, Dayro…) to group festival programmes. Not needed for the Tithi calendar.')}</p>`}</div>
+  </div>`}`;
 }
 
 function eventCard(e) {

@@ -353,25 +353,20 @@
           </select>
         </div>
 
-        <!-- Role Scope Selector -->
-        <div class="role-badge-select">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <select id="roleScopeSelect" onchange="changeRoleScope(this.value)" title="Preview the platform as a limited login would see it">
-            <option value="admin">Viewing as: Administrator — full access</option>
-            <optgroup label="Preview a limited login ↓">
-              <option value="pooja_manager">Pooja Manager (poojas only)</option>
-              <option value="accountant">Accountant (donations only)</option>
+        <!-- View switcher (superadmin / admin can preview a staff member's view) -->
+        <div class="role-badge-select" id="viewSwitchWrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <select id="roleScopeSelect" onchange="changeRoleScope(this.value)" title="Preview the portal the way a staff member with a limited login would see it. Your own access is unchanged.">
+            <option value="admin">My view — full access</option>
+            <optgroup label="Preview a staff view ↓">
+              <option value="pooja_manager">as Pooja Coordinator (Pooja &amp; Seva only)</option>
+              <option value="accountant">as Accountant (Donations, Expenses, Reports)</option>
             </optgroup>
-            <optgroup label="Preview a Management Lead" id="roleLeadGroup"></optgroup>
-            <optgroup label="Preview a Pooja Coordinator" id="roleCoordGroup"></optgroup>
-            <optgroup label="Preview a Committee Leader" id="roleCmtGroup"></optgroup>
+            <optgroup label="Preview a specific Management Lead" id="roleLeadGroup"></optgroup>
+            <optgroup label="Preview a specific Pooja Coordinator" id="roleCoordGroup"></optgroup>
+            <optgroup label="Preview a specific Committee Leader" id="roleCmtGroup"></optgroup>
           </select>
         </div>
-
-        <!-- Sign out -->
-        <button class="btn btn-outline nav-signin-btn" style="padding: 0.35rem 0.85rem; font-size: 0.82rem;" onclick="signOut()">
-          🔓 Sign Out
-        </button>
 
         <!-- Notification Bell -->
         <div class="nav-action-btn" onclick="toggleNotificationsDrawer()">
@@ -379,11 +374,18 @@
           <span class="notification-badge" id="notifBadgeCount" hidden></span>
         </div>
 
-        <!-- User Profile -->
-        <div class="user-profile-menu" onclick="signOut()" title="Sign out">
+        <!-- User menu -->
+        <div class="user-profile-menu" id="userMenuBtn" onclick="toggleUserMenu(event)" title="Account">
           <img src="assets/icon.png" class="user-avatar" alt="">
           <span class="user-name" id="topbarUserName">Administrator</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          <div class="user-menu-pop" id="userMenuPop" hidden onclick="event.stopPropagation()">
+            <div class="user-menu-email" id="userMenuEmail">—</div>
+            <button type="button" class="user-menu-item user-menu-signout" onclick="signOut()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     </header>

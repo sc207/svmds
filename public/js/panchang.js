@@ -214,6 +214,8 @@
   function resolveDate(ev, year) {
     year = Number(year);
     var ov = ev.overrides || {};
+    // one-off event: only exists for the single year it was created for
+    if (ov.once && Number(ov.once) !== year) return { date: null, source: 'once' };
     if (ov[String(year)]) return { date: ov[String(year)], source: 'pinned' };
     if (ev.type === 'FIXED_DATE') {
       if (!ev.fixedMonth || !ev.fixedDay) return { date: null, source: 'fixed' };

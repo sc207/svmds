@@ -45,6 +45,9 @@
           '<div class="ann-card-head">' +
             '<div class="ann-name">' + esc(window.annualName(ev)) + '</div>' +
             (ev.active ? '' : '<span class="badge badge-cancelled">' + esc(T('ann_disabled', 'Disabled')) + '</span>') +
+            ((typeof annualOnceYear === 'function' && annualOnceYear(ev))
+              ? '<span class="badge badge-pending" title="' + esc(T('ann_once_hint', 'One-time event — will not repeat next year')) + '">' + esc(T('ann_once_badge', 'one-time')) + ' ' + annualOnceYear(ev) + '</span>'
+              : '') +
           '</div>' +
           '<div class="ann-activity">' + esc(window.annualActivity(ev)) + '</div>' +
           '<div class="ann-tithi">' + esc(window.annualTithiLabel(ev)) + '</div>' +
@@ -183,6 +186,10 @@
     var MASA = (window.Panchang && window.Panchang.MASA_KEYS) ||
       ['Chaitra', 'Vaishakha', 'Jyeshtha', 'Ashadha', 'Shravana', 'Bhadrapada', 'Ashwin', 'Kartik', 'Margashirsha', 'Pausha', 'Magha', 'Phalguna'];
     var e = ev || { type: 'TITHI', masa: 'Kartik', paksha: 'shukla', tithi: 1, fixedMonth: 9, fixedDay: 27, active: true };
+    var Y0 = window.ANNUAL.year;
+    var onceY = (typeof annualOnceYear === 'function') ? annualOnceYear(e) : ((e.overrides && e.overrides.once) ? Number(e.overrides.once) : null);
+    var onceYears = [];
+    for (var oy = Y0 - 1; oy <= Y0 + 6; oy++) onceYears.push(oy);
     openSheet({
       title: (ev ? T('edit', 'Edit') : T('ann_add', 'Add event')) + ' — ' + T('ann_title', 'Annual Temple Event'),
       wide: true,
@@ -199,6 +206,16 @@
             '</select></div>' +
           '<div class="form-group"><label class="form-label">&nbsp;</label>' +
             '<label style="display:flex;gap:.5rem;align-items:center"><input type="checkbox" name="active"' + (e.active !== false ? ' checked' : '') + '> ' + esc(T('ann_active', 'Active')) + '</label></div>' +
+          '<div class="form-group" style="grid-column:1/-1;border-top:1px dashed var(--warm-ivory,#eaddc7);padding-top:.65rem">' +
+            '<label style="display:flex;gap:.5rem;align-items:center"><input type="checkbox" name="once" onchange="annualFormOnce(this.checked)"' + (onceY ? ' checked' : '') + '> ' +
+              esc(T('ann_once', 'One-time event — happens only in the year below, does not repeat every year')) + '</label>' +
+            '<div id="annOnceYear" style="margin-top:.5rem;display:' + (onceY ? 'block' : 'none') + '">' +
+              '<label class="form-label">' + esc(T('ann_once_year', 'Year')) + '</label>' +
+              '<select class="form-select" name="onceYear">' +
+                onceYears.map(function (y) { return '<option value="' + y + '"' + (y === (onceY || Y0) ? ' selected' : '') + '>' + y + '</option>'; }).join('') +
+              '</select>' +
+            '</div>' +
+          '</div>' +
           '<div id="annTithiFields" class="mg-2col-form" style="grid-column:1/-1;display:' + (e.type === 'FIXED_DATE' ? 'none' : 'grid') + '">' +
             '<div class="form-group"><label class="form-label">' + esc(T('ann_masa', 'Gujarati month (masa)')) + '</label><select class="form-select" name="masa">' +
               MASA.map(function (m) { return '<option value="' + m + '"' + (m === e.masa ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>' +
@@ -223,14 +240,20 @@
     if (t) t.style.display = v === 'FIXED_DATE' ? 'none' : 'grid';
     if (f) f.style.display = v === 'FIXED_DATE' ? 'grid' : 'none';
   };
+  window.annualFormOnce = function (checked) {
+    var b = document.getElementById('annOnceYear');
+    if (b) b.style.display = checked ? 'block' : 'none';
+  };
   window.saveAnnualEvent = function (id) {
     var f = document.getElementById('annForm'); if (!f) return;
     var g = function (n) { var el = f.elements[n]; return el ? (el.type === 'checkbox' ? el.checked : el.value.trim()) : ''; };
+    var isOnce = g('once');
     var body = {
       name: g('name'), name_gu: g('name_gu'), activity: g('activity'), activity_gu: g('activity_gu'),
       type: g('type'), masa: g('masa'), paksha: g('paksha'), tithi: parseInt(g('tithi'), 10) || 0,
       fixedMonth: parseInt(g('fixedMonth'), 10) || 0, fixedDay: parseInt(g('fixedDay'), 10) || 0,
-      notes: g('notes'), active: g('active')
+      notes: g('notes'), active: g('active'),
+      onceYear: isOnce ? (parseInt(g('onceYear'), 10) || window.ANNUAL.year) : null
     };
     if (!body.name) { toast(T('ann_need_name', 'Name is required.')); return; }
 
@@ -241,13 +264,18 @@
         .catch(function (e) { toast((e && e.message) || 'Save failed'); });
       return;
     }
-    // demo mode
+    // demo mode — fold onceYear into the overrides blob like the server does
+    var oy = body.onceYear; delete body.onceYear;
     if (id) {
       var ev = window.annualEventById(id);
-      if (ev) Object.assign(ev, body);
+      if (ev) {
+        Object.assign(ev, body);
+        ev.overrides = ev.overrides || {};
+        if (oy) ev.overrides.once = oy; else delete ev.overrides.once;
+      }
     } else {
       body.id = 'ANE-' + String(window.ANNUAL.events.length + 1).padStart(3, '0');
-      body.overrides = {};
+      body.overrides = oy ? { once: oy } : {};
       window.ANNUAL.events.push(body);
     }
     if (typeof closeSheet === 'function') closeSheet();

@@ -117,7 +117,9 @@
       return out;
     }
     // no calculator loaded → only overrides / fixed
-    var ov = (ev.overrides || {})[String(year)];
+    var ovAll = ev.overrides || {};
+    if (ovAll.once && Number(ovAll.once) !== Number(year)) return { date: null, source: 'once' };
+    var ov = ovAll[String(year)];
     if (ov) return { date: ov, source: 'pinned' };
     if (ev.type === 'FIXED_DATE' && ev.fixedMonth && ev.fixedDay) {
       return { date: year + '-' + String(ev.fixedMonth).padStart(2, '0') + '-' + String(ev.fixedDay).padStart(2, '0'), source: 'fixed' };
@@ -130,11 +132,22 @@
     return (typeof locDate === 'function') ? locDate(iso) : iso;
   };
 
-  /* events for the selected year, resolved + sorted by Gregorian date */
+  /* is this a one-off (single-year) event, and for which year? */
+  window.annualOnceYear = function (ev) {
+    var y = ev && ev.overrides && ev.overrides.once;
+    return y ? Number(y) : null;
+  };
+
+  /* events for the selected year, resolved + sorted by Gregorian date.
+     One-off events only appear in the single year they belong to. */
   window.annualForYear = function (year, includeInactive) {
     year = year || window.ANNUAL.year;
     return window.ANNUAL.events
       .filter(function (e) { return includeInactive || e.active; })
+      .filter(function (e) {
+        var oy = window.annualOnceYear(e);
+        return !oy || oy === Number(year);
+      })
       .map(function (e) {
         var r = window.annualResolve(e, year);
         return Object.assign({}, e, { year: year, gregorianDate: r.date, dateSource: r.source });

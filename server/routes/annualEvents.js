@@ -57,6 +57,17 @@ function validate(b, partial) {
   return null;
 }
 
+/* a one-off (single-year) event is flagged by a reserved `once` key in the
+   JSON overrides blob — no schema change. onceYear falsy => recurring. */
+function onceOverridesJSON(existingJSON, onceYear) {
+  let o = {};
+  try { o = JSON.parse(existingJSON || '{}'); } catch (_) {}
+  const y = parseInt(onceYear, 10);
+  if (y && y >= 1900 && y <= 3000) o.once = y;
+  else delete o.once;
+  return JSON.stringify(o);
+}
+
 /* POST /  (admin) */
 router.post('/', adminTier, async (req, res, next) => {
   try {
@@ -68,15 +79,16 @@ router.post('/', adminTier, async (req, res, next) => {
     const r = await run(
       `INSERT INTO annual_events
          (code, name, name_gu, name_hi, activity, activity_gu, activity_hi, type,
-          masa, paksha, tithi, fixed_month, fixed_day, description, notes, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          masa, paksha, tithi, fixed_month, fixed_day, description, notes, active, overrides_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [code, String(b.name).trim(), b.name_gu || '', b.name_hi || '',
        b.activity || '', b.activity_gu || '', b.activity_hi || '', type,
        type === 'TITHI' ? (b.masa || '') : '', type === 'TITHI' ? (b.paksha || '') : '',
        type === 'TITHI' ? (parseInt(b.tithi, 10) || 0) : 0,
        type === 'FIXED_DATE' ? (parseInt(b.fixedMonth, 10) || 0) : 0,
        type === 'FIXED_DATE' ? (parseInt(b.fixedDay, 10) || 0) : 0,
-       b.description || '', b.notes || '', b.active === false ? 0 : 1]
+       b.description || '', b.notes || '', b.active === false ? 0 : 1,
+       onceOverridesJSON('{}', b.onceYear)]
     );
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
       action: 'CREATE', entityType: 'annual_event', entityId: code, details: { name: b.name } });
@@ -107,6 +119,7 @@ router.patch('/:id', adminTier, async (req, res, next) => {
     if (b.fixedMonth !== undefined) { sets.push('fixed_month = ?'); args.push(parseInt(b.fixedMonth, 10) || 0); }
     if (b.fixedDay !== undefined) { sets.push('fixed_day = ?'); args.push(parseInt(b.fixedDay, 10) || 0); }
     if (b.active !== undefined) { sets.push('active = ?'); args.push(b.active ? 1 : 0); }
+    if (b.onceYear !== undefined) { sets.push('overrides_json = ?'); args.push(onceOverridesJSON(row.overrides_json, b.onceYear)); }
     if (!sets.length) return res.json(mapAnnualEvent(row, currentYear()));
 
     sets.push(`updated_at = datetime('now')`);

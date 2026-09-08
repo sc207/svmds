@@ -363,6 +363,39 @@ function signOut() {
   } catch (e) { window.location.href = '/login'; }
 }
 
+/* Top-bar account menu (the only sign-out affordance in the header). */
+function toggleUserMenu(ev) {
+  if (ev) ev.stopPropagation();
+  var pop = document.getElementById('userMenuPop');
+  if (!pop) return;
+  pop.hidden = !pop.hidden;
+}
+document.addEventListener('click', function (ev) {
+  var pop = document.getElementById('userMenuPop');
+  var btn = document.getElementById('userMenuBtn');
+  if (pop && !pop.hidden && btn && !btn.contains(ev.target)) pop.hidden = true;
+});
+
+/* Fill the account menu (and the top-bar name) from the real signed-in user. */
+function initAccountMenu() {
+  var s = (typeof window !== 'undefined' && window.__SESSION) || null;
+  var u = s && s.user;
+  var emailEl = document.getElementById('userMenuEmail');
+  var nameEl = document.getElementById('topbarUserName');
+  if (u) {
+    if (emailEl) emailEl.textContent = u.email || '';
+    if (nameEl && u.name) nameEl.textContent = u.name;
+    if (s.impersonating && emailEl) emailEl.textContent = (u.email || '') + '  (impersonating)';
+  } else {
+    if (emailEl) emailEl.textContent = 'Demo mode — no backend';
+  }
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAccountMenu);
+} else {
+  initAccountMenu();
+}
+
 function openBadgeGeneratorModal() {
   openModal('modalBadgeViewer');
 }

@@ -577,6 +577,7 @@ input, select, textarea { font-family: inherit; outline: none; }
 }
 
 .user-profile-menu {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.65rem;
@@ -589,6 +590,49 @@ input, select, textarea { font-family: inherit; outline: none; }
 .user-profile-menu:hover {
   background: var(--warm-ivory);
 }
+
+.user-menu-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid var(--antique-gold);
+  border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(107, 31, 42, 0.18);
+  padding: 0.5rem;
+  z-index: 120;
+}
+
+.user-menu-email {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted, #7a6a5a);
+  padding: 0.4rem 0.55rem 0.55rem;
+  border-bottom: 1px solid var(--warm-ivory);
+  margin-bottom: 0.35rem;
+  word-break: break-all;
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--dark-brown);
+  padding: 0.55rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.user-menu-item:hover { background: var(--warm-ivory); }
+
+.user-menu-signout { color: var(--primary-maroon); }
 
 .user-avatar {
   width: 38px;
