@@ -18,6 +18,26 @@ function mapUser(row) {
   };
 }
 
+function mapDevotee(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),   // frontend keys on the human code
+    rowId: row.id,
+    code: row.code || '',
+    name: row.name,
+    mobile: row.mobile || '',
+    phone: row.mobile || '',          // legacy alias used by app.js renderers
+    city: row.city || '',
+    state: row.state || 'Gujarat',
+    samaj: row.samaj || '',
+    status: row.status === 'inactive' ? 'Inactive' : 'Active',
+    notes: row.notes || '',
+    visits: row.visit_count != null ? Number(row.visit_count) : 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
 function mapSession(row, currentJti) {
   if (!row) return null;
   return {
@@ -51,4 +71,4 @@ function mapAudit(row) {
   };
 }
 
-module.exports = { mapUser, mapSession, mapAudit };
+module.exports = { mapUser, mapDevotee, mapSession, mapAudit };

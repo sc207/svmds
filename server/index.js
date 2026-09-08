@@ -80,9 +80,10 @@ app.use('/api', attachScope);
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/devotees', require('./routes/devotees'));
 
-// Phase 3+: app.use('/api/settings',  require('./routes/settings'));
-//           app.use('/api/devotees',  require('./routes/devotees'));  … etc.
+// Phase 3+: donations, poojas, committees, teams, events, visits, expenses, inventory,
+//           calendar, dashboard, reports, activity — see BACKEND_PLAN.md §4.4.
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));
 
