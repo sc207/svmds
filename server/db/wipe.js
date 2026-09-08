@@ -43,7 +43,24 @@ async function wipe() {
   console.log(`✔ done — database is clean (${users} user: ${config.adminEmail || 'no ADMIN_EMAIL set'})`);
 }
 
+/* Refuse to wipe a REMOTE database (Turso / libsql) unless the caller very
+   explicitly opts in with --force-remote. Protects production data from an
+   accidental `npm run wipe`. */
+function guardRemote() {
+  const remote = !!(process.env.TURSO_DATABASE_URL || process.env.TURSO_AUTH_TOKEN);
+  if (remote && !process.argv.includes('--force-remote')) {
+    console.error(
+      '✗ Refusing to wipe: TURSO_DATABASE_URL is set, so this would erase the REMOTE\n' +
+      '  (production) database. If that is truly what you want, re-run with:\n' +
+      '      node server/db/wipe.js --yes --force-remote\n' +
+      '  To wipe only a local data/svmds.db, unset TURSO_* first.'
+    );
+    process.exit(1);
+  }
+}
+
 async function main() {
+  guardRemote();
   if (process.argv.includes('--yes')) return wipe();
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   rl.question('This ERASES all devotees, donations, poojas, committees, teams, events, visits,\nexpenses, inventory, accounts and sessions. Type "wipe" to continue: ', async (ans) => {
