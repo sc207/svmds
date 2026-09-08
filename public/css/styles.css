@@ -1357,6 +1357,11 @@ input, select, textarea { font-family: inherit; outline: none; }
   display: flex;
 }
 
+/* The generic sheet (#mgSheet) is designed to open ON TOP of another modal
+   (e.g. "+ New devotee" from the Add Committee form) — keep it above. */
+#mgSheet.modal-overlay { z-index: 1100; }
+#mgConfirm.modal-overlay { z-index: 1200; }
+
 .modal-box {
   background: #FFFFFF;
   border-radius: var(--radius-md);
