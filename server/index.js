@@ -125,7 +125,12 @@ app.use(errorHandler);
 async function start() {
   console.log(`▶ SVMDS backend — ${config.nodeEnv}`);
   await runMigrations();
-  await seedPlatform();               // app_settings + counters only — no demo / catalog data
+  await seedPlatform();               // app_settings + counters
+  // Structural reference data the temple asked to keep — idempotent, so it's
+  // safe on every boot and guarantees a fresh deploy (or a reset DB) has the
+  // donation categories, the 3 samaj committees, the 3 management teams and the
+  // 7 annual Tithi events. It never touches devotees / donations / poojas etc.
+  await require('./db/seed/reference-data').seedReferenceData();
   await require('./services/bootstrap').ensureAdminUser();
   const port = process.env.PORT || config.port || 3000;
   app.listen(port, () => console.log(`✔ listening on :${port}  (health: /health)`));
