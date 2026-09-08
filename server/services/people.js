@@ -51,4 +51,34 @@ async function ensureDevotee({ firstName, lastName, name, mobile, city, state, s
   return Number(r.lastInsertRowid);
 }
 
-module.exports = { ensureDevotee, digits, fullName };
+/**
+ * Put a devotee on a committee / team roster if they aren't already on it.
+ * Used so a leader is always also a member of what they lead.
+ * @param {'committee'|'team'} kind
+ */
+async function addAsMember({ kind, entityId, devoteeId, role }) {
+  if (!devoteeId || !entityId) return;
+  const table   = kind === 'committee' ? 'committee_members' : 'team_members';
+  const col     = kind === 'committee' ? 'committee_id'      : 'team_id';
+  const counter = kind === 'committee' ? 'committee_member'   : 'team_member';
+
+  const exists = await queryOne(
+    `SELECT id FROM ${table} WHERE ${col} = ? AND devotee_id = ? AND is_deleted = 0`,
+    [entityId, devoteeId]
+  );
+  if (exists) return;
+
+  const dev = await queryOne('SELECT * FROM devotees WHERE id = ?', [devoteeId]);
+  if (!dev) return;
+  const parts = String(dev.name || '').trim().split(/\s+/);
+  const first = parts.shift() || dev.name || '';
+  const code = await nextCode(counter);
+  await run(
+    `INSERT INTO ${table} (code, ${col}, devotee_id, first_name, last_name, mobile, city, state, role, status, notes, joined_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', '', date('now'))`,
+    [code, entityId, devoteeId, first, parts.join(' '),
+     dev.mobile || '', dev.city || '', dev.state || 'Gujarat', role || 'Member']
+  );
+}
+
+module.exports = { ensureDevotee, addAsMember, digits, fullName };

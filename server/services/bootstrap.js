@@ -58,6 +58,18 @@ async function ensureAdminUser() {
     await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [user.id, 'superadmin']);
     console.log(`  ✓ granted superadmin role to ${email}`);
   }
+
+  // the owner is a person too — link a devotee record (fill mobile/city later in the UI)
+  if (!user.devotee_id) {
+    try {
+      const { ensureDevotee } = require('./people');
+      const devId = await ensureDevotee({ name: user.name || 'Administrator' });
+      if (devId) {
+        await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, user.id]);
+        console.log(`  ✓ linked ${email} to a devotee record`);
+      }
+    } catch (e) { console.warn('  · could not link owner devotee:', e.message); }
+  }
 }
 
 module.exports = { ensureAdminUser };

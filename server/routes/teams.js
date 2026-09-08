@@ -10,7 +10,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
-const { ensureDevotee } = require('../services/people');
+const { ensureDevotee, addAsMember } = require('../services/people');
 const { nextColorFor } = require('../services/palette');
 const shared = require('../services/sharedTables');
 const {
@@ -149,6 +149,14 @@ router.post('/:id/lead', adminTier, async (req, res, next) => {
       if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'management_lead']);
       await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
     }
+    // the lead is a person, and a lead is always also on the team roster
+    let devId = u.devotee_id;
+    if (!devId) {
+      devId = await ensureDevotee({ name: u.name, mobile: u.mobile, city: u.city });
+      if (devId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, uid]);
+    }
+    if (devId) await addAsMember({ kind: 'team', entityId: row.id, devoteeId: devId, role: 'Lead' });
+
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
       action: 'GRANT', entityType: 'management_lead', entityId: String(uid), scopeId: row.code });
     res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
