@@ -9,7 +9,7 @@
 */
 const fs = require('fs');
 const path = require('path');
-const { run, queryAll } = require('./connection');
+const { run, runBatch, queryAll } = require('./connection');
 
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
 
@@ -36,15 +36,14 @@ async function runMigrations() {
   for (const file of files) {
     if (done.has(file)) continue;
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-    await run('BEGIN');
+    const stmts = splitStatements(sql).map(s => ({ sql: s, args: [] }));
+    stmts.push({ sql: 'INSERT INTO schema_migrations (version) VALUES (?)', args: [file] });
     try {
-      for (const stmt of splitStatements(sql)) await run(stmt);
-      await run('INSERT INTO schema_migrations (version) VALUES (?)', [file]);
-      await run('COMMIT');
+      // atomic all-or-nothing — libsql .batch() over HTTP, or a real txn on better-sqlite3
+      await runBatch(stmts);
       console.log('  ✓ migrated', file);
       applied++;
     } catch (e) {
-      await run('ROLLBACK');
       console.error('  ✗ FAILED', file, '-', e.message);
       throw e;
     }

@@ -6,6 +6,8 @@ const config = require('../config');
 
 let db = null;
 let isTurso = false;
+let rawClient = null;   // libsql client (for atomic .batch); null on better-sqlite3
+let rawNative = null;   // better-sqlite3 Database (for .transaction); null on libsql
 
 function wrapLibsql(client) {
   return {
@@ -35,6 +37,7 @@ async function getDb() {
     const client = createClient({ url: config.turso.url, authToken: config.turso.token });
     await client.execute('PRAGMA foreign_keys = ON');   // added vs. reference
     isTurso = true;
+    rawClient = client;
     db = wrapLibsql(client);
     return db;
   }
@@ -45,8 +48,26 @@ async function getDb() {
   const native = new Database(path.join(dataDir, 'svmds.db'));
   native.pragma('journal_mode = WAL');
   native.pragma('foreign_keys = ON');
+  rawNative = native;
   db = wrapSqlite(native);
   return db;
+}
+
+/* Run several statements atomically (all-or-nothing).
+   libsql over HTTP has no BEGIN/COMMIT session, so use client.batch();
+   better-sqlite3 uses a real transaction. `stmts` = array of SQL strings or
+   { sql, args } objects. Used by the migration runner (§3.1). */
+async function runBatch(stmts) {
+  await getDb();
+  const norm = stmts.map(s => (typeof s === 'string' ? { sql: s, args: [] } : { sql: s.sql, args: s.args || [] }));
+  if (isTurso) {
+    await rawClient.batch(norm, 'write');
+    return;
+  }
+  const tx = rawNative.transaction(list => {
+    for (const s of list) rawNative.prepare(s.sql).run(...s.args);
+  });
+  tx(norm);
 }
 
 async function queryAll(sql, params = []) {
@@ -84,4 +105,4 @@ async function run(sql, params = []) {
   };
 }
 
-module.exports = { getDb, queryAll, queryOne, run, isTurso: () => isTurso };
+module.exports = { getDb, queryAll, queryOne, run, runBatch, isTurso: () => isTurso };
