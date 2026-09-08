@@ -3376,11 +3376,11 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 .acc-ref-table col.acc-ref-c2 { width: 34%; }
 .acc-ref-table col.acc-ref-c3 { width: auto; }
 
-/* 4-column variant (adds "In the calendar") */
-.acc-ref-table.acc-ref-table-4 { max-width: 1280px; min-width: 760px; }
-.acc-ref-table-4 col.acc-ref-c1 { width: 160px; }
-.acc-ref-table-4 col.acc-ref-c2 { width: 21%; }
-.acc-ref-table-4 col.acc-ref-c3 { width: 36%; }
+/* 4-column variant (adds "In the calendar") — fills the card width */
+.acc-ref-table.acc-ref-table-4 { max-width: none; min-width: 760px; }
+.acc-ref-table-4 col.acc-ref-c1 { width: 150px; }
+.acc-ref-table-4 col.acc-ref-c2 { width: 20%; }
+.acc-ref-table-4 col.acc-ref-c3 { width: 40%; }
 .acc-ref-table-4 col.acc-ref-c4 { width: auto; }
 .acc-ref-table thead th {
   padding: 0.7rem 0.9rem;
