@@ -129,7 +129,7 @@ function dashModuleTiles(persona) {
   if (typeof VISITS !== 'undefined')
     T('visits', '🙏', 'vis_title', 'Bhuvaji Visits', VISITS.list.length, window.t('guide_m_visits', 'Take the murti / Bhuvaji to a home or shop, with an escort team'), admin);
   if (admin && typeof state !== 'undefined') {
-    T('devotees', '👥', 'nav_devotees_s', 'Devotees', state.devotees.length, window.t('guide_m_devotees', 'The master register used across donations, poojas & committees'), true);
+    // Devotees has no tile — people are added from wherever they're used.
     T('inventory', '📦', 'nav_inventory_s', 'Inventory', state.inventory.length, window.t('guide_m_inv', 'Samagri, prasad & assets, with low-stock alerts'), true);
     T('expenses', '💸', 'nav_expenses_s', 'Expenses', state.expenses.length, window.t('guide_m_exp', 'Log temple spending against vouchers'), true);
   }
@@ -155,7 +155,6 @@ function dashGuidePanel() {
     ['puja', '🪔', window.t('nav_puja_s', 'Pooja & Seva'), window.t('guide_m_puja', 'Schedule rituals & sevas, record sevarthi, print invitations')],
     ['events', '📅', window.t('ev_title', 'Temple Events'), window.t('guide_m_events', 'Plan festivals — Navratri, Annakut, Patotsav')],
     ['visits', '🙏', window.t('vis_title', 'Bappa / Bhuvaji Visits'), window.t('guide_m_visits', 'Take the murti / Bhuvaji to a home or shop, with an escort team')],
-    ['devotees', '👥', window.t('nav_devotees_s', 'Devotees'), window.t('guide_m_devotees', 'The master register used across donations, poojas & committees')],
     ['committees', '🏛️', window.t('cmt_title', 'Committee / Samaj'), window.t('guide_m_cmt', 'Construction governance bodies — members, meetings, attendance')],
     ['management', '🗂️', window.t('nav_management_s', 'Management Apps'), window.t('guide_m_mg', 'Volunteer teams — prasad, parking, decoration — rosters & badges')],
     ['donations', '💰', window.t('don_title', 'Donations'), window.t('guide_m_don', 'Cash & in-kind offerings, 80G receipts & certificates')],
