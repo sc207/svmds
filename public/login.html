@@ -113,7 +113,8 @@
 
         <p class="login-hint">
           Sign in with the Google account an administrator has registered for you.
-          There is no self&#8209;registration and no password to remember.
+          If you are signed into several Google accounts, the button lets you
+          pick which one. There is no self&#8209;registration and no password.
         </p>
         <p class="login-legal">Shri Vihat Meldi Mata Mandir &middot; Sanand, Gujarat</p>
       </div>
@@ -145,12 +146,25 @@
 
     function init(clientId) {
       if (!clientId) { show('err', 'Google sign-in is not configured (GOOGLE_CLIENT_ID missing on the server).'); return; }
+      var tries = 0;
       (function ready() {
-        if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(ready, 120); return; }
-        google.accounts.id.initialize({ client_id: clientId, callback: onGoogle });
+        if (!window.google || !google.accounts || !google.accounts.id) {
+          if (++tries > 60) { show('err', 'Could not load Google Sign-In. Check your connection / ad-blocker and reload.'); return; }
+          setTimeout(ready, 120); return;
+        }
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: onGoogle,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          use_fedcm_for_prompt: false,   // avoid the One-Tap iframe that stalls on gsi/transform
+          itp_support: true
+        });
+        // Rendered button only — it opens the account chooser in a real popup
+        // window, which works with several signed-in Google accounts and with
+        // third-party cookies blocked. (No google.accounts.id.prompt() here.)
         google.accounts.id.renderButton(document.getElementById('gbtn'),
-          { theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill', width: 300 });
-        google.accounts.id.prompt();
+          { type: 'standard', theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill', width: 300 });
       })();
     }
 

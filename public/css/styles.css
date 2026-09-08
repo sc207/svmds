@@ -2695,6 +2695,26 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
   width: 4px; height: 4px; border-radius: 50%;
   background: var(--antique-gold); flex-shrink: 0;
 }
+.banner-signout {
+  margin-left: 0.55rem;
+  display: inline-flex; align-items: center; gap: 0.32rem;
+  padding: 0.28rem 0.7rem;
+  border: 1px solid var(--primary-maroon);
+  border-radius: 999px;
+  background: var(--primary-maroon);
+  color: #fff;
+  font: 600 0.74rem/1 var(--font-body);
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.banner-signout svg { color: #fff; }
+.banner-signout:hover { background: var(--primary-maroon-dark); }
+.banner-signout:active { transform: translateY(1px); }
+@media (max-width: 560px) {
+  .banner-signout span { display: none; }
+  .banner-signout { padding: 0.34rem 0.5rem; margin-left: 0.4rem; }
+}
 
 .banner-mandir-graphic {
   right: 1.5rem;
