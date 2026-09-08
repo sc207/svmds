@@ -21,16 +21,25 @@ function accRoleList() { return (typeof accountRoles === 'function') ? accountRo
    renderer here and the API renderer in access-api.js. */
 var ACC_DASH_NOTE = {
   superadmin:        'Full cockpit — KPIs, every module tile, “needs attention”, today across the temple, activity feed',
-  admin:             'Same full cockpit as superadmin (cannot grant/revoke admin·superadmin or impersonate)',
+  admin:             'Full cockpit — KPIs, every module tile, “needs attention”, today across the temple, activity feed',
   management_lead:   'Scoped mini-dashboard — only the team(s) assigned to this lead',
   pooja_coordinator: 'Scoped mini-dashboard — only the pooja(s) assigned to this coordinator',
   committee_leader:  'Scoped mini-dashboard — only the committee(s) this leader runs',
   event_incharge:    'Full cockpit for now — a scoped “my events” view is not built yet',
   accountant:        'Full cockpit for now — a scoped “my ledger” view is not built yet'
 };
+var ACC_CAL_NOTE = {
+  admin:             'All categories — poojas, meetings, events, annual, pledges, visits',
+  management_lead:   'Poojas, events and annual Tithi events only',
+  pooja_coordinator: 'Poojas, events and annual Tithi events only',
+  committee_leader:  'Poojas, events and annual Tithi events only',
+  event_incharge:    'Poojas, events and annual Tithi events only',
+  accountant:        'Poojas, events and annual Tithi events only'
+};
 function accRoleReferenceCard() {
   var roles = accRoleList();
   if (!roles.length && typeof ROLE_META !== 'undefined') roles = Object.keys(ROLE_META);
+  roles = roles.filter(function (r) { return r !== 'superadmin'; });   // one owner — not shown here
   var navCount = document.querySelectorAll('.sidebar-nav .nav-item[data-page]').length || 14;
   var rows = roles.map(function (r) {
     var pages = (typeof rolePages === 'function' ? rolePages(r) : []) || [];
@@ -38,21 +47,24 @@ function accRoleReferenceCard() {
       ? esc(window.t('acc_everything', 'everything')) + ' (' + navCount + ' ' + esc(window.t('acc_ref_pages', 'pages')) + ')'
       : esc(pages.join(', '));
     var dash = esc(window.t('acc_ref_dash_' + r, ACC_DASH_NOTE[r] || '—'));
+    var cal = esc(window.t('acc_ref_cal_' + r, ACC_CAL_NOTE[r] || '—'));
     return '<tr>' +
       '<th scope="row"><span class="badge badge-maroon">' + roleIcon(r) + ' ' + esc(roleLabel(r)) + '</span></th>' +
       '<td>' + pagesTxt + '</td>' +
-      '<td>' + dash + '</td></tr>';
+      '<td>' + dash + '</td>' +
+      '<td>' + cal + '</td></tr>';
   }).join('');
   return '<div class="card mg-mt">' +
     '<div class="card-header"><div class="card-title">' + esc(window.t('acc_ref_title', 'Roles & access reference')) + '</div></div>' +
     '<div class="card-body"><p class="mg-page-sub" style="margin-top:0">' +
       esc(window.t('acc_ref_sub', 'The fixed role model. Only superadmin and admin see this.')) + '</p>' +
-      '<div class="mg-table-scroll"><table class="acc-ref-table">' +
-      '<colgroup><col class="acc-ref-c1"><col class="acc-ref-c2"><col class="acc-ref-c3"></colgroup>' +
+      '<div class="mg-table-scroll"><table class="acc-ref-table acc-ref-table-4">' +
+      '<colgroup><col class="acc-ref-c1"><col class="acc-ref-c2"><col class="acc-ref-c3"><col class="acc-ref-c4"></colgroup>' +
       '<thead><tr>' +
         '<th>' + esc(window.t('acc_ref_role', 'Role')) + '</th>' +
         '<th>' + esc(window.t('acc_ref_open', 'Pages it may open')) + '</th>' +
         '<th>' + esc(window.t('acc_ref_dash', 'Dashboard it sees')) + '</th>' +
+        '<th>' + esc(window.t('acc_ref_cal', 'In the calendar')) + '</th>' +
       '</tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div></div></div>';
 }
