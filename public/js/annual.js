@@ -43,7 +43,7 @@
         activity: 'Bhagwan Shri Kamshibapa Birthday', activity_gu: 'ભગવાન શ્રી કમશીબાપાનો જન્મદિવસ', activity_hi: '',
         type: 'TITHI', masa: 'Ashwin', paksha: 'krishna', tithi: 13, fixedMonth: 0, fixedDay: 0,
         overrides: {}, description: '', notes: '', active: true },
-      { id: 'ANE-007', name: 'P.P. Bhuvaji Shri Sureshbapa Birthday', name_gu: 'પ.પૂ. ભુવાજ શ્રી સુરેશબાપાનો જન્મદિવસ', name_hi: '',
+      { id: 'ANE-007', name: 'P.P. Bhuvaji Shri Sureshbapa Birthday', name_gu: 'પ.પૂ. ભુવાજી શ્રી સુરેશબાપાનો જન્મદિવસ', name_hi: '',
         activity: 'Birthday', activity_gu: 'જન્મદિવસ', activity_hi: '',
         type: 'FIXED_DATE', masa: '', paksha: '', tithi: 0, fixedMonth: 9, fixedDay: 27,
         overrides: {}, description: '', notes: '', active: true }

@@ -67,7 +67,7 @@ const ANNUAL_EVENTS = [
   ['ANE-006', 'Dhanteras', 'ધનતેરસ',
    'Bhagwan Shri Kamshibapa Birthday', 'ભગવાન શ્રી કમશીબાપાનો જન્મદિવસ',
    'TITHI', 'Ashwin', 'krishna', 13, 0, 0],
-  ['ANE-007', 'P.P. Bhuvaji Shri Sureshbapa Birthday', 'પ.પૂ. ભુવાજ શ્રી સુરેશબાપાનો જન્મદિવસ',
+  ['ANE-007', 'P.P. Bhuvaji Shri Sureshbapa Birthday', 'પ.પૂ. ભુવાજી શ્રી સુરેશબાપાનો જન્મદિવસ',
    'Birthday', 'જન્મદિવસ', 'FIXED_DATE', '', '', 0, 9, 27],
 ];
 
@@ -105,6 +105,12 @@ async function seedReferenceData() {
            (code, name, name_gu, activity, activity_gu, type, masa, paksha, tithi, fixed_month, fixed_day)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [code, name, name_gu, activity, activity_gu, type, masa, paksha, tithi, fm, fd]
+      );
+    } else {
+      // keep the canonical temple names in sync (masa/tithi/overrides/active untouched)
+      await run(
+        `UPDATE annual_events SET name = ?, name_gu = ?, activity = ?, activity_gu = ?, updated_at = datetime('now') WHERE code = ?`,
+        [name, name_gu, activity, activity_gu, code]
       );
     }
   }
