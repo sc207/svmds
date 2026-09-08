@@ -12,7 +12,7 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
 const CAL = {
   year: 2026,
   month: 8,           // 0-indexed (September)
-  filters: { pooja: true, committee: true, event: true, donation: true, visit: true }
+  filters: { pooja: true, committee: true, event: true, annual: true, donation: true, visit: true }
 };
 (function () {
   const iso = (typeof MG !== 'undefined' && MG.today) ? MG.today : '2026-09-06';
@@ -74,6 +74,22 @@ function calEntries(monthKey) {
       });
     });
   }
+  // Annual temple Tithi / important events — resolved for the viewed year
+  if (CAL.filters.annual && typeof ANNUAL !== 'undefined' && Array.isArray(ANNUAL.events)) {
+    const yr = parseInt(monthKey.slice(0, 4), 10);
+    ANNUAL.events.forEach(ev => {
+      if (ev.active === false) return;
+      const r = (typeof annualResolve === 'function') ? annualResolve(ev, yr) : null;
+      if (!r || !r.date || !inMonth(r.date)) return;
+      out.push({
+        date: r.date, time: '', type: 'annual', color: '#8A2B39', scopeId: ev.id,
+        title: (typeof annualName === 'function' ? annualName(ev) : ev.name),
+        sub: (typeof annualActivity === 'function' ? annualActivity(ev) : ev.activity) +
+             ' · ' + (typeof annualTithiLabel === 'function' ? annualTithiLabel(ev) : ''),
+        go: () => { if (typeof switchPage === 'function') switchPage('events'); }
+      });
+    });
+  }
   // Donation pledges awaiting realisation
   if (CAL.filters.donation && typeof DON !== 'undefined' && Array.isArray(DON.donations)) {
     DON.donations.forEach(x => {
@@ -108,6 +124,7 @@ const CAL_TYPE_META = {
   pooja:     { key: 'cal_poojas',     def: '🪔 Poojas',    badge: 'badge-maroon' },
   committee: { key: 'cal_meetings',   def: '🏛️ Meetings',  badge: 'badge-pending' },
   event:     { key: 'cal_events',     def: '📅 Events',     badge: 'badge-pending' },
+  annual:    { key: 'cal_annual',     def: '🗓️ Annual',    badge: 'badge-maroon' },
   donation:  { key: 'cal_donations',  def: '💰 Pledges',   badge: 'badge-confirmed' },
   visit:     { key: 'cal_visits',     def: '🙏 Visits',    badge: 'badge-confirmed' }
 };

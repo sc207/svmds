@@ -20,6 +20,7 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  function T(k, f) { return (typeof window.t === 'function') ? window.t(k, f) : (f != null ? f : k); }
   function toast(m) { if (typeof showToast === 'function') showToast(m); }
   function me() { return (window.API && window.API.session) || {}; }
   function iAmSuper() { var s = me(); return !!(s.user && (s.user.roles || []).indexOf('superadmin') !== -1); }
@@ -28,8 +29,10 @@
   var SESSIONS = [];
 
   async function load() {
-    USERS = await window.API.get('/users');
-    try { SESSIONS = await window.API.get('/sessions'); } catch (e) { SESSIONS = []; }
+    var u = await window.API.get('/users');
+    USERS = Array.isArray(u) ? u : [];
+    try { var s = await window.API.get('/sessions'); SESSIONS = Array.isArray(s) ? s : []; }
+    catch (e) { SESSIONS = []; }
   }
 
   function draw() {
@@ -108,7 +111,29 @@
     return '<div class="stat-card"><div class="stat-label">' + esc(label) + '</div><div class="stat-value">' + esc(value) + '</div><div class="mg-muted-xs">' + esc(meta) + '</div></div>';
   }
 
-  async function refresh() { try { await load(); draw(); } catch (e) { toast('Load failed: ' + e.message); } }
+  function errState(msg) {
+    var root = document.getElementById('accessRoot');
+    if (!root) return;
+    root.innerHTML =
+      '<div class="mg-page-head"><div><h1 class="banner-title mg-page-title">🛡️ ' + esc(T('acc_title', 'Accounts & Access')) + '</h1></div></div>' +
+      '<div class="card mg-mt"><div class="card-body">' +
+        '<p class="mg-page-sub">' + esc(msg) + '</p>' +
+        '<button class="btn btn-primary mg-btn-xs" onclick="renderAccess()">' + esc(T('retry', 'Retry')) + '</button>' +
+      '</div></div>';
+  }
+  async function refresh() {
+    try { await load(); }
+    catch (e) {
+      console.error('[access] load failed', e);
+      errState((T('acc_load_fail', 'Could not load accounts') + ': ' + (e && e.message || 'request failed')));
+      return;
+    }
+    try { draw(); }
+    catch (e2) {
+      console.error('[access] draw failed', e2);
+      errState(T('acc_render_fail', 'Loaded, but the page could not be drawn. Reload and try again.'));
+    }
+  }
 
   /* ---------- actions ---------- */
   function roleCheckboxes(current) {

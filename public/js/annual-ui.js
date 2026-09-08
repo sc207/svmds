@@ -20,6 +20,16 @@
     calculated: { cls: 'badge-pending',   txt: 'ann_src_calc' }
   };
 
+  /* the section is shown in both Pooja & Seva and Temple Events, and feeds the
+     unified calendar — re-render every surface that could be visible. */
+  function annualRerender() {
+    try { if (typeof annualClearCache === 'function') annualClearCache(); } catch (e) {}
+    try { if (typeof renderPooja === 'function') renderPooja(); } catch (e) {}
+    try { if (typeof renderEvents === 'function') renderEvents(); } catch (e) {}
+    try { if (typeof renderUnifiedCalendar === 'function') renderUnifiedCalendar(); } catch (e) {}
+  }
+  window.annualRerender = annualRerender;
+
   /* ---------- the section (returns an HTML string) ---------- */
   window.annualEventsSection = function () {
     var Y = window.ANNUAL.year;
@@ -79,7 +89,7 @@
 
   window.annualSetYear = function (y) {
     window.ANNUAL.year = parseInt(y, 10) || new Date().getFullYear();
-    if (typeof renderPooja === 'function') renderPooja();
+    annualRerender();
   };
 
   /* ---------- create a Seva/Pooja from an annual event ---------- */
@@ -124,11 +134,12 @@
     }
 
     toast(name + ' — ' + T('ann_created', 'Seva/Pooja created') + '.');
+    if (typeof switchPage === 'function') switchPage('puja');
     if (typeof openPooja === 'function') {
       openPooja(newId);
       if (gotoInvitation && typeof setPoojaTab === 'function') setPoojaTab('invitation');
-    } else if (typeof renderPooja === 'function') {
-      renderPooja();
+    } else {
+      annualRerender();
     }
   };
 
@@ -162,7 +173,7 @@
     }
     if (typeof closeSheet === 'function') closeSheet();
     toast(remove ? T('ann_unpinned', 'Pin removed.') : T('ann_pinned', 'Date pinned for ' + Y + '.'));
-    if (typeof renderPooja === 'function') renderPooja();
+    annualRerender();
   };
 
   /* ---------- add / edit an annual event (admin) ---------- */
@@ -226,7 +237,7 @@
     if (window.API && window.API.online) {
       var p = id ? window.API.patch('/annual-events/' + id, body) : window.API.post('/annual-events', body);
       p.then(function () { return window.annualLoad(); })
-        .then(function () { if (typeof closeSheet === 'function') closeSheet(); toast(T('saved', 'Saved.')); if (typeof renderPooja === 'function') renderPooja(); })
+        .then(function () { if (typeof closeSheet === 'function') closeSheet(); toast(T('saved', 'Saved.')); annualRerender(); })
         .catch(function (e) { toast((e && e.message) || 'Save failed'); });
       return;
     }
@@ -241,7 +252,7 @@
     }
     if (typeof closeSheet === 'function') closeSheet();
     toast(T('saved', 'Saved.'));
-    if (typeof renderPooja === 'function') renderPooja();
+    annualRerender();
   };
 
   window.toggleAnnualActive = function (id) {
@@ -250,11 +261,11 @@
     ev.active = next;
     if (window.API && window.API.online) window.API.patch('/annual-events/' + id, { active: next }).catch(function () {});
     toast(next ? T('ann_enabled', 'Event enabled.') : T('ann_disabled_t', 'Event disabled.'));
-    if (typeof renderPooja === 'function') renderPooja();
+    annualRerender();
   };
 
   /* pull from the server on first load when online */
   if (window.API && window.API.online && typeof window.annualLoad === 'function') {
-    window.annualLoad().then(function (ok) { if (ok && typeof renderPooja === 'function') renderPooja(); });
+    window.annualLoad().then(function (ok) { if (ok) annualRerender(); });
   }
 })();

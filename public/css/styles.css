@@ -2963,9 +2963,11 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 .cal-legend-dot.cal-ev-pooja     { background: #6B1F2A; }
 .cal-legend-dot.cal-ev-committee { background: #3B5C8A; }
 .cal-legend-dot.cal-ev-event     { background: #C96A20; }
+.cal-legend-dot.cal-ev-annual    { background: #8A2B39; }
 .cal-legend-dot.cal-ev-donation  { background: #C9A24A; }
 .cal-legend-dot.cal-ev-visit     { background: #4C8B5A; }
 /* event pills inherit --c inline; give the donation/visit ones a fallback tint */
+.mg-cal-event.cal-ev-annual   { --c: #8A2B39; }
 .mg-cal-event.cal-ev-donation { --c: #C9A24A; }
 .mg-cal-event.cal-ev-visit    { --c: #4C8B5A; }
 

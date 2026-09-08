@@ -102,10 +102,20 @@
     return masa + ' ' + pk + ' ' + ti;
   };
 
-  /* resolve to { date:'YYYY-MM-DD'|null, source:'pinned'|'fixed'|'calculated' } */
+  /* resolve to { date:'YYYY-MM-DD'|null, source:'pinned'|'fixed'|'calculated' }
+     — memoised: the year-scan is cheap but the calendar re-renders often. */
+  var _resolveCache = {};
+  window.annualClearCache = function () { _resolveCache = {}; };
   window.annualResolve = function (ev, year) {
     year = year || window.ANNUAL.year;
-    if (window.Panchang && window.Panchang.resolveDate) return window.Panchang.resolveDate(ev, year);
+    var ck = (ev.id || ev.code || ev.name) + '|' + year + '|' + JSON.stringify(ev.overrides || {});
+    if (_resolveCache[ck]) return _resolveCache[ck];
+    var out;
+    if (window.Panchang && window.Panchang.resolveDate) {
+      out = window.Panchang.resolveDate(ev, year);
+      _resolveCache[ck] = out;
+      return out;
+    }
     // no calculator loaded → only overrides / fixed
     var ov = (ev.overrides || {})[String(year)];
     if (ov) return { date: ov, source: 'pinned' };
