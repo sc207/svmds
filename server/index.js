@@ -77,6 +77,7 @@ app.use('/api/auth', require('./routes/auth'));                 // public
 app.use('/api', authRequired);                                  // everything below needs a session
 app.use('/api', attachScope);
 
+app.use('/api/settings', require('./routes/settings'));
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/users', require('./routes/users'));
 

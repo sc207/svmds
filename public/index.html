@@ -5,6 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shri Vihat Meldi Mata Mandir — Temple Management Platform</title>
 
+  <!-- Auth gate — runs during head parse, before any module script. The
+       synchronous request is deliberate: an auth check belongs here and it
+       blocks ~1 frame. If the backend is unreachable (opened as a static
+       file / plain static host) the app falls through and boots in demo mode. -->
+  <script>
+  (function () {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', '/api/auth/me', false);
+      x.withCredentials = true;
+      x.send();
+      if (x.status === 401) { window.location.replace('/login'); return; }
+      if (x.status === 200) {
+        var r = JSON.parse(x.responseText || '{}');
+        if (!r || !r.user) { window.location.replace('/login'); return; }
+        window.__SESSION = r;   // { user, pages, isSuperadmin, impersonating }
+      }
+      /* other status (404 / 501 / offline) → demo mode */
+    } catch (e) { /* backend down → demo mode */ }
+  })();
+  </script>
+
   <link rel="icon" type="image/png" href="assets/icon.png">
 
   <!-- Splash loader — inlined so it paints instantly, before styles.css / JS
@@ -748,6 +770,7 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <!-- JavaScript Logic Engine -->
+<script src="js/api.js"></script>
 <script src="js/i18n.js"></script>
 <script>window.__boot && window.__boot(34, 'Lighting the diyas');</script>
 <script src="js/people.js"></script>
