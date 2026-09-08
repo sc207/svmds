@@ -148,7 +148,9 @@
       show('ok', 'Opening the Google account chooser…');
       watchdog = setTimeout(function () {
         watchdog = null;
-        show('err', 'Google sign-in did not complete. Reload this page and try again — if it keeps happening the portal’s Google sign-in origin may need to be configured by an administrator.');
+        show('err',
+          'Google sign-in did not complete. If the account chooser opened but hung: click the icon on the left of the address bar → allow third-party sign-in for this site, or try an Incognito window, then reload. ' +
+          'If it keeps failing for everyone, the portal’s Google sign-in origin needs to be added in Google Cloud Console.');
       }, 30000);
     }
 
@@ -194,7 +196,14 @@
         google.accounts.id.renderButton(box, {
           type: 'standard', theme: 'filled_blue', size: 'large',
           text: 'signin_with', shape: 'pill', width: 300,
-          click_listener: armWatchdog   // start the "not stuck" timer on click
+          click_listener: armWatchdog,     // start the "not stuck" timer on click
+          // Prefer the legacy popup account-chooser over FedCM where Chrome still
+          // allows the choice: the popup completes reliably with several accounts
+          // signed in and never hangs on accounts.google.com/gsi/transform. On
+          // the newest Chrome (FedCM-only) this is ignored and the browser's
+          // native chooser is used — the JS-origin allow-list must be correct
+          // for that path.
+          use_fedcm_for_button: false
         });
 
         /* dev-only diagnostics — safe values only, never tokens/cookies */
