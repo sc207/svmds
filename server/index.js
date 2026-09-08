@@ -36,7 +36,7 @@ app.use(helmet({
       styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://accounts.google.com/gsi/style"],
       styleSrcAttr:   ["'unsafe-inline'"],
       fontSrc:        ["'self'", "https://fonts.gstatic.com", "data:"],
-      imgSrc:         ["'self'", "data:", "blob:"],
+      imgSrc:         ["'self'", "data:", "blob:", "https://images.unsplash.com"],
       connectSrc:     ["'self'", "https://accounts.google.com"],
       frameSrc:       ["https://accounts.google.com"],
       objectSrc:      ["'none'"],
@@ -64,18 +64,28 @@ app.use('/api/auth/google', authLimiter);
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
 /* ============================================================
-   API ROUTERS — mounted here from Phase 2 onward.
-     app.use('/api/auth', require('./routes/auth'));          // public
-     app.use('/api/public', require('./routes/publicSignups').publicRouter); // unauth signup
-     app.use('/api', require('./middleware/auth').authRequired);
-     app.use('/api', require('./middleware/authz').attachScope);
-     app.use('/api/settings', require('./routes/settings'));
-     app.use('/api/devotees', require('./routes/devotees'));
-     … (one Router per resource — see BACKEND_PLAN.md §4.4)
+   API ROUTERS
+   Phase 2 (live): auth + sessions + users.
+   Phase 3+ adds one protected Router per resource below the guard —
+   see BACKEND_PLAN.md §4.4.
    ============================================================ */
-app.use('/api', (req, res) => res.status(501).json({ error: 'API not implemented yet (Phase 2+)' }));
+const { authRequired } = require('./middleware/auth');
+const { attachScope } = require('./middleware/authz');
 
-/* ---- static front-end (Phase 6: `git mv index.html css assets js public/`) ---- */
+app.use('/api/auth', require('./routes/auth'));                 // public
+
+app.use('/api', authRequired);                                  // everything below needs a session
+app.use('/api', attachScope);
+
+app.use('/api/sessions', require('./routes/sessions'));
+app.use('/api/users', require('./routes/users'));
+
+// Phase 3+: app.use('/api/settings',  require('./routes/settings'));
+//           app.use('/api/devotees',  require('./routes/devotees'));  … etc.
+
+app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));
+
+/* ---- static front-end (moved into public/ in Phase 2) ---- */
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 if (fs.existsSync(PUBLIC_DIR)) {
   app.use(express.static(PUBLIC_DIR));
@@ -85,7 +95,7 @@ if (fs.existsSync(PUBLIC_DIR)) {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
   });
 } else {
-  console.warn('⚠ public/ not found — front-end not served (still Phase 0). Run the git mv in Phase 6.');
+  console.warn('⚠ public/ not found — front-end not served. Run: git mv index.html css js assets public/');
 }
 
 app.use(notFound);
@@ -95,7 +105,7 @@ async function start() {
   console.log(`▶ SVMDS backend — ${config.nodeEnv}`);
   await runMigrations();
   await seedReferenceData();
-  // Phase 2: await require('./services/bootstrap').ensureAdminUser();
+  await require('./services/bootstrap').ensureAdminUser();
   // Phase 4: if (process.argv.includes('--demo')) await require('./db/seed/demo-data').seedDemoData();
   const port = process.env.PORT || config.port || 3000;
   app.listen(port, () => console.log(`✔ listening on :${port}  (health: /health)`));

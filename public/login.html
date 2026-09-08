@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Sign in — Shri Vihat Meldi Mata Mandir</title>
+<link rel="icon" href="assets/icon.png">
+<style>
+  :root{
+    --maroon:#6B1F2A; --maroon-dark:#4A1217; --saffron:#C96A20;
+    --gold:#C9A24A; --gold-light:#E6C978; --ivory:#F8F2E7; --cream:#EFE3CF;
+    --muted:#806B58;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:20px; color:var(--maroon-dark);
+    background:
+      radial-gradient(circle at 20% 15%, rgba(201,162,74,.18), transparent 45%),
+      radial-gradient(circle at 85% 85%, rgba(201,106,32,.15), transparent 45%),
+      linear-gradient(160deg, #FBF6EC, #EFE3CF);
+  }
+  .card{
+    background:#fff; width:100%; max-width:400px; padding:38px 32px 32px;
+    border-radius:18px; border:1px solid var(--cream);
+    box-shadow:0 24px 60px rgba(74,18,23,.18);
+    text-align:center;
+  }
+  .emblem{
+    width:76px; height:76px; margin:0 auto 16px; display:block;
+    border-radius:50%; border:2px solid var(--gold);
+    box-shadow:0 4px 14px rgba(201,162,74,.4); object-fit:cover;
+  }
+  .om{
+    width:72px;height:72px;margin:0 auto 16px;display:flex;align-items:center;
+    justify-content:center;border-radius:50%;border:2px solid var(--gold);
+    font-size:34px;color:var(--maroon);background:#FDF9EE;
+  }
+  h1{
+    font-family:'Cinzel',Georgia,serif; font-size:19px; font-weight:700;
+    color:var(--maroon); letter-spacing:.3px; line-height:1.35; margin-bottom:4px;
+  }
+  .sub{ font-size:12.5px; color:var(--muted); margin-bottom:26px }
+  .divider{
+    height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent);
+    margin:22px 0 20px;
+  }
+  #gbtn{ display:flex; justify-content:center; min-height:44px }
+  .hint{ font-size:12px; color:var(--muted); margin-top:18px; line-height:1.5 }
+  .msg{
+    margin-top:16px; padding:10px 12px; border-radius:9px; font-size:12.5px;
+    display:none; text-align:left;
+  }
+  .msg.err{ display:block; background:#FBF0EF; color:#B84A42; border:1px solid #E6C3BF }
+  .msg.ok{ display:block; background:#EAF3EC; color:#3F7A4C; border:1px solid #BFD9C4 }
+  .foot{ margin-top:22px; font-size:11px; color:#A99B87 }
+  a{ color:var(--saffron); text-decoration:none }
+</style>
+</head>
+<body>
+  <div class="card">
+    <img src="assets/icon.png" alt="" class="emblem"
+         onerror="this.outerHTML='&lt;div class=&quot;om&quot;&gt;ॐ&lt;/div&gt;'">
+    <h1>Shri Vihat Meldi Mata Mandir</h1>
+    <div class="sub">Sanand, Gujarat · Temple management</div>
+
+    <div id="gbtn"></div>
+    <div id="msg" class="msg"></div>
+
+    <div class="divider"></div>
+    <p class="hint">
+      Sign in with the Google account an administrator has registered for you.
+      There is no self sign-up.
+    </p>
+    <div class="foot">जय શ્રી વિહત મેલડી માતાજી</div>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+  (function () {
+    var msg = document.getElementById('msg');
+    function show(kind, text) { msg.className = 'msg ' + kind; msg.textContent = text; }
+
+    function onGoogle(resp) {
+      show('ok', 'Signing you in…');
+      fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ credential: resp.credential })
+      })
+        .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+        .then(function (res) {
+          if (!res.ok) { show('err', res.b.error || 'Sign-in failed.'); return; }
+          window.location.href = '/';
+        })
+        .catch(function () { show('err', 'Network error — please try again.'); });
+    }
+
+    function init(clientId) {
+      if (!clientId) {
+        show('err', 'Google sign-in is not configured on the server (GOOGLE_CLIENT_ID missing).');
+        return;
+      }
+      function ready() {
+        if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(ready, 120); return; }
+        google.accounts.id.initialize({ client_id: clientId, callback: onGoogle });
+        google.accounts.id.renderButton(document.getElementById('gbtn'), {
+          theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width: 300
+        });
+        google.accounts.id.prompt();
+      }
+      ready();
+    }
+
+    fetch('/api/auth/config', { credentials: 'include' })
+      .then(function (r) { return r.json(); })
+      .then(function (c) { init(c.googleClientId); })
+      .catch(function () { show('err', 'Could not reach the server.'); });
+  })();
+  </script>
+</body>
+</html>

@@ -14,39 +14,57 @@ The repo has two parts:
 
 | | Stack | State |
 | --- | --- | --- |
-| **Frontend** (`index.html`, `css/`, `js/`, `assets/`) | static, no-build, vanilla-JS single-page app | complete & in use |
-| **Backend** (`server/`) | Node 20 · Express · SQLite (dev) / Turso libsql (prod) · Google Sign-In auth · revocable sessions | Phase 0 — scaffold + schema; see [`BACKEND_PLAN.md`](BACKEND_PLAN.md) |
+| **Frontend** (`public/index.html`, `public/css/`, `public/js/`, `public/assets/`) | static, no-build, vanilla-JS single-page app | complete & in use |
+| **Backend** (`server/`) | Node 20 · Express · SQLite (dev) / Turso libsql (prod) · Google Sign-In auth · revocable sessions | Phase 2 — auth + sessions + accounts live; per-resource APIs next. See [`BACKEND_PLAN.md`](BACKEND_PLAN.md) |
 
 ---
 
 ## Run the frontend
 
-Open `index.html` directly, **or** serve the folder statically:
+The site lives in `public/`. Serve it standalone:
 
 ```bash
-python -m http.server 8000        # then http://localhost:8000
+python -m http.server 8000 --directory public     # then http://localhost:8000
 ```
 
-Any static server works (`npx serve`, VS Code Live Server, …). All asset /
-script / stylesheet paths are relative, so it runs from a project sub-path
-unchanged. Today all data is an **in-memory seed** in `js/*.js` — every reload
-resets it; only the temple-identity form, language and the working-date clock
-touch `localStorage`.
+Any static server works (`npx serve public`, VS Code Live Server, …), or just
+run the backend (below) — Express serves `public/` and falls back to the SPA.
+All asset / script / stylesheet paths are relative, so it also runs from a
+project sub-path unchanged. Until the per-resource APIs land, data is still an
+**in-memory seed** in `public/js/*.js` — every reload resets it; only the
+temple-identity form, language and the working-date clock touch `localStorage`.
 
 ## Run the backend (development)
 
 ```bash
 npm install
-cp .env.example .env               # ADMIN_EMAIL + a JWT_SECRET are enough for dev
+cp .env.example .env               # ADMIN_EMAIL + JWT_SECRET + GOOGLE_CLIENT_ID
 npm run migrate -- --seed          # create data/svmds.db, apply migrations, seed catalogs
-npm start                          # http://localhost:3000  (health: /health)
+npm start                          # http://localhost:3000  (login: /login, health: /health)
 ```
+
+On boot the server applies migrations, seeds reference data, and bootstraps
+`ADMIN_EMAIL` as a `superadmin` (idempotent). Visit `/login`, sign in with that
+Google account, and you land on the app.
 
 With `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` **unset**, the backend uses a
 local `data/svmds.db` (better-sqlite3). Set both to target a Turso database.
 Sign-in uses **Google Sign-In** — set `GOOGLE_CLIENT_ID` to a Google Cloud
-OAuth **Web** client id (and add your origin to that client's authorised
-JavaScript origins). No SMTP, no client secret.
+OAuth **Web** client id, and add `http://localhost:3000` (dev) + your Render URL
+to that client's **Authorized JavaScript origins**. No SMTP, no client secret.
+
+### API (Phase 2)
+
+| Route | Auth | Purpose |
+| --- | --- | --- |
+| `POST /api/auth/google` | public | verify a Google ID token → set the session cookie |
+| `GET /api/auth/me` · `POST /api/auth/logout` | cookie | current user + pages · end session |
+| `POST /api/auth/impersonate` · `/stop-impersonate` | superadmin | short-lived "sign in as" |
+| `GET/POST/PATCH/DELETE /api/users` · `/:id/roles` | admin tier¹ | Accounts & Access |
+| `GET/DELETE /api/sessions` | cookie² | list / revoke devices |
+
+¹ granting `admin`/`superadmin` or touching such an account is **superadmin only**.
+² listing/revoking *other* users' sessions is admin tier.
 
 ### npm scripts
 
