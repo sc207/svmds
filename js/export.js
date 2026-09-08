@@ -67,11 +67,22 @@
       '@media print{html,body{background:#fff}}' +
       (opt.css || '') + '</style></head><body>' +
       '<div class="' + (opt.wrapClass || 'tpl-print-wrap') + '">' + (opt.inner || '') + '</div>' +
-      '<' + 'script>(function(){var d=false;function go(){if(d)return;d=true;try{window.focus()}catch(e){}' +
-      'try{window.print()}catch(e){}}' +
-      'if(document.readyState==="complete"){setTimeout(go,400)}' +
-      'else{window.addEventListener("load",function(){setTimeout(go,400)})}' +
-      'setTimeout(go,3000);})();<' + '/script></body></html>';
+      /* Only print once styles, fonts AND images are really ready — a fixed
+         timer used to fire window.print() before the linked stylesheet had
+         parsed, so the page printed unstyled and every sheet collapsed onto
+         one printed page. */
+      '<' + 'script>(function(){var d=false;' +
+      'function go(){if(d)return;d=true;try{window.focus()}catch(e){}try{window.print()}catch(e){}}' +
+      'function cssReady(){var ls=document.querySelectorAll(\'link[rel="stylesheet"]\');' +
+      'for(var i=0;i<ls.length;i++){var s;try{s=ls[i].sheet}catch(e){return false}' +
+      'if(!s)return false;try{if(!s.cssRules||!s.cssRules.length)return false}catch(e){}}return true}' +
+      'function imgReady(){var im=document.images;for(var i=0;i<im.length;i++){if(!im[i].complete)return false}return true}' +
+      'if(document.fonts&&document.fonts.ready){try{document.fonts.ready.then(function(){},function(){})}catch(e){}}' +
+      'function whenReady(){var n=0;(function poll(){n++;' +
+      'var fontsOk=(!document.fonts)||document.fonts.status==="loaded"||n>40;' +
+      'if((cssReady()&&imgReady()&&fontsOk)||n>60){setTimeout(go,250)}else{setTimeout(poll,100)}})()}' +
+      'if(document.readyState==="complete"){whenReady()}else{window.addEventListener("load",whenReady)}' +
+      'setTimeout(go,9000);})();<' + '/script></body></html>';
     w.document.open(); w.document.write(html); w.document.close();
     return w;
   };
@@ -154,6 +165,9 @@
     var cols = opt.columns || [];
     var rows = opt.rows || [];
     var tpl = templeInfo();
+    var wide = cols.length >= 8;                    // many columns -> A4 landscape
+    var pageW = wide ? '297mm' : '210mm';
+    var tblFont = cols.length >= 11 ? '8px' : (wide ? '8.6px' : '10px');
     var w = window.open('', '_blank');
     if (!w) { toast('Please allow pop-ups to save as PDF.'); return; }
 
@@ -165,7 +179,7 @@
       "@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Cormorant+Garamond:ital@0;1&family=Inter:wght@400;600;700&family=Noto+Serif+Gujarati:wght@400;600;700&display=swap');" +
       '*{box-sizing:border-box}' +
       'html,body{margin:0;padding:0;background:#efe7d7;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.rpt{position:relative;width:210mm;min-height:297mm;margin:14px auto;background:#fff;overflow:hidden;box-shadow:0 12px 40px rgba(59,20,23,.25)}' +
+      '.rpt{position:relative;width:' + pageW + ';min-height:297mm;margin:14px auto;background:#fff;overflow:hidden;box-shadow:0 12px 40px rgba(59,20,23,.25)}' +
       '.rc{position:absolute;width:60px;height:60px;pointer-events:none;background:linear-gradient(#b8892f,#b8892f) left top/100% 3px no-repeat,linear-gradient(#b8892f,#b8892f) left top/3px 100% no-repeat}' +
       '.rc.tl{top:16px;left:16px}.rc.tr{top:16px;right:16px;transform:scaleX(-1)}.rc.bl{bottom:16px;left:16px;transform:scaleY(-1)}.rc.br{bottom:16px;right:16px;transform:scale(-1)}' +
       '.rpt-hero{position:absolute;right:-28px;bottom:-24px;width:44%;opacity:.06;pointer-events:none}' +
@@ -180,13 +194,26 @@
       '.rpt-sub{text-align:center;font-family:"Cormorant Garamond",serif;font-style:italic;color:#5b4a37;font-size:13px;margin-bottom:12px}' +
       '.rpt-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:5px 16px;font-size:9.5px;color:#8a7a5c;margin-bottom:14px}' +
       '.rpt-meta strong{color:#3B2418}' +
-      'table.rpt-t{width:100%;border-collapse:collapse;font-family:"Inter",sans-serif;font-size:10px}' +
+      'table.rpt-t{width:100%;border-collapse:collapse;font-family:"Inter",sans-serif;font-size:' + tblFont + ';table-layout:fixed}' +
+      '.rpt-t th,.rpt-t td{overflow-wrap:anywhere;word-break:break-word;white-space:normal}' +
       '.rpt-t thead th{background:#6B1F2A;color:#fff;text-align:left;padding:7px 9px;font-weight:700;font-size:8.5px;letter-spacing:.5px;text-transform:uppercase}' +
       '.rpt-t tbody td{padding:6px 9px;border-bottom:1px solid #e5d5c0;color:#3B2418;vertical-align:top}' +
       '.rpt-t tbody tr:nth-child(even) td{background:#faf6ec}' +
       '.rpt-foot{margin-top:16px;border-top:1px solid #C9A24A;padding-top:9px;display:flex;justify-content:space-between;align-items:flex-end;font-size:8.5px;color:#8a7a5c}' +
       '.rpt-sign{text-align:center}.rpt-sign span{display:block;width:150px;border-top:1px solid #3B2418;margin-bottom:3px}' +
-      '@media print{@page{size:A4;margin:12mm}html,body{background:#fff}.rpt{width:auto;min-height:0;margin:0;box-shadow:none}.rpt-in{padding:0}.rc,.rpt-hero{display:none}.rpt-t thead{display:table-header-group}.rpt-t tr{page-break-inside:avoid}}' +
+      '@media print{' +
+        '@page{size:A4 ' + (wide ? 'landscape' : 'portrait') + ';margin:12mm}' +
+        'html,body{background:#fff}' +
+        /* overflow:visible is critical — with overflow:hidden Chrome treats .rpt
+           as one unbreakable block and clips every row past page 1 */
+        '.rpt{width:auto;min-height:0;margin:0;box-shadow:none;overflow:visible;position:static}' +
+        '.rpt-in{padding:0}' +
+        '.rc,.rpt-hero{display:none}' +
+        '.rpt-t{page-break-inside:auto}' +
+        '.rpt-t thead{display:table-header-group}' +
+        '.rpt-t tr{page-break-inside:avoid}' +
+        '.rpt-foot{page-break-inside:avoid}' +
+      '}' +
       '</style></head><body><div class="rpt">' +
       '<span class="rc tl"></span><span class="rc tr"></span><span class="rc bl"></span><span class="rc br"></span>' +
       '<img class="rpt-hero" src="' + assetURL('assets/temple.png') + '" alt="" onerror="this.style.display=\'none\'">' +
@@ -206,9 +233,15 @@
       xesc(String(location.href).split('#')[0]) + '</div>' +
       '<div class="rpt-sign"><span></span>Authorised Signatory / Trustee</div></div>' +
       '</div></div>' +
-      '<' + 'script>(function(){var d=false;function go(){if(d)return;d=true;try{window.focus()}catch(e){}try{window.print()}catch(e){}}' +
-      'if(document.readyState==="complete"){setTimeout(go,400)}else{window.addEventListener("load",function(){setTimeout(go,400)})}' +
-      'setTimeout(go,3000);})();<' + '/script>' +
+      '<' + 'script>(function(){var d=false;' +
+      'function go(){if(d)return;d=true;try{window.focus()}catch(e){}try{window.print()}catch(e){}}' +
+      'function imgReady(){var im=document.images;for(var i=0;i<im.length;i++){if(!im[i].complete)return false}return true}' +
+      'if(document.fonts&&document.fonts.ready){try{document.fonts.ready.then(function(){},function(){})}catch(e){}}' +
+      'function whenReady(){var n=0;(function poll(){n++;' +
+      'var fontsOk=(!document.fonts)||document.fonts.status==="loaded"||n>40;' +
+      'if((imgReady()&&fontsOk)||n>60){setTimeout(go,250)}else{setTimeout(poll,100)}})()}' +
+      'if(document.readyState==="complete"){whenReady()}else{window.addEventListener("load",whenReady)}' +
+      'setTimeout(go,9000);})();<' + '/script>' +
       '</body></html>';
 
     w.document.open(); w.document.write(html); w.document.close();
@@ -240,6 +273,68 @@
       '<button type="button" class="export-bar-btn export-bar-pdf" onclick="runExport(\'' + key + '\',\'pdf\')" title="Print / Save as PDF">PDF</button>' +
       '</span>';
   }
+
+  /* ---- lazy PDF engine (pdfmake + html2canvas from cdnjs) ----
+     Same technique the AdminLTE / DataTables "PDF" button uses: build the
+     document with pdfMake and call .download().  html2canvas rasterises each
+     invitation card to an image, pdfMake places one image per page with an
+     explicit `pageBreak:'before'` so page N+1 always starts a fresh sheet.
+     Loaded only on first use so the app stays lean / offline-friendly for
+     everyone who never exports. Resolves with { pdfMake, html2canvas }. */
+  var _pdfLibs = null;
+  function loadScript(src) {
+    return new Promise(function (res, rej) {
+      var s = document.createElement('script');
+      s.src = src; s.async = true;
+      s.onload = function () { res(); };
+      s.onerror = function () { rej(new Error('load failed: ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  function ensurePdfLibs() {
+    if (_pdfLibs) return _pdfLibs;
+    var CDN = 'https://cdnjs.cloudflare.com/ajax/libs/';
+    _pdfLibs = Promise.resolve()
+      .then(function () {
+        // html2canvas-pro (maintained fork) — the original 1.4.1 THROWS on the
+        // modern color(srgb …) / color-mix() / oklch() values Chrome now returns
+        // from getComputedStyle, which killed every invitation capture.
+        return window.html2canvas ? null
+          : loadScript('https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas-pro.min.js');
+      })
+      .then(function () {
+        return (window.pdfMake && window.pdfMake.createPdf) ? null
+          : loadScript(CDN + 'pdfmake/0.2.7/pdfmake.min.js');
+      })
+      .then(function () {
+        // vfs_fonts registers pdfMake.vfs (the default Roboto font data)
+        return (window.pdfMake && window.pdfMake.vfs) ? null
+          : loadScript(CDN + 'pdfmake/0.2.7/vfs_fonts.js');
+      })
+      .then(function () {
+        if (!window.pdfMake || !window.pdfMake.createPdf || !window.html2canvas)
+          throw new Error('PDF engine unavailable');
+        return { pdfMake: window.pdfMake, html2canvas: window.html2canvas };
+      });
+    _pdfLibs.catch(function () { _pdfLibs = null; });   // allow retry after a failure
+    return _pdfLibs;
+  }
+  window.ensurePdfLibs = ensurePdfLibs;
+
+  /* lazy JSZip (cdnjs) — for bundling individual invitation PDFs into one .zip */
+  var _zipLib = null;
+  function ensureZipLib() {
+    if (_zipLib) return _zipLib;
+    _zipLib = (window.JSZip ? Promise.resolve()
+      : loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'))
+      .then(function () {
+        if (!window.JSZip) throw new Error('ZIP engine unavailable');
+        return window.JSZip;
+      });
+    _zipLib.catch(function () { _zipLib = null; });
+    return _zipLib;
+  }
+  window.ensureZipLib = ensureZipLib;
 
   window.registerExport = registerExport;
   window.runExport = runExport;

@@ -78,39 +78,107 @@ function dashTodayItems(scope) {
 function dashModuleTiles(persona) {
   const admin = persona.kind === 'admin';
   const tiles = [];
+  /* sub = a short "what you do here", not another number */
   const T = (page, icon, key, def, count, sub, show) => {
     if (show === false) return;
     tiles.push(`<button class="dash-tile" onclick="switchPage('${page}')">
       <span class="dash-tile-ico">${icon}</span>
       <span class="dash-tile-body">
-        <strong>${esc(window.t(key, def))}</strong>
-        <span class="dash-tile-count">${esc(String(count))}</span>
+        <span class="dash-tile-headrow"><strong>${esc(window.t(key, def))}</strong><span class="dash-tile-count">${esc(String(count))}</span></span>
         <span class="dash-tile-sub">${esc(sub)}</span>
       </span>
       <span class="dash-tile-go">→</span>
     </button>`);
   };
   if (typeof POOJA !== 'undefined')
-    T('puja', '🪔', 'nav_puja_s', 'Pooja & Seva', POOJA.poojas.length, `${POOJA.poojaTypes.length} ${window.t('pj_type', 'types')}`, admin || persona.kind === 'pooja_coordinator');
+    T('puja', '🪔', 'nav_puja_s', 'Pooja & Seva', POOJA.poojas.length, window.t('guide_m_puja', 'Schedule rituals & sevas, record sevarthi, print invitations'), admin || persona.kind === 'pooja_coordinator');
   if (typeof DON !== 'undefined') {
     const dm = DON.donations.filter(x => (x.date || '').indexOf(dashMonthKey()) === 0);
-    T('donations', '💰', 'don_title', 'Donations', dm.length + ' ' + window.t('cal_item', 'this month'), `${DON.donors.length} ${window.t('don_donor', 'donors')}`, admin || persona.kind === 'accountant');
+    T('donations', '💰', 'don_title', 'Donations', dm.length, window.t('guide_m_don', 'Cash & in-kind offerings, 80G receipts & certificates'), admin || persona.kind === 'accountant');
   }
   if (typeof CMT !== 'undefined')
-    T('committees', '🏛️', 'cmt_title', 'Committee / Samaj', CMT.committees.length, `${CMT.members.length} ${window.t('cmt_members', 'members')}`, admin || persona.kind === 'committee_leader');
+    T('committees', '🏛️', 'cmt_title', 'Committee / Samaj', CMT.committees.length, window.t('guide_m_cmt', 'Construction governance bodies — members, meetings, attendance'), admin || persona.kind === 'committee_leader');
   if (typeof EV !== 'undefined')
-    T('events', '📅', 'ev_title', 'Temple Events', EV.events.length, `${EV.eventTypes.length} ${window.t('ev_type', 'types')}`, admin || persona.kind === 'event_incharge');
+    T('events', '📅', 'ev_title', 'Temple Events', EV.events.length, window.t('guide_m_events', 'Plan festivals — Navratri, Annakut, Patotsav'), admin || persona.kind === 'event_incharge');
   if (typeof MG !== 'undefined')
-    T('management', '🗂️', 'nav_management_s', 'Management Apps', MG.managements.length, `${MG.members.length} ${window.t('cmt_members', 'volunteers')}`, admin || persona.kind === 'management_lead');
+    T('management', '🗂️', 'nav_management_s', 'Management Apps', MG.managements.length, window.t('guide_m_mg', 'Volunteer teams — prasad, parking, decoration — rosters & badges'), admin || persona.kind === 'management_lead');
   if (typeof VISITS !== 'undefined')
-    T('visits', '🙏', 'vis_title', 'Bhuvaji Visits', VISITS.list.length, `${VISITS.list.filter(v => v.date >= dashToday() && v.status !== 'cancelled').length} ${window.t('cal_up_next', 'upcoming')}`, admin);
+    T('visits', '🙏', 'vis_title', 'Bhuvaji Visits', VISITS.list.length, window.t('guide_m_visits', 'Take the murti / Bhuvaji to a home or shop, with an escort team'), admin);
   if (admin && typeof state !== 'undefined') {
-    T('devotees', '👥', 'nav_devotees_s', 'Devotees', state.devotees.length, window.t('dash_on_file', 'on file'), true);
-    T('inventory', '📦', 'nav_inventory_s', 'Inventory', state.inventory.length, window.t('dash_items', 'items'), true);
-    T('expenses', '💸', 'nav_expenses_s', 'Expenses', state.expenses.length, window.t('dash_vouchers', 'vouchers'), true);
+    T('devotees', '👥', 'nav_devotees_s', 'Devotees', state.devotees.length, window.t('guide_m_devotees', 'The master register used across donations, poojas & committees'), true);
+    T('inventory', '📦', 'nav_inventory_s', 'Inventory', state.inventory.length, window.t('guide_m_inv', 'Samagri, prasad & assets, with low-stock alerts'), true);
+    T('expenses', '💸', 'nav_expenses_s', 'Expenses', state.expenses.length, window.t('guide_m_exp', 'Log temple spending against vouchers'), true);
   }
-  T('calendar', '🗓️', 'cal_title', 'Unified Calendar', dashTodayItems().length, window.t('dash_today', 'today'), true);
+  T('calendar', '🗓️', 'cal_title', 'Unified Calendar', dashTodayItems().length, window.t('guide_m_cal', 'Every dated item from every section on one grid'), true);
   return tiles.join('');
+}
+
+/* ---- "how it works" orientation panel (admin) ---- */
+function dashGuideSeen() {
+  try { return localStorage.getItem('svmmm_guide_seen') === '1'; } catch (e) { return false; }
+}
+function dashDismissGuide() {
+  try { localStorage.setItem('svmmm_guide_seen', '1'); } catch (e) {}
+  const d = document.querySelector('.dash-guide'); if (d) d.open = false;
+}
+function dashShowGuide() {
+  try { localStorage.removeItem('svmmm_guide_seen'); } catch (e) {}
+  const d = document.querySelector('.dash-guide');
+  if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
+function dashGuidePanel() {
+  const mods = [
+    ['puja', '🪔', window.t('nav_puja_s', 'Pooja & Seva'), window.t('guide_m_puja', 'Schedule rituals & sevas, record sevarthi, print invitations')],
+    ['events', '📅', window.t('ev_title', 'Temple Events'), window.t('guide_m_events', 'Plan festivals — Navratri, Annakut, Patotsav')],
+    ['visits', '🙏', window.t('vis_title', 'Bappa / Bhuvaji Visits'), window.t('guide_m_visits', 'Take the murti / Bhuvaji to a home or shop, with an escort team')],
+    ['devotees', '👥', window.t('nav_devotees_s', 'Devotees'), window.t('guide_m_devotees', 'The master register used across donations, poojas & committees')],
+    ['committees', '🏛️', window.t('cmt_title', 'Committee / Samaj'), window.t('guide_m_cmt', 'Construction governance bodies — members, meetings, attendance')],
+    ['management', '🗂️', window.t('nav_management_s', 'Management Apps'), window.t('guide_m_mg', 'Volunteer teams — prasad, parking, decoration — rosters & badges')],
+    ['donations', '💰', window.t('don_title', 'Donations'), window.t('guide_m_don', 'Cash & in-kind offerings, 80G receipts & certificates')],
+    ['expenses', '💸', window.t('nav_expenses_s', 'Expenses'), window.t('guide_m_exp', 'Log temple spending against vouchers')],
+    ['inventory', '📦', window.t('nav_inventory_s', 'Inventory'), window.t('guide_m_inv', 'Samagri, prasad & assets, with low-stock alerts')],
+    ['calendar', '🗓️', window.t('cal_title', 'Unified Calendar'), window.t('guide_m_cal', 'Every dated item from every section on one grid')],
+    ['reports', '📊', window.t('rep_title', 'Reports & Analytics'), window.t('guide_m_rep', 'Live month figures + downloadable registers (CSV / Excel / PDF)')],
+    ['admin', '🛡️', window.t('acc_title', 'Accounts & Access'), window.t('guide_m_acc', 'Who has a login and what each person can open; audit trail')],
+    ['settings', '⚙️', window.t('set_title', 'Platform Settings'), window.t('guide_m_set', 'Temple identity, language, and the working date that drives reports')]
+  ].map(m => `<button class="dash-guide-mod" onclick="switchPage('${m[0]}')">
+      <span class="dash-guide-ico">${m[1]}</span>
+      <span class="dash-guide-mtext"><strong>${esc(m[2])}</strong><span>${esc(m[3])}</span></span>
+    </button>`).join('');
+
+  const tasks = [
+    [window.t('guide_t_don', 'Record a donation & print an 80G receipt'), 'donations', window.t('don_record', 'Record Donation')],
+    [window.t('guide_t_pooja', 'Schedule a pooja or festival seva'), 'puja', window.t('pj_schedule_btn', 'Schedule Pooja / Seva')],
+    [window.t('guide_t_fest', 'Plan a festival (Navratri, Annakut…)'), 'events', window.t('ev_add', 'Add Event')],
+    [window.t('guide_t_visit', 'Send Bappa / Bhuvaji to a home or shop'), 'visits', window.t('vis_add', 'Add Visit')],
+    [window.t('guide_t_team', 'Start a volunteer team (parking, prasad…)'), 'management', window.t('nav_management_s', 'Management Apps')],
+    [window.t('guide_t_login', 'Give someone login access'), 'admin', window.t('acc_title', 'Accounts & Access')],
+    [window.t('guide_t_date', 'Change the working date or temple details'), 'settings', window.t('set_title', 'Settings')]
+  ].map(t => `<tr><td>${esc(t[0])}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn btn-outline mg-btn-xs" onclick="switchPage('${t[1]}')">${esc(t[2])} →</button></td></tr>`).join('');
+
+  const gloss = [
+    ['Sevarthi', window.t('guide_g_sevarthi', 'The devotee family that sponsors and performs a pooja as seva.')],
+    [window.t('guide_g_padh_k', 'Padhramani / Bhuvaji visit'), window.t('guide_g_padh', "Taking Maa's murti or the Bhuvaji to a devotee's home or shop for a blessing.")],
+    [window.t('guide_g_cvm_k', 'Committee vs Management'), window.t('guide_g_cvm', 'Committee = construction governance bodies. Management = operational volunteer teams.')],
+    [window.t('guide_g_date_k', 'Working date'), window.t('guide_g_date', 'The "today" every dashboard, report and status is measured against — set it in Settings.')],
+    [window.t('guide_g_scope_k', '"Viewing as" (top bar)'), window.t('guide_g_scope', 'Preview the app as a limited login would see it. Switch back to Administrator any time.')]
+  ].map(g => `<div><strong>${esc(g[0])}</strong><span>${esc(g[1])}</span></div>`).join('');
+
+  return `
+  <details class="dash-guide"${dashGuideSeen() ? '' : ' open'}>
+    <summary>📖 ${window.t('guide_title', 'New here? How this platform works')}</summary>
+    <div class="dash-guide-body">
+      <p class="dash-guide-lead">${window.t('guide_lead', 'This is one platform for the whole temple. Pick a section from the sidebar, or use the shortcuts below. Every list has an “Add” button top-right, and every record opens a workspace with tabs.')}</p>
+      <div class="dash-guide-sec">${window.t('guide_modules', 'What each section is for')}</div>
+      <div class="dash-guide-mods">${mods}</div>
+      <div class="dash-guide-sec">${window.t('guide_tasks', 'Common tasks — where to go')}</div>
+      <div class="mg-table-scroll"><table class="custom-table dash-guide-tasks"><tbody>${tasks}</tbody></table></div>
+      <div class="dash-guide-sec">${window.t('guide_glossary', 'Words used here')}</div>
+      <div class="dash-guide-gloss">${gloss}</div>
+      <button class="btn btn-outline mg-btn-xs dash-guide-hide" onclick="dashDismissGuide()">${window.t('guide_hide', 'Got it — hide this')}</button>
+    </div>
+  </details>`;
 }
 
 /* ---- needs-attention alerts ---- */
@@ -192,6 +260,8 @@ function dashboardAdmin() {
   const f = dashFigures();
   const alerts = dashAlerts();
   return `
+  ${dashGuidePanel()}
+
   <div class="stats-grid">
     ${kpiCard(window.t('dash_kpi_pooja', "Today's Poojas"), f.poojaToday, `${f.poojaUpcoming} ${window.t('cal_up_next', 'upcoming')}`, '🪔')}
     ${kpiCard(window.t('dash_kpi_don', 'Donations This Month'), '₹' + (f.donCash + f.donKind).toLocaleString('en-IN'), `${window.t('don_cash', 'cash')} ₹${f.donCash.toLocaleString('en-IN')} · ${window.t('don_kind', 'kind')} ₹${f.donKind.toLocaleString('en-IN')}`, '💰')}
@@ -199,8 +269,11 @@ function dashboardAdmin() {
     ${kpiCard(window.t('dash_kpi_month', 'This Month'), (f.meetings + f.events) + '', `${f.meetings} ${window.t('cmt_meetings_word', 'meetings')} · ${f.events} ${window.t('ev_title', 'events')}`, '🗓️')}
   </div>
 
-  <div class="section-title mg-mt"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    <span>${window.t('dash_glance', 'Your temple at a glance')}</span></div>
+  <div class="section-title mg-mt flex justify-between items-center">
+    <span class="flex items-center gap-2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    ${window.t('dash_glance', 'Your temple at a glance')}</span>
+    <button class="btn btn-outline mg-btn-xs" onclick="dashShowGuide()">📖 ${window.t('guide_reopen', 'Guide')}</button>
+  </div>
   <div class="dash-tiles">${dashModuleTiles({ kind: 'admin' })}</div>
 
   ${alerts.length ? `

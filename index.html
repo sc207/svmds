@@ -315,7 +315,8 @@
 
         <div class="nav-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="globalSearchInput" data-i18n-ph="search_placeholder" placeholder="Search devotees, receipts, poojas..." oninput="handleGlobalSearch(this.value)">
+          <input type="text" id="globalSearchInput" autocomplete="off" data-i18n-ph="search_placeholder" placeholder="Search anything…" oninput="handleGlobalSearch(this.value)" onkeydown="gsearchKeydown(event)">
+          <kbd class="nav-search-kbd">⌘K</kbd>
         </div>
       </div>
 
@@ -333,13 +334,15 @@
         <!-- Role Scope Selector -->
         <div class="role-badge-select">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <select id="roleScopeSelect" onchange="changeRoleScope(this.value)">
-            <option value="admin">Super Admin (Full Platform)</option>
-            <option value="pooja_manager">Pooja Manager Scope</option>
-            <option value="accountant">Temple Accountant Scope</option>
-            <optgroup label="Management Lead Scope" id="roleLeadGroup"></optgroup>
-            <optgroup label="Pooja Coordinator Scope" id="roleCoordGroup"></optgroup>
-            <optgroup label="Committee Leader Scope" id="roleCmtGroup"></optgroup>
+          <select id="roleScopeSelect" onchange="changeRoleScope(this.value)" title="Preview the platform as a limited login would see it">
+            <option value="admin">Viewing as: Administrator — full access</option>
+            <optgroup label="Preview a limited login ↓">
+              <option value="pooja_manager">Pooja Manager (poojas only)</option>
+              <option value="accountant">Accountant (donations only)</option>
+            </optgroup>
+            <optgroup label="Preview a Management Lead" id="roleLeadGroup"></optgroup>
+            <optgroup label="Preview a Pooja Coordinator" id="roleCoordGroup"></optgroup>
+            <optgroup label="Preview a Committee Leader" id="roleCmtGroup"></optgroup>
           </select>
         </div>
 
@@ -1024,8 +1027,8 @@
   <div class="modal-box" style="max-width: 760px;">
     <div class="modal-header">
       <div>
-        <div class="modal-title" id="poojaFormTitle">Create Pooja</div>
-        <span class="mg-muted-xs">Pooja & Seva event scheduling</span>
+        <div class="modal-title" id="poojaFormTitle">Schedule a Pooja / Seva</div>
+        <span class="mg-muted-xs">A dated event — pick a ritual type from the catalog, set the date(s), then add sevarthi &amp; guests.</span>
       </div>
       <button class="modal-close-btn" onclick="closeModal('modalPooja')">&times;</button>
     </div>
@@ -1033,12 +1036,14 @@
       <form id="formPooja" onsubmit="handleSavePooja(event)">
         <div class="grid mg-2col-form">
           <div class="form-group">
-            <label class="form-label" for="pjFieldType">Pooja Type *</label>
+            <label class="form-label" for="pjFieldType">Ritual Type * <span class="mg-muted-xs">(from catalog)</span></label>
             <select class="form-select" id="pjFieldType" onchange="onPoojaTypeChange()"></select>
+            <div class="mg-muted-xs" id="pjTypeHint">Not listed? <a href="#" onclick="closeModal('modalPooja');openAddPoojaType();return false;">Add it to the catalog first &rarr;</a></div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="pjFieldName">Pooja Name *</label>
+            <label class="form-label" for="pjFieldName">Pooja / Seva Name *</label>
             <input type="text" class="form-input" id="pjFieldName" placeholder="e.g. Vihat Maa Moorti Sthapan Pooja" required>
+            <div class="mg-muted-xs">Auto-fills from the type — edit for this specific occasion.</div>
           </div>
         </div>
 
@@ -1101,7 +1106,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modalPooja')">Cancel</button>
-      <button class="btn btn-primary" type="submit" form="formPooja" id="poojaFormSubmitBtn">Create Pooja</button>
+      <button class="btn btn-primary" type="submit" form="formPooja" id="poojaFormSubmitBtn">Schedule Pooja</button>
     </div>
   </div>
 </div>
@@ -1240,7 +1245,10 @@
 <div class="modal-overlay" id="modalPoojaType">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-title" id="poojaTypeFormTitle">Add Pooja Type</div>
+      <div>
+        <div class="modal-title" id="poojaTypeFormTitle">Add Ritual Type (catalog)</div>
+        <span class="mg-muted-xs">A reusable template — <strong>no dates here</strong>. You set dates when you schedule a Pooja.</span>
+      </div>
       <button class="modal-close-btn" onclick="closeModal('modalPoojaType')">&times;</button>
     </div>
     <div class="modal-body">
@@ -1277,7 +1285,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modalPoojaType')">Cancel</button>
-      <button class="btn btn-primary" type="submit" form="formPoojaType" id="poojaTypeFormSubmitBtn">Add Type</button>
+      <button class="btn btn-primary" type="submit" form="formPoojaType" id="poojaTypeFormSubmitBtn">Save to Catalog</button>
     </div>
   </div>
 </div>
@@ -2037,6 +2045,7 @@
 <script src="js/calendar.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/access.js"></script>
+<script src="js/search.js"></script>
 <script>window.__boot && window.__boot(92, 'Almost ready');</script>
 
 </body>

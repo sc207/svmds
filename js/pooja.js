@@ -22,6 +22,7 @@ const POOJA = {
 
   /* Router state ------------------------------------------- */
   view: 'directory',        // 'directory' | 'workspace'
+  dirView: 'cards',         // 'cards' | 'table' — directory list mode
   activePoojaId: null,
   activeTab: 'overview',
   activeSevarthiId: null,

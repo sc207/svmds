@@ -1420,13 +1420,18 @@ function printBadgeHTML(inner) {
     title: 'Team Badges',
     wrapClass: 'mg-badge-print',
     inner: inner,
-    css: '.mg-badge-print{display:flex;flex-wrap:wrap;gap:12mm;justify-content:center;padding:14mm;background:#f2ece0}' +
+    /* NOT flex for print — a flex row that straddles a page boundary gets
+       sliced (top half on page 1, nothing on page 2). Block flow with
+       inline-block badges + break-inside:avoid moves each whole badge to
+       the next page instead. */
+    css: '.mg-badge-print{display:block;text-align:center;padding:14mm;background:#f2ece0}' +
+      '.mg-badge-print .mg-badge{display:inline-block;vertical-align:top;margin:6mm}' +
       '@media print{' +
         '@page{size:A4;margin:10mm}' +
-        'body{background:#fff}' +
-        '.mg-badge-print{background:#fff;padding:0;gap:10mm}' +
-        '.mg-badge{break-inside:avoid;page-break-inside:avoid;box-shadow:none !important;' +
-          '-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        'html,body{background:#fff}' +
+        '.mg-badge-print{background:#fff;padding:0}' +
+        '.mg-badge-print .mg-badge{margin:5mm 4mm;break-inside:avoid;page-break-inside:avoid;' +
+          'box-shadow:none !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '}'
   });
 }

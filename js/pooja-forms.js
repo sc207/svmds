@@ -71,6 +71,15 @@ function onPoojaTypeChange() {
   const t = typeById(document.getElementById('pjFieldType').value);
   const nameEl = document.getElementById('pjFieldName');
   if (t && !nameEl.value.trim()) nameEl.value = t.name;
+  const hint = document.getElementById('pjTypeHint');
+  if (hint) {
+    if (t) {
+      const bits = [t.category, t.defaultDurationMin ? '~' + t.defaultDurationMin + ' min' : '', t.suggestedOfferings ? 'Samagri: ' + t.suggestedOfferings : ''].filter(Boolean);
+      hint.innerHTML = bits.length ? esc(bits.join('  ·  ')) : 'Reusable ritual template from the catalog.';
+    } else {
+      hint.innerHTML = 'Not listed? <a href="#" onclick="closeModal(\'modalPooja\');openAddPoojaType();return false;">Add it to the catalog first &rarr;</a>';
+    }
+  }
 }
 function syncDefaultVenue() {
   const venue = document.getElementById('pjFieldDefaultVenue').value.trim();
@@ -125,8 +134,8 @@ function addPoojaCustomRow() {
 function openAddPooja() {
   if (!isPoojaAdmin()) { pjToast('Only an administrator can create a Pooja.'); return; }
   POOJA.editingPoojaId = null;
-  document.getElementById('poojaFormTitle').textContent = 'Create Pooja';
-  document.getElementById('poojaFormSubmitBtn').textContent = 'Create Pooja';
+  document.getElementById('poojaFormTitle').textContent = 'Schedule a Pooja / Seva';
+  document.getElementById('poojaFormSubmitBtn').textContent = 'Schedule Pooja';
 
   document.getElementById('formPooja').reset();
   document.getElementById('pjFieldType').innerHTML = renderPoojaTypeOptions('');
@@ -140,6 +149,7 @@ function openAddPooja() {
   renderSessionRows([]);
   renderGuestPicker([]);
   document.getElementById('pjCustomRows').innerHTML = '';
+  onPoojaTypeChange();
   openModal('modalPooja');
 }
 
@@ -162,6 +172,7 @@ function openEditPooja(id) {
   renderSessionRows(poojaSessions(p));
   renderGuestPicker(p.guestIds || []);
   document.getElementById('pjCustomRows').innerHTML = poojaCustomRowsHTML(p.custom || []);
+  onPoojaTypeChange();
   openModal('modalPooja');
 }
 
@@ -636,8 +647,8 @@ function toggleSevarthiStatus(id) {
 function openAddPoojaType() {
   if (!isPoojaAdmin()) { pjToast('Only an administrator can manage the type catalog.'); return; }
   POOJA.editingTypeId = null;
-  document.getElementById('poojaTypeFormTitle').textContent = 'Add Pooja Type';
-  document.getElementById('poojaTypeFormSubmitBtn').textContent = 'Add Type';
+  document.getElementById('poojaTypeFormTitle').textContent = 'Add Ritual Type (catalog)';
+  document.getElementById('poojaTypeFormSubmitBtn').textContent = 'Save to Catalog';
   document.getElementById('formPoojaType').reset();
   openModal('modalPoojaType');
 }
@@ -645,7 +656,7 @@ function openEditPoojaType(id) {
   const t = typeById(id);
   if (!t) return;
   POOJA.editingTypeId = id;
-  document.getElementById('poojaTypeFormTitle').textContent = 'Edit Pooja Type';
+  document.getElementById('poojaTypeFormTitle').textContent = 'Edit Ritual Type (catalog)';
   document.getElementById('poojaTypeFormSubmitBtn').textContent = 'Save Changes';
   document.getElementById('ptyFieldName').value = t.name;
   document.getElementById('ptyFieldCategory').value = t.category || '';

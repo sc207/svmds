@@ -1,0 +1,33 @@
+# Render Blueprint — Shri Vihat Meldi Mata Mandir (SVMMMS)
+# New → Blueprint → pick this repo. Fill the `sync: false` vars in the dashboard.
+services:
+  - type: web
+    name: svmmms
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_NAME
+        value: Shri Vihat Meldi Mata Mandir
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_APP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false

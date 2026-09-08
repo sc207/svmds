@@ -167,6 +167,29 @@ function renderUnifiedCalendar() {
 
   const upNext = entries.filter(e => e.date >= calToday()).slice(0, 6);
 
+  /* Agenda list — the readable calendar on a phone (the 7-column grid is far
+     too cramped below ~720px). Whole month, grouped by day, tap to open. */
+  const monthSorted = entries
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => (a.e.date + (a.e.time || '')).localeCompare(b.e.date + (b.e.time || '')));
+  let agenda = '', lastDay = '';
+  monthSorted.forEach(({ e, i }) => {
+    if (e.date !== lastDay) {
+      lastDay = e.date;
+      const isT = e.date === calToday();
+      agenda += `<li class="cal-agenda-day${isT ? ' is-today' : ''}">${calDate(e.date)}${isT ? ` <span class="mg-cal-todaytag">${window.t('today')}</span>` : ''}</li>`;
+    }
+    const m = CAL_TYPE_META[e.type] || { badge: 'badge-maroon', key: '', def: e.type };
+    agenda += `<li class="cal-agenda-item cal-ev-${e.type}" style="--c:${e.color}" onclick="calGoto(${i})">
+      <span class="cal-agenda-dot"></span>
+      <span class="cal-agenda-tx">
+        <strong>${escCal(e.title)}</strong>
+        <span>${escCal(e.sub)}</span>
+        <span class="badge ${m.badge} cal-agenda-badge">${window.t(m.key, m.def)}</span>
+      </span>
+    </li>`;
+  });
+
   root.innerHTML = `
   <div class="flex justify-between items-center mg-page-head">
     <div>
@@ -182,14 +205,21 @@ function renderUnifiedCalendar() {
 
   <div class="cal-legend">${legend}</div>
 
-  <div class="card mg-mt">
+  <div class="card mg-mt cal-grid-view">
     <div class="card-body">
       <div class="mg-cal-head">${dowNames.map(x => `<div>${x}</div>`).join('')}</div>
       <div class="mg-cal-grid">${cells}</div>
     </div>
   </div>
 
-  <div class="card mg-mt">
+  <div class="card mg-mt cal-agenda-view">
+    <div class="card-header"><div class="card-title">🗓️ ${window.t('cal_agenda', 'This month')} <span class="mg-muted-xs">(${monthSorted.length})</span></div></div>
+    <div class="card-body" style="padding:0;">
+      ${monthSorted.length ? `<ul class="cal-agenda">${agenda}</ul>` : `<div class="mg-pad-note">${window.t('cal_nothing', 'Nothing scheduled this month.')}</div>`}
+    </div>
+  </div>
+
+  <div class="card mg-mt cal-grid-view">
     <div class="card-header"><div class="card-title">${window.t('cal_up_next', 'Up Next')}</div></div>
     <div class="card-body" style="padding:0;">
       ${upNext.length ? `<div class="mg-table-scroll"><table class="custom-table">

@@ -124,16 +124,103 @@ function populateCoordRoleOptions() {
 /* ------------------------------------------------------------
    VIEW: DIRECTORY
    ------------------------------------------------------------ */
+function setPoojaDirView(m) {
+  POOJA.dirView = (m === 'table') ? 'table' : 'cards';
+  renderPooja();
+}
+
+function poojaDirTableWrap(list) {
+  return `
+  <div class="mg-table-scroll">
+    <table class="custom-table">
+      <thead>
+        <tr><th>Pooja</th><th>Type</th><th>Schedule</th><th>Venue</th><th>Sevarthi</th><th>Coordinator</th><th>Status</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="pjDirectoryBody">${poojaDirectoryRows(list)}</tbody>
+    </table>
+  </div>`;
+}
+
 function viewPoojaDirectory() {
   const list = visiblePoojas();
   const admin = isPoojaAdmin();
   const heading = admin ? window.t('pj_title') : window.t('pj_my_title');
   const sub = admin ? window.t('pj_sub_admin') : window.t('pj_sub_coord');
+  const mode = POOJA.dirView === 'table' ? 'table' : 'cards';
 
   const nowKey = pjToday() + ' ' + pjNow();
   const upcoming = list.filter(p => poojaSessions(p).some(s => (s.date + ' ' + s.endTime) >= nowKey)).length;
   const sevCount = admin ? POOJA.sevarthis.length
     : POOJA.sevarthis.filter(s => list.some(p => (p.sevarthiIds || []).indexOf(s.id) !== -1)).length;
+  const guestCount = admin ? POOJA.people.length
+    : new Set(list.reduce((a, p) => a.concat(p.guestIds || []), [])).size;
+
+  const flow = admin ? `
+  <div class="pj-flow">
+    <div class="pj-flow-step"><span class="pj-flow-n">1</span><div class="pj-flow-tx">
+      <strong>${window.t('pj_flow_1_t', 'Set up ritual types')}</strong>
+      <span>${window.t('pj_flow_1_d', 'Reusable templates in the Catalog — name, samagri, duration. No dates.')}</span></div></div>
+    <div class="pj-flow-step"><span class="pj-flow-n">2</span><div class="pj-flow-tx">
+      <strong>${window.t('pj_flow_2_t', 'Schedule a Pooja / Seva')}</strong>
+      <span>${window.t('pj_flow_2_d', 'Pick a type, set the date(s), venue, sevarthi and guests.')}</span></div></div>
+    <div class="pj-flow-step"><span class="pj-flow-n">3</span><div class="pj-flow-tx">
+      <strong>${window.t('pj_flow_3_t', 'Open a Pooja')}</strong>
+      <span>${window.t('pj_flow_3_d', 'Manage sevarthi, print invitations, track the calendar.')}</span></div></div>
+  </div>` : '';
+
+  const listBlock = list.length === 0 ? emptyState('No Pooja scheduled',
+      admin ? 'Click “Schedule Pooja / Seva” above to create your first one.'
+            : 'No Pooja has been assigned to your account yet. Please contact the temple administrator.') : `
+  <div class="card mg-mt">
+    <div class="card-header flex justify-between items-center pj-list-head">
+      <div class="card-title">${window.t('pj_scheduled', 'Scheduled Poojas & Sevas')} <span class="mg-muted-xs">(${list.length})</span></div>
+      <div class="flex gap-2 items-center pj-list-tools">
+        ${admin ? `<input class="form-input mg-inline-search" id="pjDirSearch" placeholder="Search pooja, type or sevarthi..." oninput="filterPoojaDirectory()">` : ''}
+        <div class="pj-viewtoggle" role="group" aria-label="View">
+          <button type="button" class="${mode === 'cards' ? 'is-on' : ''}" onclick="setPoojaDirView('cards')">▦ ${window.t('pj_view_cards', 'Cards')}</button>
+          <button type="button" class="${mode === 'table' ? 'is-on' : ''}" onclick="setPoojaDirView('table')">≣ ${window.t('pj_view_table', 'Table')}</button>
+        </div>
+      </div>
+    </div>
+    <div class="card-body" style="padding:${mode === 'table' ? '0' : '1.1rem'};">
+      <div id="pjDirList">${mode === 'table' ? poojaDirTableWrap(list) : `<div class="mg-card-grid">${list.map(poojaCard).join('')}</div>`}</div>
+    </div>
+  </div>`;
+
+  const setup = admin ? `
+  <details class="pj-setup" open>
+    <summary>⚙️ ${window.t('pj_setup', 'Setup — ritual type catalog & people')}</summary>
+    <div class="pj-setup-body">
+      <div class="card">
+        <div class="card-header flex justify-between items-center">
+          <div>
+            <div class="card-title">${window.t('pj_type_catalog')} <span class="mg-muted-xs">(${typeCatalogCount()} / 36)</span></div>
+            <span class="mg-muted-xs">${window.t('pj_catalog_hint', 'Reusable ritual definitions. You pick one of these when you schedule a Pooja.')}</span>
+          </div>
+          <button class="btn btn-primary mg-btn-xs" onclick="openAddPoojaType()">+ ${window.t('pj_add_type_btn', 'Add Ritual Type')}</button>
+        </div>
+        <div class="card-body"><div class="pj-type-grid">${poojaTypeCards()}</div></div>
+      </div>
+
+      <div class="card mg-mt">
+        <div class="card-header flex justify-between items-center">
+          <div>
+            <div class="card-title">${window.t('pj_people_registry', 'Guests & Pandits')} <span class="mg-muted-xs">(${POOJA.people.length})</span></div>
+            <span class="mg-muted-xs">${window.t('pj_guests_hint', 'Priests & special guests you can attach to any Pooja.')}</span>
+          </div>
+          <button class="btn btn-primary mg-btn-xs" onclick="openAddGuest('directory')">+ ${window.t('pj_add_guest', 'Add Guest / Pandit')}</button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="mg-table-scroll">
+            <table class="custom-table pj-reg-table">
+              <thead><tr><th>Name</th><th>Role</th><th>Mobile</th><th>City / State</th><th>In Poojas</th><th>Actions</th></tr></thead>
+              <tbody>${guestRegistryRows()}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>` : '';
 
   return `
   <div class="flex justify-between items-center mg-page-head">
@@ -146,73 +233,24 @@ function viewPoojaDirectory() {
         ${typeof exportBar === 'function' ? exportBar('mod-pooja') : ''}
         <button class="btn btn-primary" onclick="openAddPooja()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          ${window.t('pj_add')}
+          ${window.t('pj_schedule_btn', 'Schedule Pooja / Seva')}
         </button>` : ''}
     </div>
   </div>
 
+  ${flow}
+
   <div class="stats-grid">
-    ${kpiCard(window.t('pj_kpi_total'), list.length, admin ? 'Across the platform' : 'Assigned to you', '🪔')}
+    ${kpiCard(window.t('pj_kpi_total'), list.length, admin ? 'Scheduled on the platform' : 'Assigned to you', '🪔')}
     ${kpiCard(window.t('pj_kpi_upcoming'), upcoming, 'With a session still to come', '🗓️')}
     ${kpiCard(window.t('pj_kpi_sevarthis'), sevCount, 'Devotees sponsoring seva', '🙏')}
-    ${kpiCard(window.t('pj_kpi_types'), typeCatalogCount() + ' / 36', 'Master catalog', '📜')}
+    ${admin
+      ? kpiCard(window.t('pj_kpi_types'), typeCatalogCount() + ' / 36', 'Catalog templates', '📜')
+      : kpiCard(window.t('pj_guests_pandits', 'Guests / Pandits'), guestCount, 'Across your poojas', '🧑‍🎓')}
   </div>
 
-  ${list.length === 0 ? emptyState('No Pooja assigned',
-      admin ? 'Create your first Pooja to get started.'
-            : 'No Pooja has been assigned to your account yet. Please contact the temple administrator.') : `
-  <div class="section-title">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    <span>${window.t('pj_open_ws')}</span>
-  </div>
-
-  <div class="mg-card-grid">
-    ${list.map(p => poojaCard(p)).join('')}
-  </div>
-
-  ${admin ? `
-  <div class="card" style="margin-top:1.75rem;">
-    <div class="card-header flex justify-between items-center">
-      <div class="card-title">${window.t('pj_directory')}</div>
-      <input class="form-input mg-inline-search" id="pjDirSearch" placeholder="Search pooja, type or sevarthi..." oninput="filterPoojaDirectory()">
-    </div>
-    <div class="card-body" style="padding:0;">
-      <div class="mg-table-scroll">
-        <table class="custom-table">
-          <thead>
-            <tr><th>Pooja</th><th>Type</th><th>Schedule</th><th>Venue</th><th>Sevarthi</th><th>Coordinator</th><th>Status</th><th>Actions</th></tr>
-          </thead>
-          <tbody id="pjDirectoryBody">${poojaDirectoryRows(list)}</tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="card mg-mt">
-    <div class="card-header flex justify-between items-center">
-      <div class="card-title">${window.t('pj_guests_pandits')} (${POOJA.people.length})</div>
-      <button class="btn btn-primary mg-btn-xs" onclick="openAddGuest('directory')">+ ${window.t('pj_add_guest')}</button>
-    </div>
-    <div class="card-body" style="padding:0;">
-      <div class="mg-table-scroll">
-        <table class="custom-table pj-reg-table">
-          <thead><tr><th>Name</th><th>Role</th><th>Mobile</th><th>City / State</th><th>In Poojas</th><th>Actions</th></tr></thead>
-          <tbody>${guestRegistryRows()}</tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="card mg-mt">
-    <div class="card-header flex justify-between items-center">
-      <div class="card-title">${window.t('pj_type_catalog')} (${typeCatalogCount()} / 36)</div>
-      <button class="btn btn-primary mg-btn-xs" onclick="openAddPoojaType()">+ ${window.t('pj_type')}</button>
-    </div>
-    <div class="card-body">
-      <div class="pj-type-grid">${poojaTypeCards()}</div>
-    </div>
-  </div>` : ''}
-  `}
+  ${listBlock}
+  ${setup}
   `;
 }
 
@@ -274,7 +312,12 @@ function poojaCard(p) {
   const st = poojaStatus(p);
   const sess = poojaSessions(p);
   const sevs = sevarthisOf(p);
+  const guests = (typeof peopleOf === 'function') ? peopleOf(p) : [];
   const venues = Array.from(new Set(sess.map(s => s.venue).filter(Boolean)));
+  const nx = nextSession(p);
+  const dtg = nx ? Math.max(0, Math.round((new Date(nx.date) - new Date(pjToday())) / 86400000)) : null;
+  const seva = p.estimatedSevaAmount ? '₹' + Number(p.estimatedSevaAmount).toLocaleString('en-IN') : '—';
+  const dtgText = dtg == null ? '' : (dtg === 0 ? ' · today' : ' · in ' + dtg + ' day' + (dtg > 1 ? 's' : ''));
   return `
   <div class="mg-card" style="--mg-color:${p.color}">
     <div class="mg-card-stripe"></div>
@@ -285,15 +328,19 @@ function poojaCard(p) {
         <span class="badge ${POOJA_STATUS_BADGE[st]}">${POOJA_STATUS_DOT[st]} ${poojaStatusLabel(st)}</span>
       </div>
     </div>
-    <p class="mg-card-desc">${esc(t ? t.name : 'Custom pooja')}${p.scheduleMode === 'multi' ? ` · ${sess.length} sessions` : ''}</p>
+    <p class="mg-card-desc">${esc(t ? t.name : 'Custom pooja')} · ${p.scheduleMode === 'multi' ? sess.length + ' sessions' : 'Single event'}</p>
     <div class="mg-card-meta">
       <div><span>Schedule</span><strong>${dateRangeText(p)}</strong></div>
       <div><span>Venue</span><strong>${esc(venues[0] || p.defaultVenue || '—')}</strong></div>
       <div><span>Sevarthi</span><strong>${sevs.length ? esc(sevs.map(s => s.firstName).join(', ')) : '—'}</strong></div>
-      <div><span>Coordinator</span><strong>${esc(coordinatorNames(p))}</strong></div>
+      <div><span>Guests / Pandits</span><strong>${guests.length || '—'}</strong></div>
+      <div><span>Coordinator</span><strong>${esc(coordinatorNames(p) || '—')}</strong></div>
+      <div><span>Est. Seva</span><strong>${seva}</strong></div>
     </div>
     <div class="mg-card-next">
-      ${sess.length ? `${POOJA_STATUS_DOT[st]} Next: <strong>${esc((nextSession(p) || {}).label || p.name)}</strong> · ${fmtDate((nextSession(p) || {}).date)}, ${fmtTime((nextSession(p) || {}).startTime)}` : 'No session scheduled yet'}
+      ${sess.length
+        ? `${POOJA_STATUS_DOT[st]} Next: <strong>${esc((nx || {}).label || p.name)}</strong> · ${fmtDate((nx || {}).date)}, ${fmtTime((nx || {}).startTime)}${dtgText}`
+        : 'No session scheduled yet — use Edit Pooja to add a date'}
     </div>
     <button class="btn btn-primary w-full mg-open-btn" onclick="openPooja('${p.id}')">Open Pooja →</button>
   </div>`;
@@ -343,7 +390,9 @@ function filterPoojaDirectory() {
       || coordinatorNames(p).toLowerCase().includes(q);
   });
   const body = document.getElementById('pjDirectoryBody');
-  if (body) body.innerHTML = poojaDirectoryRows(list);
+  if (body) { body.innerHTML = poojaDirectoryRows(list); return; }
+  const host = document.getElementById('pjDirList');
+  if (host) host.innerHTML = `<div class="mg-card-grid">${list.map(poojaCard).join('')}</div>`;
 }
 
 /* ------------------------------------------------------------
@@ -675,12 +724,13 @@ function invAudienceOptions() {
     count: (typeof cmtMembersOf === 'function' ? cmtMembersOf(c.id).length : 0)
   }));
 }
-/** Recipient rows (name + place) for a chosen audience committee. */
+/** Recipient rows (name + place + mobile) for a chosen audience committee. */
 function invAudienceRecipients(audienceId) {
   if (!audienceId || typeof cmtMembersOf !== 'function') return [];
   return cmtMembersOf(audienceId).map(m => ({
     name: (m.firstName + ' ' + m.lastName).trim(),
-    place: [m.city, m.state].filter(Boolean).map(x => (typeof tData === 'function' ? tData(x) : x)).join(', ')
+    place: [m.city, m.state].filter(Boolean).map(x => (typeof tData === 'function' ? tData(x) : x)).join(', '),
+    mobile: m.mobile || ''
   }));
 }
 
@@ -695,7 +745,8 @@ function panePoojaInvitation(p) {
   const accentOpts = POOJA.accentPalette.map(a =>
     `<option value="${a.hex}" ${a.hex === inv.accent ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
   const audOpts = invAudienceOptions();
-  const audCount = inv.audience ? invAudienceRecipients(inv.audience).length : 0;
+  const initRcpts = inv.audience ? invAudienceRecipients(inv.audience) : [];
+  const audCount = initRcpts.length;
 
   return `
   <div class="flex justify-between items-center mg-pane-head">
@@ -707,8 +758,8 @@ function panePoojaInvitation(p) {
 
   <div class="pj-invite-controls">
     <div class="pj-invite-stage">
-      <div id="pjInvitePreview">${invitationMarkup(p, inv)}</div>
-      <div id="pjInviteBatchNote" class="pj-invite-batch-note"${audCount ? '' : ' hidden'}>${audCount ? (window.t('pj_inv_aud_preview', 'Preview shows 1 of') + ' ' + audCount + ' — ' + window.t('pj_inv_aud_pdf', 'Print / Save PDF generates all') + ' ' + audCount) : ''}</div>
+      <div id="pjInvitePreview">${invitationPreviewHTML(p, inv, initRcpts)}</div>
+      <div id="pjInviteBatchNote" class="pj-invite-batch-note"${audCount ? '' : ' hidden'}>${audCount ? (audCount + ' ' + window.t('cmt_members', 'members') + ' — ' + window.t('pj_inv_aud_pdf', 'Print / Save PDF generates all') + ' ' + audCount + ' (' + window.t('pj_inv_aud_onepage', 'one invitation per page') + ')') : ''}</div>
     </div>
 
     <div class="card">
@@ -759,10 +810,12 @@ function panePoojaInvitation(p) {
             <label class="mg-check-inline"><input type="checkbox" id="invShowSevarthi" ${inv.showSevarthi !== false ? 'checked' : ''} onchange="updateInvitationPreview()"> <span>${window.t('pj_inv_show_sevarthi', 'Show sevarthi name(s)')}</span></label>
             <label class="mg-check-inline"><input type="checkbox" id="invShowGuests" ${inv.showGuests !== false ? 'checked' : ''} onchange="updateInvitationPreview()"> <span>${window.t('pj_inv_show_guests', 'Show guests / pandits')}</span></label>
           </div>
-          <div class="flex gap-2 mg-mt-sm">
+          <div class="flex gap-2 mg-mt-sm" style="flex-wrap:wrap">
             <button class="btn btn-primary" type="submit">${window.t('pj_inv_save', 'Save Card')}</button>
             <button class="btn btn-outline" type="button" onclick="previewInvitation('${p.id}')">${window.t('preview')}</button>
-            <button class="btn btn-secondary" type="button" onclick="printInvitationFor('${p.id}')">${window.t('pj_inv_print', 'Print / Save PDF')}</button>
+            <button class="btn btn-secondary js-inv-dl" type="button" onclick="downloadInvitationFor('${p.id}')">⬇ ${window.t('pj_inv_download', 'Download all (1 PDF)')}</button>
+            <button class="btn btn-secondary js-inv-zip" id="pjInvZipBtn" type="button" onclick="downloadInvitationZipFor('${p.id}')"${initRcpts.length ? '' : ' hidden'}>🗂️ ${window.t('pj_inv_zip', 'Download ZIP (individual)')}</button>
+            <button class="btn btn-outline" type="button" onclick="printInvitationFor('${p.id}')">${window.t('pj_inv_print_only', 'Print')}</button>
           </div>
         </form>
       </div>
@@ -788,20 +841,33 @@ function readInvitationOpts(p) {
   };
 }
 
+/** Build the designer-panel preview markup: one card for an open invitation,
+    or one card per committee member (stacked, numbered) for an audience —
+    the exact set that printInvitationFor() will send to the PDF. */
+function invitationPreviewHTML(p, opts, rcpts) {
+  if (!rcpts || !rcpts.length) return invitationMarkup(p, opts);
+  return rcpts.map((r, i) =>
+    `<div class="inv-pv"><span class="inv-pv-n">${i + 1} / ${rcpts.length}</span>` +
+    invitationMarkup(p, Object.assign({}, opts, { recipient: r })) + '</div>'
+  ).join('');
+}
+
 function updateInvitationPreview() {
   const p = poojaById(POOJA.activePoojaId);
   const box = document.getElementById('pjInvitePreview');
   if (!p || !box) return;
   const opts = readInvitationOpts(p);
   const rcpts = invAudienceRecipients(opts.audience);
-  if (rcpts.length) opts.recipient = rcpts[0];      // preview the first member
-  box.innerHTML = invitationMarkup(p, opts);
+  box.innerHTML = invitationPreviewHTML(p, opts, rcpts);
+  const zipBtn = document.getElementById('pjInvZipBtn');
+  if (zipBtn) zipBtn.hidden = !rcpts.length;
   const note = document.getElementById('pjInviteBatchNote');
   if (note) {
     note.hidden = !rcpts.length;
     if (rcpts.length) note.textContent =
-      window.t('pj_inv_aud_preview', 'Preview shows 1 of') + ' ' + rcpts.length + ' — ' +
-      window.t('pj_inv_aud_pdf', 'Print / Save PDF generates all') + ' ' + rcpts.length;
+      rcpts.length + ' ' + window.t('cmt_members', 'members') + ' — ' +
+      window.t('pj_inv_aud_pdf', 'Print / Save PDF generates all') + ' ' + rcpts.length +
+      ' (' + window.t('pj_inv_aud_onepage', 'one invitation per page') + ')';
   }
 }
 
@@ -820,33 +886,221 @@ function previewInvitation(id) {
   if (!p) return;
   const opts = readInvitationOpts(p);
   const rcpts = invAudienceRecipients(opts && opts.audience);
-  if (rcpts.length) opts.recipient = rcpts[0];
-  const note = rcpts.length ? `<div class="pj-invite-batch-note">${rcpts.length} ${window.t('cmt_members', 'members')} — Print / Save PDF generates all ${rcpts.length}</div>` : '';
+  const note = rcpts.length ? `<div class="pj-invite-batch-note">${rcpts.length} ${window.t('cmt_members', 'members')} — ${window.t('pj_inv_aud_pdf', 'Print / Save PDF generates all')} ${rcpts.length} (${window.t('pj_inv_aud_onepage', 'one invitation per page')})</div>` : '';
   openSheet({
     title: `Invitation — ${p.name}`,
     wide: true,
-    body: `<div class="pj-invite-single">${invitationMarkup(p, opts)}</div>${note}`,
-    footer: `<button class="btn btn-outline" onclick="closeSheet()">Close</button>
-             <button class="btn btn-primary" onclick="printInvitationFor('${id}')">Print / Save PDF</button>`
+    body: `<div class="pj-invite-single">${invitationPreviewHTML(p, opts, rcpts)}</div>${note}`,
+    footer: `<button class="btn btn-outline" onclick="closeSheet()">${window.t('close', 'Close')}</button>
+             <button class="btn btn-outline" onclick="printInvitationFor('${id}')">${window.t('pj_inv_print_only', 'Print')}</button>
+             ${rcpts.length ? `<button class="btn btn-outline js-inv-zip" onclick="downloadInvitationZipFor('${id}')">🗂️ ${window.t('pj_inv_zip', 'Download ZIP (individual)')}</button>` : ''}
+             <button class="btn btn-primary js-inv-dl" onclick="downloadInvitationFor('${id}')">⬇ ${window.t('pj_inv_download', 'Download all (1 PDF)')}</button>`
   });
 }
 
-function printInvitationFor(id) {
+/** Resolve the full set of invitation cards for a pooja: one per committee
+    member when an audience is chosen, otherwise a single open card.
+    `items[]` carries each card's markup + its recipient (name / mobile / place)
+    so the ZIP export can name every file. */
+function invitationCardSet(id) {
   const p = poojaById(id);
-  if (!p) return;
+  if (!p) return null;
   const opts = (POOJA.activePoojaId === id) ? readInvitationOpts(p) : Object.assign({}, p.invitation);
   const rcpts = invAudienceRecipients(opts && opts.audience);
-  let cards, title = p.name;
   if (rcpts.length) {
     const cmt = (typeof cmtById === 'function') ? cmtById(opts.audience) : null;
     const cmtName = cmt ? (cmt.name || cmt.samaj || 'Committee') : 'Committee';
-    title = p.name + ' - ' + cmtName;
-    cards = rcpts.map(r => invitationMarkup(p, Object.assign({}, opts, { recipient: r })));
-    if (typeof pjToast === 'function') pjToast(rcpts.length + ' invitation cards prepared — ' + cmtName + '.');
-  } else {
-    cards = [invitationMarkup(p, opts)];
+    const items = rcpts.map(r => ({ markup: invitationMarkup(p, Object.assign({}, opts, { recipient: r })), recipient: r }));
+    return {
+      cards: items.map(x => x.markup), items,
+      title: p.name + ' - ' + cmtName, count: rcpts.length, cmtName, poojaName: p.name
+    };
   }
-  printInvitationHTML(cards, title);
+  const only = invitationMarkup(p, opts);
+  return { cards: [only], items: [{ markup: only, recipient: null }], title: p.name, count: 1, cmtName: '', poojaName: p.name };
+}
+
+/* Open the browser print dialog (kept as a secondary option / fallback). */
+function printInvitationFor(id) {
+  const set = invitationCardSet(id);
+  if (set) printInvitationHTML(set.cards, set.title);
+}
+
+/* Option 1 — one multi-page PDF (one invitation per A5 page), downloaded directly. */
+function downloadInvitationFor(id) {
+  const set = invitationCardSet(id);
+  if (!set) return;
+  downloadInvitationPDF(set.cards, set.title, id);
+}
+
+/* Option 2 — a ZIP of individual single-page PDFs, one per devotee.
+   Each PDF: "<pooja> - <devotee> - <mobile>.pdf" · ZIP: "<pooja> - <committee>.zip" */
+function downloadInvitationZipFor(id) {
+  const set = invitationCardSet(id);
+  if (!set) return;
+  downloadInvitationZIP(set, id);
+}
+
+function invImagesReady(root) {
+  const imgs = Array.prototype.slice.call(root.querySelectorAll('img'));
+  return Promise.all(imgs.map(im => (im.complete && im.naturalWidth)
+    ? Promise.resolve()
+    : new Promise(res => { im.onload = im.onerror = res; setTimeout(res, 2500); })));
+}
+
+function invFileName(parts) {
+  return (parts || []).filter(Boolean).join(' - ')
+    .replace(/[\/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function invTriggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 3000);
+}
+
+/* Rasterise each invitation card markup to a JPEG data-URL (shared by the
+   single-PDF and the ZIP export). Retries a tainted card with the inline
+   SVG emblem instead of the local PNGs (needed on file://). */
+async function renderInvitationImages(markups, onProgress) {
+  const libs = await ensurePdfLibs();
+  const h2c = libs.html2canvas;
+  const stage = document.createElement('div');
+  stage.className = 'pj-pdf-stage';
+  stage.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(stage);
+  const images = [];
+  try {
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+    for (let i = 0; i < markups.length; i++) {
+      stage.innerHTML = markups[i];
+      const card = stage.firstElementChild;
+      if (!card) continue;
+      await invImagesReady(card);
+      const opt = { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false,
+                    width: card.offsetWidth, height: card.offsetHeight,
+                    windowWidth: card.offsetWidth, windowHeight: card.offsetHeight };
+      let canvas;
+      try {
+        canvas = await h2c(card, opt);
+        canvas.toDataURL('image/jpeg', 0.5);           // probe: throws if the canvas is tainted
+      } catch (tainted) {
+        card.classList.add('pj-pdf-noimg');
+        await invImagesReady(card);
+        canvas = await h2c(card, opt);
+      }
+      images.push(canvas.toDataURL('image/jpeg', 0.92));
+      if (onProgress) onProgress(i + 1, markups.length);
+    }
+  } finally {
+    stage.remove();
+  }
+  return images;
+}
+
+// A5 portrait in PDF points (1pt = 1/72in): 148mm x 210mm.
+const INV_A5_W = 148 / 25.4 * 72;   // ≈ 419.53
+const INV_A5_H = 210 / 25.4 * 72;   // ≈ 595.28
+
+function invPdfDocDef(images) {
+  return {
+    pageSize: 'A5', pageOrientation: 'portrait', pageMargins: [0, 0, 0, 0],
+    content: images.map((data, i) => {
+      // fit box a hair under the page so rounding never spills a blank page
+      const node = { image: data, fit: [INV_A5_W, INV_A5_H - 2], alignment: 'center' };
+      if (i > 0) node.pageBreak = 'before';
+      return node;
+    })
+  };
+}
+
+function invBusy(sel, on) {
+  const btns = document.querySelectorAll(sel);
+  btns.forEach(b => {
+    if (on) { b.disabled = true; b.dataset.lbl = b.dataset.lbl || b.textContent; b.textContent = window.t('pj_inv_dl_wait', 'Building…'); }
+    else { b.disabled = false; if (b.dataset.lbl) { b.textContent = b.dataset.lbl; delete b.dataset.lbl; } }
+  });
+}
+
+async function downloadInvitationPDF(cards, title, id) {
+  const arr = Array.isArray(cards) ? cards : [cards];
+  if (!arr.length) return;
+  const fname = invFileName([title]) || 'Invitations';
+  invBusy('.js-inv-dl', true);
+  const done = () => invBusy('.js-inv-dl', false);
+
+  let libs;
+  try { libs = await ensurePdfLibs(); }
+  catch (e) {
+    done();
+    pjToast(window.t('pj_inv_dl_offline', 'PDF engine unavailable — opening print view instead.'));
+    printInvitationHTML(cards, title);
+    return;
+  }
+
+  try {
+    const images = await renderInvitationImages(arr, (n, tot) => {
+      if (tot > 6) pjToast(window.t('pj_inv_dl_prog', 'Rendering') + ' ' + n + '/' + tot + '…');
+    });
+    if (!images.length) throw new Error('no cards rendered');
+    libs.pdfMake.createPdf(invPdfDocDef(images)).download(fname + '.pdf');
+    if (typeof logPoojaActivity === 'function' && id) logPoojaActivity(id, 'Invitation PDF generated (' + images.length + ' page' + (images.length > 1 ? 's' : '') + ')');
+    pjToast(images.length + ' ' + window.t('pj_inv_dl_ok', 'invitation page(s) saved as PDF.'));
+  } catch (e) {
+    console.error('invitation PDF failed', e);
+    pjToast(window.t('pj_inv_dl_fail', 'PDF generation failed — opening print view instead.'));
+    printInvitationHTML(cards, title);
+  } finally {
+    done();
+  }
+}
+
+async function downloadInvitationZIP(set, id) {
+  if (!set || !set.items || !set.items.length) return;
+  invBusy('.js-inv-zip', true);
+  const done = () => invBusy('.js-inv-zip', false);
+
+  let libs, JSZip;
+  try { libs = await ensurePdfLibs(); JSZip = await ensureZipLib(); }
+  catch (e) {
+    done();
+    pjToast(window.t('pj_inv_dl_offline', 'PDF engine unavailable — opening print view instead.'));
+    printInvitationHTML(set.cards, set.title);
+    return;
+  }
+
+  try {
+    const images = await renderInvitationImages(set.items.map(it => it.markup), (n, tot) => {
+      if (tot > 3) pjToast(window.t('pj_inv_zip_prog', 'Packing') + ' ' + n + '/' + tot + '…');
+    });
+    if (!images.length) throw new Error('no cards rendered');
+
+    const pooja = set.poojaName || 'Pooja';
+    const zip = new JSZip();
+    const used = {};
+    for (let i = 0; i < images.length; i++) {
+      const blob = await new Promise(res => libs.pdfMake.createPdf(invPdfDocDef([images[i]])).getBlob(res));
+      const r = set.items[i] && set.items[i].recipient;
+      let base = invFileName([pooja, r && r.name, r && r.mobile]) || (pooja + ' ' + (i + 1));
+      let name = base + '.pdf', k = 2;
+      while (used[name.toLowerCase()]) name = base + ' (' + (k++) + ').pdf';
+      used[name.toLowerCase()] = 1;
+      zip.file(name, blob);
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const zipName = (invFileName([set.title]) || (pooja + ' invitations')) + '.zip';
+    invTriggerDownload(zipBlob, zipName);
+    if (typeof logPoojaActivity === 'function' && id) logPoojaActivity(id, 'Invitation ZIP generated (' + images.length + ' PDFs) — ' + zipName);
+    pjToast(images.length + ' ' + window.t('pj_inv_zip_ok', 'invitation PDFs saved as a ZIP.'));
+  } catch (e) {
+    console.error('invitation ZIP failed', e);
+    pjToast(window.t('pj_inv_zip_fail', 'ZIP generation failed — opening print view instead.'));
+    printInvitationHTML(set.cards, set.title);
+  } finally {
+    done();
+  }
 }
 
 /* ---- Invitation markup + SVG motifs ----
@@ -976,25 +1230,32 @@ function printInvitationHTML(cards, title) {
     wrapClass: 'pj-invite-print',
     inner: inner,
     css:
-      /* on-screen popup: each card is a distinct sheet, stacked */
+      /* on-screen popup: each card is a distinct sheet, stacked vertically */
       '.pj-invite-print{display:block;background:#efe7d7;padding:20px 0}' +
-      '.inv-page{display:block;position:relative;width:402px;max-width:92vw;margin:0 auto 26px}' +
+      '.inv-page{display:block;position:relative;width:402px;max-width:92vw;margin:0 auto 26px;box-sizing:border-box}' +
       '.inv-page .pj-invite{box-shadow:0 16px 44px rgba(107,31,42,.28)}' +
       '.inv-page-n{position:absolute;top:-15px;left:50%;transform:translateX(-50%);z-index:6;' +
         'font:600 11px/1 Inter,system-ui,sans-serif;letter-spacing:1px;color:#8a7a5c;background:#efe7d7;padding:2px 10px;border-radius:10px}' +
-      /* print / PDF: exactly one A5 page per card */
+      /* print / PDF: exactly one A5 page per card. Every rule is !important and
+         each .inv-page carries an explicit A5 height, so N recipients always
+         produce N pages even if a forced page-break were ignored and even
+         before the linked stylesheet finishes parsing. */
       '@media print{' +
         '@page{size:A5 portrait;margin:0}' +
-        'html,body{background:#fff}' +
-        '.pj-invite-print{padding:0;background:#fff}' +
-        '.inv-page{width:auto;max-width:none;margin:0;' +
-          'break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid}' +
-        '.inv-page:last-child{break-after:auto;page-break-after:auto}' +
-        '.inv-page-n{display:none}' +
-        '.pj-invite{width:148mm !important;height:210mm !important;min-height:0 !important;' +
-          'margin:0 !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;' +
-          'page-break-after:auto !important;break-after:auto !important;' +
-          'overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        'html,body{background:#fff !important;margin:0 !important;padding:0 !important}' +
+        '.pj-invite-print{display:block !important;margin:0 !important;padding:0 !important;background:#fff !important}' +
+        '.inv-page{display:block !important;position:relative !important;' +
+          'width:148mm !important;height:210mm !important;min-height:0 !important;max-height:210mm !important;' +
+          'margin:0 !important;padding:0 !important;box-sizing:border-box !important;overflow:hidden !important;' +
+          'break-inside:avoid !important;page-break-inside:avoid !important;' +
+          'break-after:page !important;page-break-after:always !important}' +
+        '.inv-page:last-child{break-after:auto !important;page-break-after:auto !important}' +
+        '.inv-page-n{display:none !important}' +
+        '.pj-invite{width:148mm !important;height:210mm !important;min-height:0 !important;max-height:210mm !important;' +
+          'margin:0 !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;overflow:hidden !important;' +
+          'break-inside:avoid !important;page-break-inside:avoid !important;' +
+          'break-after:auto !important;page-break-after:auto !important;' +
+          '-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}' +
         '.pj-invite-frame{margin:8mm !important;min-height:0 !important}' +
       '}'
   });

@@ -8,3 +8,9 @@ Thumbs.db
 .claude/
 CLAUDE.md
 node_modules/
+
+# Backend — secrets & local database
+.env
+.env.local
+data/
+uploads/
