@@ -19,15 +19,23 @@
 
         <div class="grid mg-2col-form">
           <div class="form-group">
-            <label class="form-label" for="mgLeadSelect">Management Lead *</label>
+            <div class="flex justify-between items-center"><label class="form-label" for="mgLeadSelect" style="margin:0">Management Lead *</label>
+              <button class="btn btn-outline mg-btn-xs" type="button" onclick="mgAddLead()">+ New devotee</button></div>
             <select class="form-select" id="mgLeadSelect" required></select>
-            <span class="mg-muted-xs">The Lead can only manage the Management(s) assigned to them.</span>
+            <span class="mg-muted-xs">Pick a devotee, or add a new one — no login account needed.</span>
           </div>
           <div class="form-group">
             <label class="form-label" for="mgFieldSize">Expected Team Size *</label>
             <input type="number" class="form-input" id="mgFieldSize" min="1" value="15" required>
             <span class="mg-muted-xs" id="mgCurrentTeamNote">Current team members: 0</span>
           </div>
+        </div>
+
+        <div class="form-group">
+          <div class="flex justify-between items-center"><label class="form-label" style="margin:0">Team members</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" onclick="mgAddMemberPerson()">+ Add new Devotee</button></div>
+          <div class="mg-muted-xs" style="margin-bottom:.4rem">Tick people from the register, or add new ones. The Lead is added automatically. You can also add volunteers later.</div>
+          <div id="mgMemberPicker"></div>
         </div>
 
         <div class="grid mg-2col-form">
@@ -380,7 +388,9 @@ function openAddManagement() {
 
   const f = document.getElementById('formManagement');
   f.reset();
-  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML('');  document.getElementById('mgFieldName').value = '';
+  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML('');
+  mgRenderMemberPicker([]);
+  document.getElementById('mgFieldName').value = '';
   document.getElementById('mgFieldSize').value = 15;
   document.getElementById('mgFieldStatus').value = 'active';
   document.getElementById('mgFieldDesc').value = '';
@@ -396,7 +406,9 @@ function openEditManagement(id) {
   document.getElementById('mgFormTitle').textContent = 'Edit Management';
   document.getElementById('mgFormSubmitBtn').textContent = 'Save Changes';
 
-  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(m.leadId);  document.getElementById('mgFieldName').value = m.name;
+  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(m.leadId);
+  mgRenderMemberPicker((membersOf(m.id)||[]).map(function(x){return x.devoteeId||x.id;}));
+  document.getElementById('mgFieldName').value = m.name;
   document.getElementById('mgFieldSize').value = m.expectedTeamSize;
   document.getElementById('mgFieldStatus').value = m.status;
   document.getElementById('mgFieldDesc').value = m.description;
@@ -414,11 +426,31 @@ function leadOptionsHTML(selected) {
     }).join('');
 }
 
+/* lead "+ New devotee" + team-member picker — same shared devotee sheet */
+function mgAddLead() {
+  openDevoteeSheet({
+    title: 'Add a new Management Lead (devotee)',
+    onSaved: function (dev) { document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(dev.id); }
+  });
+}
+function mgRenderMemberPicker(ids) {
+  const box = document.getElementById('mgMemberPicker');
+  if (box) box.innerHTML = personCheckList((typeof allPeople === 'function' ? allPeople() : []), ids || [], 'mg-mem-check');
+}
+function mgAddMemberPerson() {
+  const keep = checkedIds('mgMemberPicker', 'mg-mem-check');
+  openDevoteeSheet({
+    title: 'Add a new Team member (devotee)',
+    onSaved: function (dev) { keep.push(dev.id); mgRenderMemberPicker(keep); }
+  });
+}
+
 function handleSaveManagement(e) {
   e.preventDefault();
 
   const name = document.getElementById('mgFieldName').value.trim();
   const leadId = document.getElementById('mgLeadSelect').value;
+  const memberIds = checkedIds('mgMemberPicker', 'mg-mem-check');
   const size = parseInt(document.getElementById('mgFieldSize').value, 10);
   const desc = document.getElementById('mgFieldDesc').value.trim();
   const status = document.getElementById('mgFieldStatus').value;
@@ -443,13 +475,24 @@ function handleSaveManagement(e) {
   } else {
     const id = nextId('MGMT', MG.managements, 3);
     MG.managements.push({
-      id, name, leadId, expectedTeamSize: size, description: desc, status, notes,
+      id, name, leadId, memberIds, expectedTeamSize: size, description: desc, status, notes,
       color: (typeof nextCardColor === 'function' ? nextCardColor(MG.managements.length) : '#6B1F2A'),
       createdAt: MG.today
     });
     MG.communication.push({ managementId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
     logActivity(id, `Management created and assigned to ${leadById(leadId)?.name || 'Lead'}`);
-    mgToast(`${name} created. Open it to add volunteers.`);
+    mgToast(`${name} created.`);
+    if (window.API && window.API.online) {
+      window.API.post('/teams', { name, description: desc, expectedTeamSize: size }).then(function (t) {
+        var code = t && (t.code || t.id); if (!code) return;
+        if (leadId) window.API.post('/teams/' + code + '/lead', { devoteeId: leadId }).catch(function(){});
+        memberIds.forEach(function (mid) {
+          var p = (typeof personById === 'function') ? personById(mid) : null;
+          if (!p) return; var parts = String(p.name || '').trim().split(/s+/);
+          window.API.post('/teams/' + code + '/members', { firstName: parts.shift() || p.name, lastName: parts.join(' '), mobile: (p.mobile||'').replace(/D/g,''), city: p.city||'' }).catch(function(){});
+        });
+      }).catch(function(){});
+    }
   }
 
   MG.editingMgmtId = null;

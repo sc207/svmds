@@ -132,33 +132,50 @@ router.delete('/:id', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/* ---------- lead assignment (admin tier) ---------- */
+/* ---------- lead assignment (admin tier) ----------
+   body: { userId } — an account holder, OR { devoteeId } — no login account */
 router.post('/:id/lead', adminTier, async (req, res, next) => {
   try {
     const row = await teamByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Team not found' });
-    const uid = parseInt(req.body.userId, 10);
-    const u = uid ? await queryOne('SELECT * FROM users WHERE id = ? AND is_deleted = 0', [uid]) : null;
-    if (!u) return res.status(400).json({ error: 'Unknown userId' });
+
+    let u = null, devId = null;
+    if (req.body.userId != null && String(req.body.userId).trim()) {
+      u = await queryOne('SELECT * FROM users WHERE id = ? AND is_deleted = 0', [parseInt(req.body.userId, 10) || -1]);
+      if (!u) return res.status(400).json({ error: 'Unknown userId' });
+      devId = u.devotee_id;
+    } else if (req.body.devoteeId != null && String(req.body.devoteeId).trim()) {
+      const d = await queryOne('SELECT * FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]);
+      if (!d) return res.status(400).json({ error: 'Unknown devoteeId' });
+      devId = d.id;
+      u = await queryOne('SELECT * FROM users WHERE devotee_id = ? AND is_deleted = 0', [d.id]);
+    } else {
+      return res.status(400).json({ error: 'userId or devoteeId is required' });
+    }
+
+    const uid = u ? u.id : null;
+    if (!devId && u) {
+      devId = await ensureDevotee({ name: u.name, mobile: u.mobile, city: u.city });
+      if (devId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, uid]);
+    }
+
     const prev = row.lead_id;
-    await run(`UPDATE teams SET lead_id = ?, updated_at = datetime('now') WHERE id = ?`, [uid, row.id]);
-    const has = await queryOne('SELECT 1 AS x FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'management_lead']);
-    if (!has) await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [uid, 'management_lead']);
+    await run(`UPDATE teams SET lead_id = ?, lead_devotee_id = ?, updated_at = datetime('now') WHERE id = ?`,
+      [uid, devId, row.id]);
+    if (uid) {
+      const has = await queryOne('SELECT 1 AS x FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'management_lead']);
+      if (!has) await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [uid, 'management_lead']);
+    }
     if (prev && prev !== uid) {
       const still = await queryOne('SELECT 1 AS x FROM teams WHERE lead_id = ? AND is_deleted = 0 LIMIT 1', [prev]);
       if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'management_lead']);
       await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
     }
-    // the lead is a person, and a lead is always also on the team roster
-    let devId = u.devotee_id;
-    if (!devId) {
-      devId = await ensureDevotee({ name: u.name, mobile: u.mobile, city: u.city });
-      if (devId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, uid]);
-    }
     if (devId) await addAsMember({ kind: 'team', entityId: row.id, devoteeId: devId, role: 'Lead' });
 
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
-      action: 'GRANT', entityType: 'management_lead', entityId: String(uid), scopeId: row.code });
+      action: 'GRANT', entityType: 'management_lead', entityId: String(uid || 'dev:' + devId), scopeId: row.code });
     res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });

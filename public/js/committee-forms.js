@@ -13,9 +13,20 @@
         <div class="form-group"><label class="form-label" for="cmtFieldName">Committee Name *</label>
           <input type="text" class="form-input" id="cmtFieldName" placeholder="e.g. Rabari Samaj Committee" required></div>
         <div class="grid mg-2col-form">
-          <div class="form-group"><label class="form-label" for="cmtLeadSelect">Leader *</label><select class="form-select" id="cmtLeadSelect" required></select></div>
+          <div class="form-group">
+            <div class="flex justify-between items-center"><label class="form-label" for="cmtLeadSelect" style="margin:0">Leader *</label>
+              <button class="btn btn-outline mg-btn-xs" type="button" onclick="cmtAddLeader()">+ New devotee</button></div>
+            <select class="form-select" id="cmtLeadSelect" required></select>
+            <div class="mg-muted-xs">Pick a devotee, or add a new one — no login account needed.</div>
+          </div>
           <div class="form-group"><label class="form-label" for="cmtFieldSamaj">Samaj</label>
             <input type="text" class="form-input" id="cmtFieldSamaj" list="donCommitteeList" placeholder="e.g. Rabari Samaj"></div>
+        </div>
+        <div class="form-group">
+          <div class="flex justify-between items-center"><label class="form-label" style="margin:0">Members</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" onclick="cmtAddMemberPerson()">+ Add new Devotee</button></div>
+          <div class="mg-muted-xs" style="margin-bottom:.4rem">Tick people from the register, or add new ones. The leader is added automatically.</div>
+          <div id="cmtMemberPicker"></div>
         </div>
         <div class="grid mg-2col-form">
           <div class="form-group"><label class="form-label" for="cmtFieldSize">Expected Size *</label><input type="number" class="form-input" id="cmtFieldSize" min="1" value="20" required></div>
@@ -141,7 +152,9 @@ function openAddCommittee() {
   document.getElementById('committeeFormTitle').textContent = window.t('cmt_add', 'Add Committee');
   document.getElementById('committeeFormSubmitBtn').textContent = window.t('cmt_create', 'Create Committee');
   document.getElementById('formCommittee').reset();
-  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions('');  document.getElementById('cmtFieldSize').value = 20;
+  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions('');
+  cmtRenderMemberPicker([]);
+  document.getElementById('cmtFieldSize').value = 20;
   document.getElementById('cmtFieldStatus').value = 'active';
   openModal('modalCommittee');
 }
@@ -150,7 +163,9 @@ function openEditCommittee(id) {
   CMT.editingCmtId = id;
   document.getElementById('committeeFormTitle').textContent = window.t('cmt_edit', 'Edit Committee');
   document.getElementById('committeeFormSubmitBtn').textContent = window.t('save');
-  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(c.leaderId);  document.getElementById('cmtFieldName').value = c.name;
+  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(c.leaderId);
+  cmtRenderMemberPicker((c.members||[]).map(function(m){return m.devoteeId||m.id;}));
+  document.getElementById('cmtFieldName').value = c.name;
   document.getElementById('cmtFieldSamaj').value = c.samaj || '';
   document.getElementById('cmtFieldSize').value = c.expectedSize;
   document.getElementById('cmtFieldStatus').value = c.status;
@@ -158,10 +173,33 @@ function openEditCommittee(id) {
   document.getElementById('cmtFieldNotes').value = c.notes || '';
   openModal('modalCommittee');
 }
+/* leader "+ New devotee" — reuse the shared sheet, then select the new person */
+function cmtAddLeader() {
+  openDevoteeSheet({
+    title: 'Add a new Leader (devotee)',
+    onSaved: function (dev) {
+      document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(dev.id);
+    }
+  });
+}
+/* members roster inside the committee form */
+function cmtRenderMemberPicker(ids) {
+  const box = document.getElementById('cmtMemberPicker');
+  if (box) box.innerHTML = personCheckList((typeof allPeople === 'function' ? allPeople() : []), ids || [], 'cmt-mem-check');
+}
+function cmtAddMemberPerson() {
+  const keep = checkedIds('cmtMemberPicker', 'cmt-mem-check');
+  openDevoteeSheet({
+    title: 'Add a new Member (devotee)',
+    onSaved: function (dev) { keep.push(dev.id); cmtRenderMemberPicker(keep); }
+  });
+}
+
 function handleSaveCommittee(e) {
   e.preventDefault();
   const name = document.getElementById('cmtFieldName').value.trim();
   const leaderId = document.getElementById('cmtLeadSelect').value;
+  const memberIds = checkedIds('cmtMemberPicker', 'cmt-mem-check');
   const size = parseInt(document.getElementById('cmtFieldSize').value, 10);
   const purpose = document.getElementById('cmtFieldPurpose').value.trim();
   if (!name) { cmtToast(window.t('cmt_need_name', 'Name is required.')); return; }
@@ -181,10 +219,28 @@ function handleSaveCommittee(e) {
     cmtToast(name + ' — ' + window.t('save') + ' ✓');
   } else {
     const id = cmtNextId('CMT', CMT.committees, 3);
-    CMT.committees.push(Object.assign({ id, createdDate: cmtToday() }, payload));
+    CMT.committees.push(Object.assign({ id, createdDate: cmtToday(), memberIds }, payload));
     CMT.communication.push({ committeeId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
     cmtLogActivity(id, window.t('cmt_created', 'Committee created') + ' — ' + cmtLeadName(id));
     cmtToast(name + ' — ' + window.t('cmt_create', 'created'));
+    // best-effort DB persist: committee + leader + each member
+    if (window.API && window.API.online) {
+      window.API.post('/committees', { name, samaj: payload.samaj, purpose: payload.purpose, expectedSize: payload.expectedSize })
+        .then(function (c) {
+          var code = c && (c.code || c.id);
+          if (!code) return;
+          if (leaderId) window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId }).catch(function () {});
+          memberIds.forEach(function (mid) {
+            var p = (typeof personById === 'function') ? personById(mid) : null;
+            if (p) {
+              var parts = String(p.name || '').trim().split(/\s+/);
+              window.API.post('/committees/' + code + '/members', {
+                firstName: parts.shift() || p.name, lastName: parts.join(' '), mobile: (p.mobile || '').replace(/\D/g, ''), city: p.city || ''
+              }).catch(function () {});
+            }
+          });
+        }).catch(function () {});
+    }
   }
   CMT.editingCmtId = null;
   closeModal('modalCommittee');
