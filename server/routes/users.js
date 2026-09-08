@@ -41,16 +41,35 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /* POST /  — create an account.
-   body: { email, name?, firstName?, lastName?, mobile?, city?, state?, samaj?, roles?[] }
-   Every account is also a person: the shared devotee row is created (or reused
-   by mobile) and linked on users.devotee_id. */
+   body: { email, roles?[],
+           devoteeId?  — link an existing person (id or code), OR
+           name?/firstName?/lastName?, mobile?, city?, state?, samaj? — a new one }
+   Every account is a person: an existing devotee is linked as-is, otherwise the
+   shared devotee row is created (or reused by mobile). users.devotee_id is set. */
 router.post('/', adminTier, async (req, res, next) => {
   try {
     const email = String(req.body.email || '').toLowerCase().trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return res.status(400).json({ error: 'A valid email is required' });
     }
-    const name = String(req.body.name || `${req.body.firstName || ''} ${req.body.lastName || ''}`).trim();
+
+    // an explicitly-picked existing devotee wins — no duplicate is ever created
+    let linkedDev = null;
+    if (req.body.devoteeId != null && String(req.body.devoteeId).trim()) {
+      linkedDev = await queryOne(
+        'SELECT * FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]
+      );
+      if (!linkedDev) return res.status(400).json({ error: 'That devotee no longer exists' });
+      const taken = await queryOne('SELECT id FROM users WHERE devotee_id = ? AND is_deleted = 0', [linkedDev.id]);
+      if (taken) return res.status(409).json({ error: 'That devotee already has a login account' });
+    }
+
+    const name = linkedDev
+      ? linkedDev.name
+      : String(req.body.name || `${req.body.firstName || ''} ${req.body.lastName || ''}`).trim();
+    const mobile = linkedDev ? (linkedDev.mobile || '') : (req.body.mobile || '');
+    const city = linkedDev ? (linkedDev.city || '') : (req.body.city || '');
     const roles = [...new Set(req.body.roles || [])];
     for (const r of roles) {
       if (!VALID_ROLES.includes(r)) return res.status(400).json({ error: `Unknown role: ${r}` });
@@ -64,22 +83,22 @@ router.post('/', adminTier, async (req, res, next) => {
     let userId;
     if (existing) {
       await run(`UPDATE users SET is_deleted = 0, active = 1, name = ?, mobile = ?, city = ?, updated_at = datetime('now') WHERE id = ?`,
-        [name, req.body.mobile || '', req.body.city || '', existing.id]);
+        [name, mobile, city, existing.id]);
       userId = existing.id;
       await run('DELETE FROM user_roles WHERE user_id = ?', [userId]);
     } else {
       const r = await run('INSERT INTO users (email, name, mobile, city, active) VALUES (?, ?, ?, ?, 1)',
-        [email, name, req.body.mobile || '', req.body.city || '']);
+        [email, name, mobile, city]);
       userId = r.lastInsertRowid;
     }
     for (const role of roles) {
       await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [userId, role]);
     }
 
-    // link (create if new) the shared devotee record for this account
-    const devoteeId = await ensureDevotee({
+    // link the person: the picked devotee, else create-or-reuse one by mobile
+    const devoteeId = linkedDev ? linkedDev.id : await ensureDevotee({
       name, firstName: req.body.firstName, lastName: req.body.lastName,
-      mobile: req.body.mobile, city: req.body.city, state: req.body.state, samaj: req.body.samaj,
+      mobile, city, state: req.body.state, samaj: req.body.samaj,
     });
     if (devoteeId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devoteeId, userId]);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Access',
