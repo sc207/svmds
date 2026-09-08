@@ -66,6 +66,7 @@ function mapDonor(row) {
     orgName: row.org_name || '',
     contactPerson: row.contact_person || '',
     name,
+    devoteeId: row.devotee_id || null,
     mobile: row.mobile || '',
     city: row.city || '',
     state: row.state || 'Gujarat',

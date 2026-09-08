@@ -5,6 +5,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
+const { ensureDevotee } = require('../services/people');
 const { mapDonor } = require('../utils/mappers');
 
 const router = express.Router();
@@ -54,13 +55,21 @@ router.post('/', async (req, res, next) => {
       if (dup) return res.status(200).json({ ...mapDonor(dup), _deduped: true });
     }
 
+    // an individual donor is a person → create-or-reuse the shared devotee row
+    const devoteeId = type === 'individual'
+      ? await ensureDevotee({
+          firstName, lastName: req.body.lastName, mobile,
+          city: req.body.city, state: req.body.state, samaj: req.body.committee,
+        })
+      : null;
+
     const code = await nextCode('donor');
     const r = await run(
-      `INSERT INTO donors (code, type, first_name, last_name, org_name, contact_person, mobile, city, state, committee, pan, notes, added_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, date('now'))`,
+      `INSERT INTO donors (code, type, first_name, last_name, org_name, contact_person, mobile, city, state, committee, pan, notes, devotee_id, added_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, date('now'))`,
       [code, type, firstName, req.body.lastName || '', orgName, req.body.contactPerson || '',
        mobile, req.body.city || '', req.body.state || 'Gujarat', req.body.committee || '',
-       req.body.pan || '', req.body.notes || '']
+       req.body.pan || '', req.body.notes || '', devoteeId]
     );
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Donations',
       action: 'CREATE', entityType: 'donor', entityId: code });

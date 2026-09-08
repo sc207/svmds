@@ -6,6 +6,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
+const { ensureDevotee } = require('../services/people');
 const { mapVisit } = require('../utils/mappers');
 
 const router = express.Router();
@@ -52,11 +53,10 @@ router.post('/', async (req, res, next) => {
     const status = b.status || 'requested';
     const mobile = String(b.mobile || '').trim();
 
-    let devoteeId = null;
-    if (mobile) {
-      const dev = await queryOne('SELECT id FROM devotees WHERE mobile = ? AND is_deleted = 0', [mobile]);
-      devoteeId = dev ? dev.id : null;
-    }
+    // a padhramani is for a person → create-or-reuse the shared devotee row
+    const devoteeId = await ensureDevotee({
+      name, mobile, city: b.city, state: b.state,
+    });
     const id = crypto.randomUUID();
     const code = await nextCode('visit');
     await run(

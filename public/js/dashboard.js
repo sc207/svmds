@@ -291,8 +291,6 @@ function dashboardAdmin() {
   const f = dashFigures();
   const alerts = dashAlerts();
   return `
-  ${dashGuidePanel()}
-
   <div class="stats-grid">
     ${kpiCard(window.t('dash_kpi_pooja', "Today's Poojas"), f.poojaToday, `${f.poojaUpcoming} ${window.t('cal_up_next', 'upcoming')}`, '🪔')}
     ${kpiCard(window.t('dash_kpi_don', 'Donations This Month'), '₹' + (f.donCash + f.donKind).toLocaleString('en-IN'), `${window.t('don_cash', 'cash')} ₹${f.donCash.toLocaleString('en-IN')} · ${window.t('don_kind', 'kind')} ₹${f.donKind.toLocaleString('en-IN')}`, '💰')}
@@ -300,10 +298,9 @@ function dashboardAdmin() {
     ${kpiCard(window.t('dash_kpi_month', 'This Month'), (f.meetings + f.events) + '', `${f.meetings} ${window.t('cmt_meetings_word', 'meetings')} · ${f.events} ${window.t('ev_title', 'events')}`, '🗓️')}
   </div>
 
-  <div class="section-title mg-mt flex justify-between items-center">
-    <span class="flex items-center gap-2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    ${window.t('dash_glance', 'Your temple at a glance')}</span>
-    <button class="btn btn-outline mg-btn-xs" onclick="dashShowGuide()">📖 ${window.t('guide_reopen', 'Guide')}</button>
+  <div class="section-title mg-mt flex items-center gap-2">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    <span>${window.t('dash_glance', 'Your temple at a glance')}</span>
   </div>
   <div class="dash-tiles">${dashModuleTiles({ kind: 'admin' })}</div>
 
