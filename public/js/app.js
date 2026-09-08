@@ -69,9 +69,9 @@ function toggleSidebarMenu() {
  */
 function currentAllowedPages() {
   // Preview personas (topbar "view as" switcher) — one restricted module at a time.
-  if (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader') return ['dashboard', 'committees'];
-  if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator') return ['dashboard', 'puja'];
-  if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead') return ['dashboard', 'management'];
+  if (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader') return ['dashboard', 'committees', 'calendar'];
+  if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator') return ['dashboard', 'puja', 'calendar'];
+  if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead') return ['dashboard', 'management', 'calendar'];
   // Real signed-in session — honour the page list the backend computed for this
   // user's roles (accountant, event_incharge, committee_leader, …). '*' or no
   // backend (demo mode) → unrestricted.

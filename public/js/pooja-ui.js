@@ -51,7 +51,7 @@ function closeSevarthiProfile()  { POOJA.activeSevarthiId = null; renderPooja();
 /* ------------------------------------------------------------
    ROLE CHROME — restricts the shell for a Coordinator
    ------------------------------------------------------------ */
-const POOJA_ALLOWED_PAGES = ['puja', 'dashboard'];
+const POOJA_ALLOWED_PAGES = ['puja', 'dashboard', 'calendar'];
 
 function applyPoojaRoleChrome() {
   const coord = POOJA.session.role === 'coordinator';

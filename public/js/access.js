@@ -32,27 +32,29 @@ function accRoleReferenceCard() {
   var roles = accRoleList();
   if (!roles.length && typeof ROLE_META !== 'undefined') roles = Object.keys(ROLE_META);
   var navCount = document.querySelectorAll('.sidebar-nav .nav-item[data-page]').length || 14;
-  var openLbl = esc(window.t('acc_ref_open', 'Pages it may open'));
-  var dashLbl = esc(window.t('acc_ref_dash', 'Dashboard it sees'));
-  var items = roles.map(function (r) {
+  var rows = roles.map(function (r) {
     var pages = (typeof rolePages === 'function' ? rolePages(r) : []) || [];
     var pagesTxt = (pages[0] === '*')
       ? esc(window.t('acc_everything', 'everything')) + ' (' + navCount + ' ' + esc(window.t('acc_ref_pages', 'pages')) + ')'
       : esc(pages.join(', '));
     var dash = esc(window.t('acc_ref_dash_' + r, ACC_DASH_NOTE[r] || '—'));
-    return '<div class="acc-ref-item">' +
-      '<div class="acc-ref-role"><span class="badge badge-maroon">' + roleIcon(r) + ' ' + esc(roleLabel(r)) + '</span></div>' +
-      '<div class="acc-ref-lines">' +
-        '<div><span class="acc-ref-k">' + openLbl + '</span><span class="acc-ref-v">' + pagesTxt + '</span></div>' +
-        '<div><span class="acc-ref-k">' + dashLbl + '</span><span class="acc-ref-v mg-muted-xs">' + dash + '</span></div>' +
-      '</div>' +
-    '</div>';
+    return '<tr>' +
+      '<th scope="row"><span class="badge badge-maroon">' + roleIcon(r) + ' ' + esc(roleLabel(r)) + '</span></th>' +
+      '<td>' + pagesTxt + '</td>' +
+      '<td>' + dash + '</td></tr>';
   }).join('');
   return '<div class="card mg-mt">' +
     '<div class="card-header"><div class="card-title">' + esc(window.t('acc_ref_title', 'Roles & access reference')) + '</div></div>' +
     '<div class="card-body"><p class="mg-page-sub" style="margin-top:0">' +
       esc(window.t('acc_ref_sub', 'The fixed role model. Only superadmin and admin see this.')) + '</p>' +
-      '<div class="acc-ref-list">' + items + '</div></div></div>';
+      '<div class="mg-table-scroll"><table class="acc-ref-table">' +
+      '<colgroup><col class="acc-ref-c1"><col class="acc-ref-c2"><col class="acc-ref-c3"></colgroup>' +
+      '<thead><tr>' +
+        '<th>' + esc(window.t('acc_ref_role', 'Role')) + '</th>' +
+        '<th>' + esc(window.t('acc_ref_open', 'Pages it may open')) + '</th>' +
+        '<th>' + esc(window.t('acc_ref_dash', 'Dashboard it sees')) + '</th>' +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div></div></div>';
 }
 window.accRoleReferenceCard = accRoleReferenceCard;
 

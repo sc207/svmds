@@ -22,14 +22,16 @@
     window.t = function (k, f) { return f != null ? f : k; };
   }
 
+  /* Every role can open the Unified Calendar (it self-restricts to poojas /
+     events / annual events for non-admins — see calendar.js). */
   var ROLE_META = {
     superadmin:        { icon: '🛡️', pages: ['*'] },
     admin:             { icon: '🛡️', pages: ['*'] },
-    management_lead:   { icon: '🗂️', pages: ['dashboard', 'management'] },
-    pooja_coordinator: { icon: '🪔', pages: ['dashboard', 'puja'] },
-    committee_leader:  { icon: '🏛️', pages: ['dashboard', 'committees'] },
+    management_lead:   { icon: '🗂️', pages: ['dashboard', 'management', 'calendar'] },
+    pooja_coordinator: { icon: '🪔', pages: ['dashboard', 'puja', 'calendar'] },
+    committee_leader:  { icon: '🏛️', pages: ['dashboard', 'committees', 'calendar'] },
     event_incharge:    { icon: '📅', pages: ['dashboard', 'events', 'calendar'] },
-    accountant:        { icon: '💰', pages: ['dashboard', 'donations', 'expenses', 'reports'] }
+    accountant:        { icon: '💰', pages: ['dashboard', 'donations', 'expenses', 'reports', 'calendar'] }
   };
 
   /* Seeded from the people already referenced across the modules

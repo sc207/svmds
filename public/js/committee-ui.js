@@ -34,7 +34,7 @@ function openCmtMeeting(id) {
 function closeCmtMeeting() { CMT.activeMeetingId = null; renderCommittee(); }
 
 /* ---- role chrome ---- */
-const CMT_ALLOWED_PAGES = ['committees', 'dashboard'];
+const CMT_ALLOWED_PAGES = ['committees', 'dashboard', 'calendar'];
 function applyCmtRoleChrome() {
   const lead = CMT.session.role === 'leader';
   document.querySelectorAll('.nav-item[data-page]').forEach(el => {

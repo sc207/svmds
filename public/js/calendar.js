@@ -22,6 +22,21 @@ const CAL = {
 
 function calToday() { return (typeof MG !== 'undefined' && MG.today) ? MG.today : '2026-09-06'; }
 
+/* Which entry categories this viewer may see.
+   Admin / superadmin / demo  → everything.
+   Any scoped persona or limited login (management lead, pooja coordinator,
+   committee leader, event in-charge, accountant) → only the temple-wide
+   programme: poojas, events and annual Tithi events. Committee meetings,
+   donation pledges and Bhuvaji visits stay private to the admin view. */
+var CAL_PUBLIC_TYPES = ['pooja', 'event', 'annual'];
+function calRestricted() {
+  return (typeof currentAllowedPages === 'function') && currentAllowedPages() !== null;
+}
+function calAllowedTypes() {
+  return calRestricted() ? CAL_PUBLIC_TYPES.slice()
+                         : ['pooja', 'committee', 'event', 'annual', 'donation', 'visit'];
+}
+
 /* ---- localisation: delegate to the shared i18n.js helpers (locDate / locTime
    / locNum / locMonthYear) so every calendar in the app formats the same way ---- */
 function calD(v) { return (typeof tData === 'function') ? tData(v == null ? '' : v) : (v == null ? '' : v); }
@@ -136,6 +151,7 @@ function shiftCalMonth(delta) {
   renderUnifiedCalendar();
 }
 function toggleCalFilter(type) {
+  if (calAllowedTypes().indexOf(type) === -1) return;   // not visible to this viewer
   CAL.filters[type] = !CAL.filters[type];
   renderUnifiedCalendar();
 }
@@ -152,6 +168,11 @@ function renderUnifiedCalendar() {
   const monthKey = y + '-' + String(mo + 1).padStart(2, '0');
   const daysIn = new Date(y, mo + 1, 0).getDate();
   const startDow = (new Date(y, mo, 1).getDay() + 6) % 7;   // Monday-first
+
+  // clamp the filters to what this viewer is allowed to see
+  const allowedTypes = calAllowedTypes();
+  Object.keys(CAL.filters).forEach(k => { if (allowedTypes.indexOf(k) === -1) CAL.filters[k] = false; });
+
   const entries = calEntries(monthKey);
   renderUnifiedCalendar._entries = entries;
 
@@ -176,7 +197,7 @@ function renderUnifiedCalendar() {
   const trail = (7 - ((startDow + daysIn) % 7)) % 7;
   for (let i = 0; i < trail; i++) cells += `<div class="mg-cal-cell mg-cal-empty"></div>`;
 
-  const legend = Object.keys(CAL_TYPE_META).map(type => {
+  const legend = allowedTypes.filter(type => CAL_TYPE_META[type]).map(type => {
     const m = CAL_TYPE_META[type];
     return `<button class="cal-legend-btn ${CAL.filters[type] ? 'on' : 'off'}" onclick="toggleCalFilter('${type}')">
       <span class="cal-legend-dot cal-ev-${type}"></span>${window.t(m.key, m.def)}</button>`;
@@ -211,7 +232,9 @@ function renderUnifiedCalendar() {
   <div class="flex justify-between items-center mg-page-head">
     <div>
       <h1 class="banner-title mg-page-title">🗓️ ${window.t('cal_title', 'Unified Temple Calendar')}</h1>
-      <p class="mg-page-sub">${window.t('cal_sub', 'Poojas, committee meetings, events, pledges and visits — all in one place')}</p>
+      <p class="mg-page-sub">${calRestricted()
+        ? window.t('cal_sub_public', 'Poojas, events and annual Tithi dates across the temple')
+        : window.t('cal_sub', 'Poojas, committee meetings, events, pledges and visits — all in one place')}</p>
     </div>
     <div class="flex gap-2 items-center">
       <button class="btn btn-outline mg-btn-xs" onclick="shiftCalMonth(-1)">← ${window.t('back')}</button>

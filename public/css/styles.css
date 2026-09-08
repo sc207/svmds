@@ -3361,32 +3361,48 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 }
 .acc-table .mg-muted-xs { line-height: 1.45; }
 
-/* Roles & access reference — stacked rows (no table-layout headaches) */
-.acc-ref-list { display: flex; flex-direction: column; }
-.acc-ref-item {
-  display: grid;
-  grid-template-columns: 190px 1fr;
-  gap: 0.75rem 1.25rem;
-  padding: 0.85rem 0;
-  border-top: 1px solid var(--warm-border);
+/* Roles & access reference — a real 3-column table, capped width, cells wrap.
+   Self-contained (does NOT use .custom-table, whose td{white-space:nowrap}
+   fought the wrapping here). */
+.acc-ref-table {
+  table-layout: fixed;
+  width: 100%;
+  max-width: 1060px;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: 0.86rem;
 }
-.acc-ref-item:first-child { border-top: none; }
-.acc-ref-role .badge { white-space: nowrap; }
-.acc-ref-lines { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
-.acc-ref-lines > div { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.acc-ref-k {
-  flex: 0 0 130px;
+.acc-ref-table col.acc-ref-c1 { width: 190px; }
+.acc-ref-table col.acc-ref-c2 { width: 34%; }
+.acc-ref-table col.acc-ref-c3 { width: auto; }
+.acc-ref-table thead th {
+  padding: 0.7rem 0.9rem;
+  background: var(--warm-ivory);
+  color: var(--muted-brown);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  color: var(--muted-brown);
-  padding-top: 1px;
+  letter-spacing: 0.5px;
+  text-align: left;
+  border-bottom: 2px solid var(--warm-border);
 }
-.acc-ref-v { flex: 1 1 240px; min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
-@media (max-width: 640px) {
-  .acc-ref-item { grid-template-columns: 1fr; gap: 0.5rem; }
-  .acc-ref-k { flex-basis: 100%; }
+.acc-ref-table tbody th,
+.acc-ref-table tbody td {
+  padding: 0.8rem 0.9rem;
+  vertical-align: top;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--warm-border);
+}
+.acc-ref-table tbody tr:last-child th,
+.acc-ref-table tbody tr:last-child td { border-bottom: 0; }
+.acc-ref-table tbody th { font-weight: 600; }
+.acc-ref-table tbody th .badge { white-space: nowrap; }
+.acc-ref-table tbody td { color: var(--muted-brown); }
+@media (max-width: 620px) {
+  .acc-ref-table { min-width: 560px; }
 }
 
 /* Reports — downloadable-register cards */

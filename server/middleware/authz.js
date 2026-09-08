@@ -3,14 +3,16 @@
    (BACKEND_PLAN.md §5.2) */
 const { queryAll } = require('../db/connection');
 
+// Every role can open the Unified Calendar; it self-restricts its categories
+// for non-admins on the client (public/js/calendar.js).
 const ROLE_PAGES = {
   superadmin:        ['*'],
   admin:             ['*'],
-  management_lead:   ['dashboard', 'management'],
-  pooja_coordinator: ['dashboard', 'puja'],
-  committee_leader:  ['dashboard', 'committees'],
+  management_lead:   ['dashboard', 'management', 'calendar'],
+  pooja_coordinator: ['dashboard', 'puja', 'calendar'],
+  committee_leader:  ['dashboard', 'committees', 'calendar'],
   event_incharge:    ['dashboard', 'events', 'calendar'],
-  accountant:        ['dashboard', 'donations', 'expenses', 'reports'],
+  accountant:        ['dashboard', 'donations', 'expenses', 'reports', 'calendar'],
 };
 
 // Only a superadmin may grant/revoke these, disable such an account, or impersonate.
