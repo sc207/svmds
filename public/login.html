@@ -124,11 +124,37 @@
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
+  /* ---- ONE controlled Google Identity Services flow for this page ----
+     - a single google.accounts.id.initialize() (guarded, never repeated)
+     - the RENDERED button only (no One Tap prompt), auto_select:false, so a
+       browser signed into several Google accounts always gets the chooser
+     - no login_hint / hd / fixed email — the user picks the account
+     - a watchdog so a failed FedCM/token exchange never leaves the user stuck;
+       it returns them to a usable /login with a clear message
+     Google authentication (who owns this Google account) is separate from
+     application authorization (is that email registered temple staff) — the
+     latter is decided by the backend at POST /api/auth/google. */
   (function () {
     var msg = document.getElementById('loginMsg');
+    var box = document.getElementById('gbtn');
+    var initialized = false;
+    var watchdog = null;
+
     function show(kind, text) { msg.className = 'login-msg ' + kind; msg.textContent = text; }
+    function clearWatchdog() { if (watchdog) { clearTimeout(watchdog); watchdog = null; } }
+
+    function armWatchdog() {
+      clearWatchdog();
+      show('ok', 'Opening the Google account chooser…');
+      watchdog = setTimeout(function () {
+        watchdog = null;
+        show('err', 'Google sign-in did not complete. Reload this page and try again — if it keeps happening the portal’s Google sign-in origin may need to be configured by an administrator.');
+      }, 30000);
+    }
 
     function onGoogle(resp) {
+      clearWatchdog();
+      if (!resp || !resp.credential) { show('err', 'Google sign-in could not be completed. Please try again.'); return; }
       show('ok', 'Signing you in…');
       fetch('/api/auth/google', {
         method: 'POST',
@@ -138,40 +164,52 @@
       })
         .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
         .then(function (res) {
-          if (!res.ok) { show('err', (res.b && res.b.error) || 'Sign-in failed.'); return; }
-          window.location.href = '/';
+          if (res.ok) { window.location.href = '/'; return; }
+          // application authorization failure (not a Google failure)
+          show('err', (res.b && res.b.error) || 'This Google account is not authorised for the temple portal.');
         })
         .catch(function () { show('err', 'Network error — please try again.'); });
     }
 
     function init(clientId) {
-      if (!clientId) { show('err', 'Google sign-in is not configured (GOOGLE_CLIENT_ID missing on the server).'); return; }
+      if (initialized) return;
+      if (!clientId) { show('err', 'Google sign-in is not configured on the server (GOOGLE_CLIENT_ID missing).'); return; }
+
       var tries = 0;
       (function ready() {
         if (!window.google || !google.accounts || !google.accounts.id) {
-          if (++tries > 60) { show('err', 'Could not load Google Sign-In. Check your connection / ad-blocker and reload.'); return; }
+          if (++tries > 80) { show('err', 'Could not load Google Sign-In. Check your connection or an ad-blocker, then reload.'); return; }
           setTimeout(ready, 120); return;
         }
+
         google.accounts.id.initialize({
           client_id: clientId,
           callback: onGoogle,
-          auto_select: false,
-          cancel_on_tap_outside: true,
-          use_fedcm_for_prompt: false,   // avoid the One-Tap iframe that stalls on gsi/transform
-          itp_support: true
+          auto_select: false,          // never auto-pick when multiple accounts exist
+          itp_support: true            // Safari / ITP support (not a FedCM toggle)
         });
-        // Rendered button only — it opens the account chooser in a real popup
-        // window, which works with several signed-in Google accounts and with
-        // third-party cookies blocked. (No google.accounts.id.prompt() here.)
-        google.accounts.id.renderButton(document.getElementById('gbtn'),
-          { type: 'standard', theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill', width: 300 });
+        initialized = true;
+        window.__gisInitialized = true;
+
+        google.accounts.id.renderButton(box, {
+          type: 'standard', theme: 'filled_blue', size: 'large',
+          text: 'signin_with', shape: 'pill', width: 300,
+          click_listener: armWatchdog   // start the "not stuck" timer on click
+        });
+
+        /* dev-only diagnostics — safe values only, never tokens/cookies */
+        if (/^(localhost|127\.|\[::1\])/.test(location.hostname)) {
+          console.info('[login] origin           :', window.location.origin);
+          console.info('[login] google client id :', clientId);
+          console.info('[login] gis initialized  :', window.__gisInitialized === true);
+        }
       })();
     }
 
     fetch('/api/auth/config', { credentials: 'include' })
       .then(function (r) { return r.json(); })
-      .then(function (c) { init(c.googleClientId); })
-      .catch(function () { show('err', 'Could not reach the server.'); });
+      .then(function (c) { init(c && c.googleClientId); })
+      .catch(function () { show('err', 'Could not reach the server. Reload and try again.'); });
   })();
   </script>
 </body>

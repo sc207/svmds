@@ -46,6 +46,13 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+/* Let Google Identity Services use the FedCM credential API from this origin
+   (needed by the "Sign in with Google" button on modern Chrome). */
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'identity-credentials-get=(self "https://accounts.google.com")');
+  next();
+});
+
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || !config.allowedOrigins.length || config.allowedOrigins.includes(origin)) return cb(null, true);
