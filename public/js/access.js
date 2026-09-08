@@ -264,7 +264,7 @@ function renderSettings() {
   root.innerHTML = `
   <div class="mg-page-head"><div>
     <h1 class="banner-title mg-page-title">⚙️ ${window.t('set_title', 'Platform Settings')}</h1>
-    <p class="mg-page-sub">${window.t('set_sub', 'Temple identity, language and demo data')}</p>
+    <p class="mg-page-sub">${window.t('set_sub', 'Temple identity and language')}</p>
   </div></div>
   <div class="dashboard-2col">
     <div class="card"><div class="card-body">
@@ -304,22 +304,7 @@ function renderSettings() {
           <option value="gu" ${lang === 'gu' ? 'selected' : ''}>ગુજરાતી</option>
         </select></div>
 
-      <h4 class="mg-pane-title" style="font-size:0.95rem;margin-top:0.5rem;">${window.t('set_clock_title', 'Working date & data')}</h4>
-      <p class="mg-page-sub" style="margin:0 0 0.6rem;">${window.t('set_clock_sub', 'Every dashboard, calendar, pooja/event status and monthly report is calculated against this date. Move it to see how records track over time.')}</p>
-      <div class="grid mg-2col-form">
-        <div class="form-group"><label class="form-label">${window.t('date', 'Date')}</label>
-          <input type="date" class="form-input" id="setClkDate" value="${esc(nowDate)}"></div>
-        <div class="form-group"><label class="form-label">${window.t('time', 'Time')}</label>
-          <input type="time" class="form-input" id="setClkTime" value="${esc(nowTime)}"></div>
-      </div>
-      <div class="flex gap-2" style="flex-wrap:wrap;">
-        <button class="btn btn-primary" onclick="applyWorkingDate()">${window.t('set_clock_apply', 'Apply working date')}</button>
-        <button class="btn btn-outline" onclick="resetWorkingDate()">${window.t('set_clock_reset', 'Reset to seed date')}</button>
-      </div>
-      ${clkOverridden ? `<div class="mg-note-box mg-mt-sm">${window.t('set_clock_note', 'A custom working date is active and is remembered across reloads.')}</div>` : ''}
-
       <div class="mg-note-box mg-mt-sm">${window.t('set_accounts_hint', 'Manage who can access the platform in the')} <a href="#" onclick="switchPage('admin');return false;"><strong>${window.t('acc_title', 'Accounts & Access')}</strong></a> ${window.t('set_page', 'page')}.</div>
-      <button class="btn btn-outline mg-mt-sm mg-btn-danger" onclick="if(confirm('${window.t('set_reset_confirm', 'Reload and reset all demo data?')}')){try{localStorage.removeItem('svmmm_clock')}catch(e){} location.reload();}">${window.t('set_reset', 'Fresh load — reset all demo data')}</button>
     </div></div>
   </div>`;
 }

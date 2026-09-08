@@ -48,173 +48,22 @@ const POOJA = {
   ],
 
   /* --- Pooja Type master catalog (grows toward 36) -------- */
-  poojaTypes: [
-    { id:'PTY-001', name:'Vihat Meldi Mata Vishesh Havan', category:'Special Havan', description:'Principal havan invoking Maa Vihat Meldi with 108 aahutis.', defaultDurationMin:60,  suggestedOfferings:'Ghee, samidha, black sesame, kumkum, coconut', icon:'🔥' },
-    { id:'PTY-002', name:'Maha Aarti & Deepotsav',         category:'Daily Ritual',  description:'Grand aarti with rows of lit diyas across the mandap.',    defaultDurationMin:30,  suggestedOfferings:'Ghee diyas, cotton wicks, camphor, flowers', icon:'🪔' },
-    { id:'PTY-003', name:'Rudrabhishek Seva',              category:'Abhishek',      description:'Abhishek of the shivling with panchamrit and mantras.',   defaultDurationMin:45,  suggestedOfferings:'Milk, curd, honey, ghee, sugar, bilva leaves', icon:'💧' },
-    { id:'PTY-004', name:'Navgraha Shanti Pooja',          category:'Shanti Pooja',  description:'Propitiation of the nine planets for peace and relief.',  defaultDurationMin:90,  suggestedOfferings:'Nine grains, nine cloths, ghee, havan samagri', icon:'🪐' },
-    { id:'PTY-005', name:'Chandi Path & Archana',          category:'Path',          description:'Recitation of Durga Saptashati with archana.',            defaultDurationMin:120, suggestedOfferings:'Red flowers, chunri, kumkum, coconut, ghee lamp', icon:'📿' },
-    { id:'PTY-006', name:'Shat Chandi Mahayagna',          category:'Special Yagna', description:'Hundred-fold Chandi recitation with mahayagna.',          defaultDurationMin:180, suggestedOfferings:'Large havan kund, ghee, dry fruits, 100 chunris', icon:'🕉️' },
-    { id:'PTY-007', name:'Gau Seva & Grass Donation',      category:'Seva',          description:'Feeding and honouring the temple cows.',                  defaultDurationMin:15,  suggestedOfferings:'Green fodder, jaggery, wheat flour balls', icon:'🐄' },
-    { id:'PTY-008', name:'Annadan Mahaprasad Seva',        category:'Prasad',        description:'Community meal offered as prasad to all devotees.',       defaultDurationMin:60,  suggestedOfferings:'Rice, dal, ghee, vegetables, sweets', icon:'🍲' },
-    { id:'PTY-009', name:'Vihat Maa Moorti Sthapan Pooja', category:'Sthapana',      description:'Consecration & installation of the Maa Vihat idol.',      defaultDurationMin:150, suggestedOfferings:'Panchratna, navdhanya, kalash, chunri, gold thread', icon:'🛕' },
-    { id:'PTY-010', name:'Kalash Sthapana',                category:'Sthapana',      description:'Establishment of the sacred kalash to begin an anushthan.', defaultDurationMin:45, suggestedOfferings:'Copper kalash, mango leaves, coconut, raw rice, thread', icon:'⚱️' },
-    { id:'PTY-011', name:'Prana Pratishtha',               category:'Sthapana',      description:'Rite of infusing divine life-force into the deity.',      defaultDurationMin:120, suggestedOfferings:'Netravali, madhuparka, panchamrit, new vastra', icon:'✨' },
-    { id:'PTY-012', name:'Yagna / Havan',                  category:'Havan',         description:'General fire ceremony with sankalp and purnahuti.',       defaultDurationMin:75,  suggestedOfferings:'Havan samagri, ghee, samidha, coconut', icon:'🔥' },
-    { id:'PTY-013', name:'Abhishek Seva',                  category:'Abhishek',      description:'Ceremonial bathing of Maa with sacred substances.',       defaultDurationMin:40,  suggestedOfferings:'Milk, panchamrit, gangajal, rose water, chandan', icon:'💧' },
-    { id:'PTY-014', name:'Annakut Darshan',               category:'Utsav',         description:'Mountain of food offered and displayed before Maa.',      defaultDurationMin:90,  suggestedOfferings:'56 bhog items, sweets, farsan, fruits', icon:'🍛' },
-    { id:'PTY-015', name:'Mata Chowki / Dayro',            category:'Utsav',         description:'Devotional night of bhajan, garba and dayro.',            defaultDurationMin:240, suggestedOfferings:'Sound system, harmonium, prasad, chunri', icon:'🎶' },
-    { id:'PTY-016', name:'Dhwaja Aarohan',                 category:'Utsav',         description:'Hoisting of the sacred flag atop the shikhar.',           defaultDurationMin:30,  suggestedOfferings:'Silk dhwaja, kalash, coconut, garland', icon:'🚩' }
-  ],
+  poojaTypes: [],
 
   /* --- Pooja events (the thing admin creates & opens) ----- */
-  poojas: [
-    {
-      id:'PJA-001', typeId:'PTY-009', name:'Vihat Maa Moorti Sthapan Pooja',
-      scheduleMode:'multi', defaultVenue:'Main Sabha Mandap',
-      sessions:[
-        { id:'PSN-001', label:'Adhivas & Kalash Sthapana', date:'2026-09-15', startTime:'08:30', endTime:'12:00', venue:'Yagna Shala' },
-        { id:'PSN-002', label:'Navgraha & Panchang Pooja', date:'2026-09-18', startTime:'09:00', endTime:'12:30', venue:'Yagna Shala' },
-        { id:'PSN-003', label:'Moorti Sthapan & Prana Pratishtha', date:'2026-09-22', startTime:'07:30', endTime:'13:30', venue:'Main Sabha Mandap' }
-      ],
-      guestIds:['GST-001','GST-002'],
-      sevarthiIds:['SEV-001','SEV-002'], coordinatorIds:['DEV-010'],
-      status:'planned', color:'#6B1F2A', estimatedSevaAmount:251000,
-      notes:'Sevarthi parivar is funding idol carving and all samagri. Coordinate carving delivery by 12 Sept.',
-      custom:[ { label:'Muhurat', value:'Abhijit Muhurat, 11:48 AM (22 Sept)' }, { label:'Idol Height', value:'42 inches, white marble' } ],
-      invitation:{ template:'royal', accent:'#6B1F2A', headline:'',
-        inviteLine:'',
-        blessing:'',
-        showSevarthi:true, showGuests:true, showSchedule:true },
-      createdDate:'2026-08-28'
-    },
-    {
-      id:'PJA-002', typeId:'PTY-010', name:'Sharadiya Navratri Kalash Sthapana',
-      scheduleMode:'single', defaultVenue:'Garbha Mandap',
-      sessions:[ { id:'PSN-004', label:'Kalash Sthapana', date:'2026-09-06', startTime:'06:30', endTime:'08:30', venue:'Garbha Mandap' } ],
-      guestIds:['GST-003'],
-      sevarthiIds:['SEV-003'], coordinatorIds:['DEV-010'],
-      status:'planned', color:'#C96A20', estimatedSevaAmount:21000,
-      notes:'Opens the nine-night Navratri anushthan.',
-      custom:[],
-      invitation:{ template:'festival', accent:'#C96A20', headline:'',
-        inviteLine:'',
-        blessing:'',
-        showSevarthi:true, showGuests:false, showSchedule:false },
-      createdDate:'2026-08-20'
-    },
-    {
-      id:'PJA-003', typeId:'PTY-006', name:'Shat Chandi Mahayagna',
-      scheduleMode:'single', defaultVenue:'Yagna Shala',
-      sessions:[ { id:'PSN-005', label:'Mahayagna & Purnahuti', date:'2026-09-02', startTime:'07:00', endTime:'12:30', venue:'Yagna Shala' } ],
-      guestIds:['GST-004'],
-      sevarthiIds:['SEV-004'], coordinatorIds:['DEV-011'],
-      status:'planned', color:'#7A3B62', estimatedSevaAmount:151000,
-      notes:'Completed. Purnahuti done at 12:10 PM.',
-      custom:[ { label:'Aahuti Count', value:'1,08,000' } ],
-      invitation:{ template:'royal', accent:'#7A3B62', headline:'',
-        inviteLine:'',
-        blessing:'',
-        showSevarthi:true, showGuests:true, showSchedule:false },
-      createdDate:'2026-08-10'
-    },
-    {
-      id:'PJA-004', typeId:'PTY-014', name:'Annakut Mahotsav Darshan',
-      scheduleMode:'single', defaultVenue:'Main Sabha Mandap',
-      sessions:[ { id:'PSN-006', label:'Annakut Darshan', date:'2026-10-02', startTime:'10:00', endTime:'13:00', venue:'Main Sabha Mandap' } ],
-      guestIds:[],
-      sevarthiIds:['SEV-005'], coordinatorIds:['DEV-010'],
-      status:'planned', color:'#C9A24A', estimatedSevaAmount:75000,
-      notes:'56 bhog to be arranged with Bhojan Shala team.',
-      custom:[],
-      invitation:{ template:'cream', accent:'#C9A24A', headline:'',
-        inviteLine:'',
-        blessing:'',
-        showSevarthi:true, showGuests:false, showSchedule:false },
-      createdDate:'2026-09-01'
-    },
-    {
-      id:'PJA-005', typeId:'PTY-003', name:'Shravan Rudrabhishek Seva',
-      scheduleMode:'single', defaultVenue:'Shiv Mandir',
-      sessions:[ { id:'PSN-007', label:'Rudrabhishek', date:'2026-09-08', startTime:'07:00', endTime:'08:30', venue:'Shiv Mandir' } ],
-      guestIds:[],
-      sevarthiIds:['SEV-006'], coordinatorIds:[],
-      status:'planned', color:'#3B5C8A', estimatedSevaAmount:11000,
-      notes:'',
-      custom:[],
-      invitation:{ template:'cream', accent:'#3B5C8A', headline:'',
-        inviteLine:'',
-        blessing:'',
-        showSevarthi:true, showGuests:false, showSchedule:false },
-      createdDate:'2026-09-01'
-    },
-    {
-      id:'PJA-006', typeId:'PTY-005', name:'Poonam Chandi Path & Archana',
-      scheduleMode:'single', defaultVenue:'Main Sabha Mandap',
-      sessions:[ { id:'PSN-008', label:'Chandi Path', date:'2026-09-28', startTime:'16:00', endTime:'18:00', venue:'Main Sabha Mandap' } ],
-      guestIds:['GST-005'],
-      sevarthiIds:[], coordinatorIds:[],
-      status:'planned', color:'#4C8B5A', estimatedSevaAmount:0,
-      notes:'Sevarthi still to be confirmed.',
-      custom:[],
-      invitation:{ template:'royal', accent:'#4C8B5A', headline:'',
-        inviteLine:'',
-        blessing:'',
-        showSevarthi:false, showGuests:true, showSchedule:false },
-      createdDate:'2026-09-03'
-    },
-    {
-      id:'PJA-007', typeId:'PTY-002', name:'Sandhya Deepmala Maha Aarti',
-      scheduleMode:'single', defaultVenue:'Main Sabha Mandap',
-      sessions:[ { id:'PSN-009', label:'Deepmala Aarti', date:'2026-09-06', startTime:'19:15', endTime:'20:30', venue:'Main Sabha Mandap' } ],
-      guestIds:[],
-      sevarthiIds:['SEV-003'], coordinatorIds:['DEV-011'],
-      status:'planned', color:'#C9A24A', estimatedSevaAmount:5100,
-      notes:'Lamp-lighting seva this evening. 251 diyas arranged.',
-      custom:[ { label:'Diya Count', value:'251' } ],
-      invitation:{ template:'festival', accent:'#C9A24A', headline:'',
-        inviteLine:'',
-        blessing:'',
-        showSevarthi:true, showGuests:false, showSchedule:false },
-      createdDate:'2026-09-06'
-    }
-  ],
+  poojas: [],
 
   /* --- Sevarthi devotee records (module-local) ------------ */
-  sevarthis: [
-    { id:'SEV-001', devoteeId:'DEV-201', firstName:'Hasmukhbhai', lastName:'Prajapati', mobile:'9825011001', city:'Sanand',    state:'Gujarat', committee:'General Committee', status:'active',   notes:'Sponsoring idol carving; runs the sthapana operations personally.', addedDate:'2026-08-25' },
-    { id:'SEV-002', devoteeId:'DEV-202', firstName:'Rekhaben',    lastName:'Prajapati', mobile:'9825011002', city:'Sanand',    state:'Gujarat', committee:'General Committee', status:'active',   notes:'Co-sevarthi with Hasmukhbhai (family).', addedDate:'2026-08-25' },
-    { id:'SEV-003', devoteeId:'DEV-203', firstName:'Dineshbhai',  lastName:'Rabari',    mobile:'9825011003', city:'Bavla',     state:'Gujarat', committee:'Rabari Samaj',      status:'active',   notes:'Navratri kalash sthapana sevarthi.', addedDate:'2026-08-18' },
-    { id:'SEV-004', devoteeId:'DEV-204', firstName:'Manishbhai',  lastName:'Soni',      mobile:'9825011004', city:'Ahmedabad', state:'Gujarat', committee:'Marvadi Samaj',     status:'active',   notes:'Funded full Shat Chandi Mahayagna.', addedDate:'2026-08-05' },
-    { id:'SEV-005', devoteeId:'DEV-205', firstName:'Jayeshbhai',  lastName:'Patel',     mobile:'9825011005', city:'Viramgam',  state:'Gujarat', committee:'General Committee', status:'active',   notes:'Annakut bhog sevarthi.', addedDate:'2026-08-30' },
-    { id:'SEV-006', devoteeId:'DEV-206', firstName:'Alkaben',     lastName:'Joshi',     mobile:'9825011006', city:'Sanand',    state:'Gujarat', committee:'General Committee', status:'inactive', notes:'Shravan Rudrabhishek sevarthi. Currently travelling.', addedDate:'2026-08-29' }
-  ],
+  sevarthis: [],
 
   /* --- Coordinator pool (grantable authorized members) ---- */
-  coordinators: [
-    { id:'DEV-001', name:'Rajesh Patel', mobile:'9876500001', city:'Sanand' },
-    { id:'DEV-010', name:'Amit Shah',    mobile:'9876500002', city:'Ahmedabad' },
-    { id:'DEV-011', name:'Kiran Patel',  mobile:'9876500003', city:'Sanand' }
-  ],
+  coordinators: [],
 
   /* --- Guests & Pandits registry (shared across poojas) --- */
-  people: [
-    { id:'GST-001', firstName:'Rameshbhai',   lastName:'Joshi',   role:'Pandit',             mobile:'9825022001', city:'Sanand',    state:'Gujarat', notes:'Chief priest. Performs all sthapana and havan rituals.' },
-    { id:'GST-002', firstName:'Bhupendrabhai', lastName:'Patel',  role:'Trust President',     mobile:'9825022002', city:'Sanand',    state:'Gujarat', notes:'' },
-    { id:'GST-003', firstName:'Kailashben',   lastName:'Rabari',  role:'Mahila Mandal Head',  mobile:'9825022003', city:'Bavla',     state:'Gujarat', notes:'Leads the ladies volunteer group.' },
-    { id:'GST-004', firstName:'Dixitji',      lastName:'Vyas',    role:'Yagna Acharya',       mobile:'9825022004', city:'Ahmedabad', state:'Gujarat', notes:'Specialist for Shat Chandi Mahayagna.' },
-    { id:'GST-005', firstName:'Nileshbhai',   lastName:'Trivedi', role:'Path Acharya',        mobile:'9825022005', city:'Viramgam',  state:'Gujarat', notes:'Chandi Path recitation.' }
-  ],
+  people: [],
 
   /* --- Per-pooja activity log ----------------------------- */
-  activity: [
-    { poojaId:'PJA-001', text:'Pooja created and assigned to Amit Shah', when:'9 days ago' },
-    { poojaId:'PJA-001', text:'Sevarthi Hasmukhbhai Prajapati added', when:'9 days ago' },
-    { poojaId:'PJA-001', text:'Sevarthi Rekhaben Prajapati linked (same family)', when:'9 days ago' },
-    { poojaId:'PJA-001', text:'Session "Moorti Sthapan & Prana Pratishtha" scheduled for 22 Sep', when:'6 days ago' },
-    { poojaId:'PJA-002', text:'Navratri Kalash Sthapana created', when:'Today' },
-    { poojaId:'PJA-003', text:'Shat Chandi Mahayagna marked complete', when:'4 days ago' }
-  ]
+  activity: []
 };
 
 /* ------------------------------------------------------------

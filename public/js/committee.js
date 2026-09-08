@@ -40,87 +40,36 @@ const CMT = {
   ],
 
   /* Devotees who can lead a committee */
-  leaders: [
-    { id:'DEV-001', name:'Rajesh Patel',   mobile:'9876500001', city:'Sanand' },
-    { id:'DEV-010', name:'Amit Shah',       mobile:'9876500002', city:'Ahmedabad' },
-    { id:'DEV-020', name:'Harishbhai Rabari',mobile:'9876500021', city:'Bavla' },
-    { id:'DEV-021', name:'Manjula Ben',     mobile:'9876500022', city:'Viramgam' }
-  ],
+  leaders: [],
 
   committees: [
-    { id:'CMT-001', name:'General Temple Committee', leaderId:'DEV-001', samaj:'General Committee',
+    { id:'CMT-001', name:'General Temple Committee', leaderId: '', samaj:'General Committee',
       purpose:'Overall governance of the temple construction — approvals, budgets and coordination between samaj committees.',
       color:'#6B1F2A', expectedSize:25, status:'active', createdDate:'2026-06-01',
       notes:'Meets on the first Sunday of every month.' },
-    { id:'CMT-002', name:'Rabari Samaj Committee', leaderId:'DEV-020', samaj:'Rabari Samaj',
+    { id:'CMT-002', name:'Rabari Samaj Committee', leaderId: '', samaj:'Rabari Samaj',
       purpose:'Rabari samaj contribution drives, shram-daan rosters and stone/timber procurement for the shikhar.',
       color:'#C96A20', expectedSize:45, status:'active', createdDate:'2026-06-05',
       notes:'Largest samaj group; handles village-wise collection.' },
-    { id:'CMT-003', name:'Marvadi Samaj Committee', leaderId:'DEV-021', samaj:'Marvadi Samaj',
+    { id:'CMT-003', name:'Marvadi Samaj Committee', leaderId: '', samaj:'Marvadi Samaj',
       purpose:'Festival celebrations, prasad sponsorship and marble / gold work funding.',
       color:'#7A3B62', expectedSize:32, status:'active', createdDate:'2026-06-08',
       notes:'' }
   ],
 
   /* devoteeId links to a shared person record so one devotee can sit on several committees */
-  members: [
-    { id:'CMM-001', committeeId:'CMT-001', devoteeId:'DEV-101', firstName:'Bharat',   lastName:'Patel',    mobile:'9811100201', city:'Sanand',    state:'Gujarat', role:'Treasurer',      status:'active',   notes:'Keeps the construction ledger.', joinedDate:'2026-06-02' },
-    { id:'CMM-002', committeeId:'CMT-001', devoteeId:'DEV-102', firstName:'Nita',     lastName:'Shah',     mobile:'9811100202', city:'Ahmedabad', state:'Gujarat', role:'Secretary',      status:'active',   notes:'Records minutes.', joinedDate:'2026-06-02' },
-    { id:'CMM-003', committeeId:'CMT-001', devoteeId:'DEV-103', firstName:'Suresh',   lastName:'Thakor',   mobile:'9811100203', city:'Bavla',     state:'Gujarat', role:'Member',         status:'active',   notes:'', joinedDate:'2026-06-10' },
-    { id:'CMM-004', committeeId:'CMT-001', devoteeId:'DEV-104', firstName:'Alpa',     lastName:'Joshi',    mobile:'9811100204', city:'Sanand',    state:'Gujarat', role:'Member',         status:'inactive', notes:'On leave — family abroad.', joinedDate:'2026-06-12' },
-    { id:'CMM-005', committeeId:'CMT-001', devoteeId:'DEV-020', firstName:'Harishbhai',lastName:'Rabari',  mobile:'9876500021', city:'Bavla',     state:'Gujarat', role:'Coordinator',    status:'active',   notes:'Also leads the Rabari Samaj Committee.', joinedDate:'2026-06-02' },
-
-    { id:'CMM-006', committeeId:'CMT-002', devoteeId:'DEV-105', firstName:'Ramesh',   lastName:'Rabari',   mobile:'9811100205', city:'Sanand',    state:'Gujarat', role:'Village In-charge', status:'active', notes:'Sanand village collection.', joinedDate:'2026-06-06' },
-    { id:'CMM-007', committeeId:'CMT-002', devoteeId:'DEV-106', firstName:'Dinesh',   lastName:'Rabari',   mobile:'9811100206', city:'Bavla',     state:'Gujarat', role:'Village In-charge', status:'active', notes:'Bavla + Changodar.', joinedDate:'2026-06-06' },
-    { id:'CMM-008', committeeId:'CMT-002', devoteeId:'DEV-107', firstName:'Kanta',    lastName:'Ben',      mobile:'9811100207', city:'Viramgam',  state:'Gujarat', role:'Mahila Wing',    status:'active',   notes:'Ladies shram-daan roster.', joinedDate:'2026-06-11' },
-    { id:'CMM-009', committeeId:'CMT-002', devoteeId:'DEV-108', firstName:'Jayanti',  lastName:'Rabari',   mobile:'9811100208', city:'Sanand',    state:'Gujarat', role:'Member',         status:'active',   notes:'', joinedDate:'2026-06-14' },
-
-    { id:'CMM-010', committeeId:'CMT-003', devoteeId:'DEV-109', firstName:'Mahesh',   lastName:'Soni',     mobile:'9811100209', city:'Ahmedabad', state:'Gujarat', role:'Treasurer',      status:'active',   notes:'Gold / marble fund.', joinedDate:'2026-06-09' },
-    { id:'CMM-011', committeeId:'CMT-003', devoteeId:'DEV-110', firstName:'Rekha',    lastName:'Agrawal',  mobile:'9811100210', city:'Ahmedabad', state:'Gujarat', role:'Member',         status:'active',   notes:'', joinedDate:'2026-06-15' }
-  ],
+  members: [],
 
   /* Meetings (with an assigned attendee list) */
-  meetings: [
-    { id:'MTG-001', committeeId:'CMT-001', title:'Monthly Governance Meeting', date:'2026-09-01', startTime:'10:00', endTime:'12:00', venue:'Trust Office, Sanand', agenda:'Budget review, contractor payment approval, samaj drive status.', memberIds:['CMM-001','CMM-002','CMM-003','CMM-005'], notes:'', completed:true },
-    { id:'MTG-002', committeeId:'CMT-001', title:'Contractor Coordination', date:'2026-09-06', startTime:'17:00', endTime:'18:30', venue:'Construction Site', agenda:'Shikhar stone delivery schedule, labour arrangement.', memberIds:['CMM-001','CMM-003','CMM-005'], notes:'On site.', completed:false },
-    { id:'MTG-003', committeeId:'CMT-001', title:'Navratri Planning', date:'2026-09-18', startTime:'19:00', endTime:'21:00', venue:'Sabha Mandap', agenda:'Mahotsav budget, stage, security, prasad.', memberIds:['CMM-001','CMM-002','CMM-003','CMM-004','CMM-005'], notes:'', completed:false },
-    { id:'MTG-004', committeeId:'CMT-002', title:'Rabari Samaj Collection Review', date:'2026-09-03', startTime:'18:00', endTime:'20:00', venue:'Rabari Vadi, Sanand', agenda:'Village-wise contribution figures, pending pledges.', memberIds:['CMM-006','CMM-007','CMM-008','CMM-009'], notes:'', completed:true },
-    { id:'MTG-005', committeeId:'CMT-002', title:'Shram-daan Roster', date:'2026-09-14', startTime:'07:00', endTime:'09:00', venue:'Construction Site', agenda:'Assign weekend shram-daan teams for foundation work.', memberIds:['CMM-006','CMM-007','CMM-008','CMM-009'], notes:'', completed:false },
-    { id:'MTG-006', committeeId:'CMT-003', title:'Marble & Gold Work Funding', date:'2026-09-05', startTime:'11:00', endTime:'12:30', venue:'Ahmedabad Office', agenda:'Quotations for garbhagruh marble, gold kalash sponsorship.', memberIds:['CMM-010','CMM-011'], notes:'', completed:true }
-  ],
+  meetings: [],
 
-  attendance: [
-    { meetingId:'MTG-001', memberId:'CMM-001', status:'present', markedAt:'2026-09-01T10:05:00' },
-    { meetingId:'MTG-001', memberId:'CMM-002', status:'present', markedAt:'2026-09-01T10:02:00' },
-    { meetingId:'MTG-001', memberId:'CMM-003', status:'absent',  markedAt:'2026-09-01T10:30:00' },
-    { meetingId:'MTG-001', memberId:'CMM-005', status:'present', markedAt:'2026-09-01T10:08:00' },
-    { meetingId:'MTG-002', memberId:'CMM-001', status:'present', markedAt:'2026-09-06T17:03:00' },
-    { meetingId:'MTG-002', memberId:'CMM-005', status:'present', markedAt:'2026-09-06T17:05:00' },
-    { meetingId:'MTG-004', memberId:'CMM-006', status:'present', markedAt:'2026-09-03T18:04:00' },
-    { meetingId:'MTG-004', memberId:'CMM-007', status:'present', markedAt:'2026-09-03T18:02:00' },
-    { meetingId:'MTG-004', memberId:'CMM-008', status:'present', markedAt:'2026-09-03T18:10:00' },
-    { meetingId:'MTG-004', memberId:'CMM-009', status:'absent',  markedAt:'2026-09-03T18:40:00' },
-    { meetingId:'MTG-006', memberId:'CMM-010', status:'present', markedAt:'2026-09-05T11:05:00' },
-    { meetingId:'MTG-006', memberId:'CMM-011', status:'present', markedAt:'2026-09-05T11:02:00' }
-  ],
+  attendance: [],
 
-  communication: [
-    { committeeId:'CMT-001', groupName:'General Committee', groupLink:'https://chat.whatsapp.com/demo-genc', broadcastName:'General Committee Broadcast', broadcastLink:'https://wa.me/919876500001' },
-    { committeeId:'CMT-002', groupName:'Rabari Samaj Nirman', groupLink:'https://chat.whatsapp.com/demo-rabari', broadcastName:'Rabari Samaj Broadcast', broadcastLink:'https://wa.me/919876500021' },
-    { committeeId:'CMT-003', groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' }
-  ],
+  communication: [],
 
-  drafts: [
-    { id:'CDR-001', committeeId:'CMT-001', title:'Meeting Reminder', message:"Jai Mataji 🙏\n\nReminder: General Committee meeting tomorrow at 10:00 AM at the Trust Office. Agenda: budget review & contractor approval. Please be on time.\n\nThank you.", updatedAt:'2026-09-05' },
-    { id:'CDR-002', committeeId:'CMT-002', title:'Contribution Update Request', message:"Jai Mataji 🙏\n\nVillage in-charges, kindly send your updated collection figures and pending pledge list before Friday for the review meeting.\n\nThank you.", updatedAt:'2026-09-04' }
-  ],
+  drafts: [],
 
-  activity: [
-    { committeeId:'CMT-001', text:'Contractor payment of ₹8,50,000 approved', when:'5 days ago' },
-    { committeeId:'CMT-001', text:'Bharat Patel marked Present for Monthly Governance Meeting', when:'5 days ago' },
-    { committeeId:'CMT-002', text:'Village-wise collection figures updated', when:'3 days ago' },
-    { committeeId:'CMT-003', text:'Committee created and assigned to Manjula Ben', when:'3 months ago' }
-  ]
+  activity: []
 };
 
 /* ------------------------------------------------------------

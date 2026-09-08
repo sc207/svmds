@@ -25,24 +25,7 @@ const VISITS = {
   purposes: ['home_inauguration', 'shop_opening', 'wedding_blessing', 'health_blessing', 'business_puja', 'festival_padhramani', 'other'],
   teams: ['Bhuvaji + 2 helpers', 'Palki Escort Team', 'VIP Escort Team', 'Mandir Handling Team', 'Youth Volunteer Team'],
 
-  list: [
-    { id:'VIS-001', devoteeName:'Rameshbhai Rabari', mobile:'9876543210', purpose:'home_inauguration',
-      address:'Plot 42, Krishna Park Society', city:'Sanand', state:'Gujarat',
-      date:'2026-09-22', time:'11:00', escortTeam:'Palki Escort Team', status:'confirmed',
-      notes:'Vastu muhurat 11:18 AM. Family will arrange lunch for the team.' },
-    { id:'VIS-002', devoteeName:'Kiran Joshi', mobile:'9723456789', purpose:'shop_opening',
-      address:'Shop 7, Sanand Main Bazaar', city:'Sanand', state:'Gujarat',
-      date:'2026-09-25', time:'16:00', escortTeam:'Mandir Handling Team', status:'scheduled',
-      notes:'Narrow lane — small murti only, no palki.' },
-    { id:'VIS-003', devoteeName:'Hasmukhbhai Prajapati', mobile:'9825011001', purpose:'business_puja',
-      address:'Prajapati Ceramics, GIDC Phase 2', city:'Changodar', state:'Gujarat',
-      date:'2026-10-02', time:'10:30', escortTeam:'Bhuvaji + 2 helpers', status:'requested',
-      notes:'Bhuvaji padhramani requested for new kiln inauguration.' },
-    { id:'VIS-004', devoteeName:'Manishbhai Soni', mobile:'9825011004', purpose:'wedding_blessing',
-      address:'Soni Farm, Bavla Road', city:'Bavla', state:'Gujarat',
-      date:'2026-09-05', time:'18:00', escortTeam:'VIP Escort Team', status:'completed',
-      notes:'Done. Chunri and prasad handed over.' }
-  ]
+  list: []
 };
 
 function visToday() { return (typeof MG !== 'undefined' && MG.today) ? MG.today : VISITS.today; }

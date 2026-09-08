@@ -46,26 +46,10 @@ const DON = {
   ],
 
   /* --- Donor registry (individual / company / trust) ----- */
-  donors: [
-    { id:'DNR-001', type:'individual', firstName:'Rameshbhai', lastName:'Rabari',  orgName:'', contactPerson:'', mobile:'9876543210', city:'Sanand',    state:'Gujarat', committee:'Rabari Samaj',      pan:'AARPR1234K', notes:'Regular Poonam donor.', addedDate:'2026-07-10' },
-    { id:'DNR-002', type:'individual', firstName:'Priya',      lastName:'Sharma',  orgName:'', contactPerson:'', mobile:'9812345678', city:'Ahmedabad', state:'Gujarat', committee:'General Committee', pan:'BXSPS5678L', notes:'', addedDate:'2026-07-18' },
-    { id:'DNR-003', type:'individual', firstName:'Kiran',      lastName:'Joshi',   orgName:'', contactPerson:'', mobile:'9723456789', city:'Sanand',    state:'Gujarat', committee:'Marvadi Samaj',     pan:'', notes:'', addedDate:'2026-08-01' },
-    { id:'DNR-004', type:'trust',      firstName:'', lastName:'', orgName:'Shree Rabari Samaj Seva Trust', contactPerson:'Harishbhai Rabari', mobile:'9825001100', city:'Bavla', state:'Gujarat', committee:'Rabari Samaj', pan:'AAETS4321M', notes:'Registered charitable trust.', addedDate:'2026-06-20' },
-    { id:'DNR-005', type:'organization', firstName:'', lastName:'', orgName:'Sanand Diamonds Pvt. Ltd.', contactPerson:'Nitin Mehta', mobile:'9898007700', city:'Ahmedabad', state:'Gujarat', committee:'General Committee', pan:'AABCS9988Q', notes:'CSR contribution.', addedDate:'2026-08-22' },
-    { id:'DNR-006', type:'individual', firstName:'Bhavesh',    lastName:'Desai',   orgName:'', contactPerson:'', mobile:'9654321098', city:'Bavla',     state:'Gujarat', committee:'Rabari Samaj',      pan:'', notes:'', addedDate:'2026-08-10' }
-  ],
+  donors: [],
 
   /* --- Donation records --------------------------------- */
-  donations: [
-    { id:'DON-001', receiptNo:'REC-2026-101', certNo:'', donorId:'DNR-001', categoryId:'DCT-004', mode:'Cash', amount:1100, item:'', qty:'', valuation:0, date:'2026-09-05', purpose:'', committee:'Rabari Samaj', status:'received', certificateIssued:false, notes:'', recordedBy:'Administrator' },
-    { id:'DON-002', receiptNo:'REC-2026-102', certNo:'', donorId:'DNR-002', categoryId:'DCT-001', mode:'UPI', amount:501, item:'', qty:'', valuation:0, date:'2026-09-05', purpose:'', committee:'General Committee', status:'received', certificateIssued:false, notes:'', recordedBy:'Administrator' },
-    { id:'DON-003', receiptNo:'REC-2026-103', certNo:'CERT-2026-004', donorId:'DNR-003', categoryId:'DCT-002', mode:'Bank Transfer', amount:21000, item:'', qty:'', valuation:0, date:'2026-09-04', purpose:'Sabha Mandap marble flooring', committee:'Marvadi Samaj', status:'received', certificateIssued:true, notes:'NEFT ref 8842190', recordedBy:'Administrator' },
-    { id:'DON-004', receiptNo:'REC-2026-104', certNo:'CERT-2026-001', donorId:'DNR-006', categoryId:'DCT-005', mode:'In-Kind', amount:0, item:'Gir cow with calf, healthy, 4 yrs', qty:'1 cow + 1 calf', valuation:85000, date:'2026-09-03', purpose:'Temple gaushala', committee:'Rabari Samaj', status:'received', certificateIssued:true, notes:'Vet certificate attached.', recordedBy:'Administrator' },
-    { id:'DON-005', receiptNo:'REC-2026-105', certNo:'CERT-2026-002', donorId:'DNR-004', categoryId:'DCT-006', mode:'In-Kind', amount:0, item:'Gold paghadi (mukut) for Maa — 22k, hallmarked', qty:'1 pc, 148 grams', valuation:1150000, date:'2026-09-02', purpose:'Adornment of the deity', committee:'Rabari Samaj', status:'received', certificateIssued:true, notes:'Hallmark BIS 916. Weighed before trustees.', recordedBy:'Administrator' },
-    { id:'DON-006', receiptNo:'REC-2026-106', certNo:'CERT-2026-003', donorId:'DNR-005', categoryId:'DCT-008', mode:'In-Kind', amount:0, item:'Diamond ring — 3.20 ct centre stone (VVS1, F), 18k gold band', qty:'1 pc', valuation:20000000, date:'2026-09-01', purpose:'Temple corpus / treasury', committee:'General Committee', status:'received', certificateIssued:true, notes:'GIA certificate no. 22947xxxx. Kept in bank locker by resolution.', recordedBy:'Administrator' },
-    { id:'DON-007', receiptNo:'REC-2026-107', certNo:'', donorId:'DNR-004', categoryId:'DCT-009', mode:'In-Kind', amount:0, item:'Sona Masuri rice + cow ghee', qty:'500 kg rice, 40 kg ghee', valuation:62000, date:'2026-09-06', purpose:'Annakut & daily annadan', committee:'Rabari Samaj', status:'received', certificateIssued:false, notes:'', recordedBy:'Administrator' },
-    { id:'DON-008', receiptNo:'REC-2026-108', certNo:'', donorId:'DNR-005', categoryId:'DCT-002', mode:'Cheque', amount:500000, item:'', qty:'', valuation:0, date:'2026-09-06', purpose:'New shikhar cladding', committee:'General Committee', status:'pledged', certificateIssued:false, notes:'PDC dated 30 Sep.', recordedBy:'Administrator' }
-  ]
+  donations: []
 };
 
 /* ------------------------------------------------------------
