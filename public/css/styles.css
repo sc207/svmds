@@ -3314,3 +3314,59 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 .rep-mod-grid .card-body { display: flex; flex-direction: column; gap: 0.75rem; height: 100%; }
 .rep-mod-head { flex: 1; }
 .rep-mod-head .stat-card-value { font-size: 1.4rem; font-weight: 800; color: var(--primary-maroon); line-height: 1.15; }
+
+/* ============================================================
+   ANNUAL TEMPLE EVENTS  (Seva & Pooja module section)
+   ============================================================ */
+.ann-section .mg-inline-select { min-width: 88px; }
+.ann-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.9rem;
+}
+.ann-card {
+  background: var(--ivory-card, #fff);
+  border: 1px solid var(--warm-border);
+  border-left: 3px solid var(--antique-gold);
+  border-radius: 11px;
+  padding: 0.9rem 1rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+.ann-card--off { opacity: 0.6; }
+.ann-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;
+}
+.ann-name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--primary-maroon);
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+.ann-activity { font-size: 0.86rem; color: var(--dark-brown); }
+.ann-tithi {
+  font-size: 0.8rem;
+  color: var(--saffron);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.ann-greg {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  margin-top: 0.15rem;
+}
+.ann-greg-date { font-weight: 700; color: var(--dark-brown); font-size: 0.9rem; }
+.ann-greg-src { font-size: 0.68rem; }
+.ann-hint {
+  font-size: 0.72rem; color: var(--muted-brown); line-height: 1.4;
+  margin-top: 0.1rem;
+}
+.ann-hint--warn { color: var(--danger); }
+.ann-card-actions {
+  display: flex; flex-wrap: wrap; gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+@media (max-width: 600px) {
+  .ann-grid { grid-template-columns: 1fr; }
+}

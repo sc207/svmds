@@ -49,6 +49,28 @@ const TEAMS = [
   ['MGMT-003', 'Prasad Management', 'Prasad preparation, packing and orderly distribution at Bhojan Shala.', '#4C8B5A'],
 ];
 
+/* Temple annual Tithi & important events (spec). TITHI rows carry Amanta
+   coordinates; the Gregorian date is computed per year. */
+const ANNUAL_EVENTS = [
+  // code, name(en), name_gu, activity(en), activity_gu, type, masa, paksha, tithi, fixedM, fixedD
+  ['ANE-001', 'Gujarati New Year (Bestu Varas)', 'બેસતું વર્ષ',
+   "Mataji's Gadi", 'માતાજીની ગાદી', 'TITHI', 'Kartik', 'shukla', 1, 0, 0],
+  ['ANE-002', 'Maha Sud Bij', 'મહા સુદ બીજ',
+   "Mataji's Dhaja", 'માતાજીની ધજા', 'TITHI', 'Magha', 'shukla', 2, 0, 0],
+  ['ANE-003', 'Chaitra Sud Punam', 'ચૈત્ર સુદ પૂનમ',
+   "Mataji's Ramel", 'માતાજીની રમેલ', 'TITHI', 'Chaitra', 'shukla', 15, 0, 0],
+  ['ANE-004', 'Jeth Sud Trij', 'જેઠ સુદ ત્રીજ',
+   'Bhagwan Shri Kamshibapa Sthapana Divas', 'ભગવાન શ્રી કમશીબાપાનો સ્થાપના દિવસ',
+   'TITHI', 'Jyeshtha', 'shukla', 3, 0, 0],
+  ['ANE-005', 'Dussehra', 'દશેરા',
+   "Mataji's Gadi", 'માતાજીની ગાદી', 'TITHI', 'Ashwin', 'shukla', 10, 0, 0],
+  ['ANE-006', 'Dhanteras', 'ધનતેરસ',
+   'Bhagwan Shri Kamshibapa Birthday', 'ભગવાન શ્રી કમશીબાપાનો જન્મદિવસ',
+   'TITHI', 'Ashwin', 'krishna', 13, 0, 0],
+  ['ANE-007', 'P.P. Bhuvaji Shri Sureshbapa Birthday', 'પ.પૂ. ભુવાજ શ્રી સુરેશબાપાનો જન્મદિવસ',
+   'Birthday', 'જન્મદિવસ', 'FIXED_DATE', '', '', 0, 9, 27],
+];
+
 async function seedReferenceData() {
   for (const [code, name, kind, icon, description] of DONATION_CATEGORIES)
     await upsert('donation_categories', code, { name, kind, icon, description });
@@ -75,12 +97,25 @@ async function seedReferenceData() {
     }
   }
 
+  for (const [code, name, name_gu, activity, activity_gu, type, masa, paksha, tithi, fm, fd] of ANNUAL_EVENTS) {
+    const exists = await queryOne('SELECT id FROM annual_events WHERE code = ?', [code]);
+    if (!exists) {
+      await run(
+        `INSERT INTO annual_events
+           (code, name, name_gu, activity, activity_gu, type, masa, paksha, tithi, fixed_month, fixed_day)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [code, name, name_gu, activity, activity_gu, type, masa, paksha, tithi, fm, fd]
+      );
+    }
+  }
+
   // push the counters past the codes we just inserted
   await ensureCounter('donation_category', 'DCT', 3, 11);
   await ensureCounter('committee', 'CMT', 3, 4);
   await ensureCounter('team', 'MGMT', 3, 4);
+  await ensureCounter('annual_event', 'ANE', 3, 8);
 
-  console.log('  ✓ reference data (donation categories, 3 committees, 3 teams)');
+  console.log('  ✓ reference data (donation categories, 3 committees, 3 teams, 7 annual events)');
 }
 
 module.exports = { seedReferenceData };

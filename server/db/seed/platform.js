@@ -31,6 +31,7 @@ const COUNTERS = [
   ['donation', 'DON', 3], ['donor', 'DNR', 3], ['donation_category', 'DCT', 3],
   ['event', 'EVN', 3], ['event_type', 'EVT', 3],
   ['visit', 'VIS', 3], ['expense', 'EXP', 3], ['inventory', 'INV', 3],
+  ['annual_event', 'ANE', 3],
 ];
 
 async function seedPlatform() {

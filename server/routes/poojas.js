@@ -113,14 +113,20 @@ router.post('/', adminTier, async (req, res, next) => {
     }
 
     const id = crypto.randomUUID();
+    let annualEventId = null;
+    if (b.annualEventId) {
+      const ae = await queryOne('SELECT id FROM annual_events WHERE (code = ? OR id = ?) AND is_deleted = 0',
+        [b.annualEventId, parseInt(b.annualEventId, 10) || -1]);
+      annualEventId = ae ? ae.id : null;
+    }
     const code = await nextCode('pooja');
     await run(
       `INSERT INTO poojas (id, code, type_id, name, schedule_mode, default_venue, status, color,
-                           estimated_seva_amount, notes, custom_json, invitation_json, created_date)
-       VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, date('now'))`,
+                           estimated_seva_amount, notes, custom_json, invitation_json, annual_event_id, created_date)
+       VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, date('now'))`,
       [id, code, typeId, name, scheduleMode, b.defaultVenue || '', b.color || '#6B1F2A',
        Number(b.estimatedSevaAmount || 0), b.notes || '',
-       JSON.stringify(b.custom || []), JSON.stringify(b.invitation || {})]
+       JSON.stringify(b.custom || []), JSON.stringify(b.invitation || {}), annualEventId]
     );
     for (const s of sessions) {
       await run(

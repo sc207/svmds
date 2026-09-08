@@ -250,6 +250,7 @@ function viewPoojaDirectory() {
   </div>
 
   ${listBlock}
+  ${typeof annualEventsSection === 'function' ? annualEventsSection() : ''}
   ${setup}
   `;
 }

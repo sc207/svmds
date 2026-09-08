@@ -494,6 +494,45 @@ function mapInventory(row) {
   };
 }
 
+function mapAnnualEvent(row, year) {
+  if (!row) return null;
+  let overrides = {};
+  try { overrides = JSON.parse(row.overrides_json || '{}'); } catch (_) {}
+  const ev = {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    name: row.name,
+    name_gu: row.name_gu || '',
+    name_hi: row.name_hi || '',
+    activity: row.activity || '',
+    activity_gu: row.activity_gu || '',
+    activity_hi: row.activity_hi || '',
+    type: row.type,
+    masa: row.masa || '',
+    paksha: row.paksha || '',
+    tithi: Number(row.tithi || 0),
+    fixedMonth: Number(row.fixed_month || 0),
+    fixedDay: Number(row.fixed_day || 0),
+    overrides,
+    description: row.description || '',
+    notes: row.notes || '',
+    active: !!row.active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+  if (year) {
+    try {
+      const { resolveDate } = require('../services/panchang');
+      const r = resolveDate(ev, year);
+      ev.year = Number(year);
+      ev.gregorianDate = r.date;
+      ev.dateSource = r.source;   // 'pinned' | 'fixed' | 'calculated'
+    } catch (_) {}
+  }
+  return ev;
+}
+
 function mapSession(row, currentJti) {
   if (!row) return null;
   return {
@@ -534,4 +573,5 @@ module.exports = {
   mapCommittee, mapCommitteeMember, mapMeeting, mapCommunication, mapDraft, mapAttendance,
   mapTeam, mapTeamMember, mapVolunteeringSession, mapPublicPage, mapSignup,
   mapEventType, mapEvent, mapVisit, mapExpense, mapInventory,
+  mapAnnualEvent,
 };
