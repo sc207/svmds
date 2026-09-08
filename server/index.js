@@ -12,6 +12,7 @@ const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const { runMigrations } = require('./db/migrate');
 const { seedPlatform } = require('./db/seed/platform');
+const { getDb, queryOne, isTurso } = require('./db/connection');
 const { notFound, errorHandler } = require('./middleware/error');
 
 /* ---- fail-fast: strong JWT secret in production ---- */
@@ -21,6 +22,20 @@ if (config.isProd && (
   config.jwtSecret.length < 32
 )) {
   console.error('FATAL: JWT_SECRET must be a strong 32+ character value in production.');
+  process.exit(1);
+}
+
+/* ---- fail-fast: a real (Turso) database in production ----
+   Without TURSO_* the driver silently falls back to an EPHEMERAL local SQLite
+   file (data/svmds.db). On Render that file is wiped on every restart / deploy,
+   so every account, donation and audit row created through the live site would
+   vanish. Refuse to boot rather than lose data silently. */
+if (config.isProd && !(config.turso.url && config.turso.token)) {
+  console.error(
+    '\nFATAL: NODE_ENV=production but TURSO_DATABASE_URL / TURSO_AUTH_TOKEN are not set.\n' +
+    'The server would write to an ephemeral local file and lose all data on the next\n' +
+    'restart. Add both values in the Render dashboard → Environment, then redeploy.\n'
+  );
   process.exit(1);
 }
 
@@ -68,7 +83,37 @@ app.use(cookieParser());
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many sign-in attempts' } });
 app.use('/api/auth/google', authLimiter);
 
-app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+/* Health + live DB diagnostic. No auth — reports only infra status (which
+   driver is active, row counts), never PII. Hit https://<host>/health to
+   confirm the live site is really talking to Turso. */
+app.get('/health', async (req, res) => {
+  const info = {
+    status: 'ok',
+    env: config.nodeEnv,
+    tursoConfigured: !!(config.turso.url && config.turso.token),
+    adminEmailSet: !!config.adminEmail,
+    db: null,
+    counts: null,
+  };
+  try {
+    await getDb();
+    info.db = isTurso()
+      ? 'turso (persistent)'
+      : 'local-file (EPHEMERAL — data is lost on every restart/redeploy)';
+    try {
+      const u = await queryOne('SELECT COUNT(*) AS n FROM users');
+      const a = await queryOne('SELECT COUNT(*) AS n FROM audit_logs');
+      const s = await queryOne('SELECT COUNT(*) AS n FROM sessions WHERE revoked = 0');
+      info.counts = { users: Number(u.n), auditLogs: Number(a.n), activeSessions: Number(s.n) };
+    } catch (e) {
+      info.counts = { error: e.message };   // DB reachable but not migrated yet
+    }
+  } catch (e) {
+    info.status = 'degraded';
+    info.db = 'ERROR: ' + e.message;
+  }
+  res.status(200).json(info);
+});
 
 /* ============================================================
    API ROUTERS

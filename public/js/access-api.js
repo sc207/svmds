@@ -27,12 +27,15 @@
 
   var USERS = [];
   var SESSIONS = [];
+  var AUDIT = [];
 
   async function load() {
     var u = await window.API.get('/users');
     USERS = Array.isArray(u) ? u : [];
     try { var s = await window.API.get('/sessions'); SESSIONS = Array.isArray(s) ? s : []; }
     catch (e) { SESSIONS = []; }
+    try { var a = await window.API.get('/activity?limit=60'); AUDIT = Array.isArray(a) ? a : []; }
+    catch (e) { AUDIT = []; }
   }
 
   function draw() {
@@ -116,6 +119,24 @@
             '</td>' +
           '</tr>';
         }).join('') : '<tr><td colspan="2" class="mg-muted-xs" style="padding:1rem">No other active sessions.</td></tr>') +
+        '</tbody></table></div></div></div>' +
+
+      /* Audit trail — server-recorded, from /api/activity (audit_logs table) */
+      '<div class="card mg-mt"><div class="card-header"><div class="card-title">Audit trail <span class="mg-muted-xs">(' + AUDIT.length + ' most recent)</span></div></div>' +
+        '<div class="card-body" style="padding:0"><div class="mg-table-scroll"><table class="custom-table acc-table acc-table-sm">' +
+        '<thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead><tbody>' +
+        (AUDIT.length ? AUDIT.map(function (a) {
+          var when = a.createdAt ? String(a.createdAt).replace('T', ' ').slice(0, 16) : '—';
+          var ent = [a.entityType, a.entityId].filter(Boolean).join(' ');
+          var extra = '';
+          try { var d = a.details || {}; var keys = Object.keys(d); if (keys.length) extra = keys.map(function (k) { return k + ': ' + (typeof d[k] === 'object' ? JSON.stringify(d[k]) : d[k]); }).join(', '); } catch (e) {}
+          return '<tr>' +
+            '<td class="mg-muted-xs" style="white-space:nowrap">' + esc(when) + '</td>' +
+            '<td class="acc-wrap">' + esc(a.userEmail || '—') + (a.module ? ' <span class="badge badge-maroon">' + esc(a.module) + '</span>' : '') + '</td>' +
+            '<td style="white-space:nowrap"><strong>' + esc(a.action || '') + '</strong></td>' +
+            '<td class="acc-wrap mg-muted-xs">' + esc([ent, extra].filter(Boolean).join(' · ')) + '</td>' +
+          '</tr>';
+        }).join('') : '<tr><td colspan="4" class="mg-muted-xs" style="padding:1rem">No audit entries yet. Every account / role / data change is recorded here.</td></tr>') +
         '</tbody></table></div></div></div>';
   }
 
