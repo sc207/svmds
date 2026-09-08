@@ -11,7 +11,7 @@ const rateLimit = require('express-rate-limit');
 
 const config = require('./config');
 const { runMigrations } = require('./db/migrate');
-const { seedReferenceData } = require('./db/seed/reference-data');
+const { seedPlatform } = require('./db/seed/platform');
 const { notFound, errorHandler } = require('./middleware/error');
 
 /* ---- fail-fast: strong JWT secret in production ---- */
@@ -117,9 +117,8 @@ app.use(errorHandler);
 async function start() {
   console.log(`▶ SVMDS backend — ${config.nodeEnv}`);
   await runMigrations();
-  await seedReferenceData();
+  await seedPlatform();               // app_settings + counters only — no demo / catalog data
   await require('./services/bootstrap').ensureAdminUser();
-  // Phase 4: if (process.argv.includes('--demo')) await require('./db/seed/demo-data').seedDemoData();
   const port = process.env.PORT || config.port || 3000;
   app.listen(port, () => console.log(`✔ listening on :${port}  (health: /health)`));
 }

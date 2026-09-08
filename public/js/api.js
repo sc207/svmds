@@ -38,10 +38,11 @@ window.API = (function () {
   }
 
   return {
-    get:  function (p) { return req('GET', p); },
-    post: function (p, b) { return req('POST', p, b === undefined ? {} : b); },
-    put:  function (p, b) { return req('PUT', p, b === undefined ? {} : b); },
-    del:  function (p) { return req('DELETE', p); },
+    get:   function (p) { return req('GET', p); },
+    post:  function (p, b) { return req('POST', p, b === undefined ? {} : b); },
+    put:   function (p, b) { return req('PUT', p, b === undefined ? {} : b); },
+    patch: function (p, b) { return req('PATCH', p, b === undefined ? {} : b); },
+    del:   function (p) { return req('DELETE', p); },
 
     /* Populated by the inline auth gate in index.html (may be null in demo mode). */
     session: (typeof window !== 'undefined' && window.__SESSION) || null,

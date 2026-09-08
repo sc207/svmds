@@ -25,6 +25,13 @@ function cookieOptions() {
   };
 }
 
+/* clearCookie must be called with the same attributes minus maxAge/expires. */
+function clearCookieOptions() {
+  const o = cookieOptions();
+  delete o.maxAge;
+  return o;
+}
+
 /** Verify the cookie; return the decoded payload or null (no throw). */
 async function readSession(req) {
   const token = req.cookies && req.cookies[COOKIE];
@@ -54,4 +61,4 @@ async function authRequired(req, res, next) {
   }
 }
 
-module.exports = { COOKIE, signToken, cookieOptions, readSession, authRequired };
+module.exports = { COOKIE, signToken, cookieOptions, clearCookieOptions, readSession, authRequired };

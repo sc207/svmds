@@ -14,9 +14,11 @@ async function upsert(table, code, cols) {
 }
 
 async function ensureCounter(name, prefix, pad, next) {
+  // opt-in seed: force next_value past the codes we just inserted so the first
+  // user-created row doesn't collide (platform.js already created the row at 1).
   await run(
     `INSERT INTO counters (name, prefix, pad, next_value) VALUES (?, ?, ?, ?)
-     ON CONFLICT(name) DO NOTHING`,
+     ON CONFLICT(name) DO UPDATE SET next_value = MAX(counters.next_value, excluded.next_value)`,
     [name, prefix, pad, next]
   );
 }

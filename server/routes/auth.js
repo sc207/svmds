@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
 const config = require('../config');
-const { COOKIE, signToken, cookieOptions, readSession } = require('../middleware/auth');
+const { COOKIE, signToken, cookieOptions, clearCookieOptions, readSession } = require('../middleware/auth');
 const { pagesForUser, isSuperadmin } = require('../middleware/authz');
 const { verifyGoogleToken } = require('../services/google');
 const { getActiveUserByEmail, getUser, linkGoogle } = require('../services/userStore');
@@ -86,18 +86,22 @@ router.get('/me', async (req, res, next) => {
 });
 
 /* -------------------- POST /logout -------------------- */
-router.post('/logout', async (req, res, next) => {
-  try {
-    const payload = await readSession(req);
-    if (payload && payload.jti) {
-      await run('UPDATE sessions SET revoked = 1 WHERE id = ?', [payload.jti]);
-      await logAudit({ userId: payload.id, userEmail: payload.email, module: 'Auth', action: 'LOGOUT' });
-    }
-    res.clearCookie(COOKIE, cookieOptions());
-    res.json({ ok: true });
-  } catch (e) {
-    next(e);
+async function endSession(req, res) {
+  const payload = await readSession(req);
+  if (payload && payload.jti) {
+    await run('UPDATE sessions SET revoked = 1 WHERE id = ?', [payload.jti]);
+    await logAudit({ userId: payload.id, userEmail: payload.email, module: 'Auth', action: 'LOGOUT' });
   }
+  res.clearCookie(COOKIE, clearCookieOptions());
+}
+
+router.post('/logout', async (req, res, next) => {
+  try { await endSession(req, res); res.json({ ok: true }); } catch (e) { next(e); }
+});
+
+/* GET /logout — plain-navigation sign-out, lands on the login page. */
+router.get('/logout', async (req, res, next) => {
+  try { await endSession(req, res); res.redirect('/login'); } catch (e) { next(e); }
 });
 
 /* -------------------- POST /impersonate  (superadmin only) -------------------- */
@@ -143,7 +147,7 @@ router.post('/stop-impersonate', async (req, res, next) => {
     if (payload && payload.jti) {
       await run('UPDATE sessions SET revoked = 1 WHERE id = ?', [payload.jti]);
     }
-    res.clearCookie(COOKIE, cookieOptions());
+    res.clearCookie(COOKIE, clearCookieOptions());
     // client then re-runs Google sign-in as itself
     res.json({ ok: true });
   } catch (e) {

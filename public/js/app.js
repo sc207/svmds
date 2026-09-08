@@ -391,10 +391,13 @@ function handleJoinTeam(e) {
   showToast(`Volunteer application submitted for ${name}!`);
 }
 
-function handleLogin(e) {
-  e.preventDefault();
-  closeModal('modalLogin');
-  showToast('Signed in successfully!');
+/* Auth is a real page now (public/login.html + Google Sign-In). The in-app
+   "Sign in" button and the user menu route here to end the session. */
+function signOut() {
+  try {
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+      .finally(function () { window.location.href = '/login'; });
+  } catch (e) { window.location.href = '/login'; }
 }
 
 function openBadgeGeneratorModal() {

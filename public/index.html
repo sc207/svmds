@@ -368,9 +368,9 @@
           </select>
         </div>
 
-        <!-- Login / Auth Trigger -->
-        <button class="btn btn-outline nav-signin-btn" style="padding: 0.35rem 0.85rem; font-size: 0.82rem;" onclick="openModal('modalLogin')" data-i18n="sign_in">
-          🔐 Sign In
+        <!-- Sign out -->
+        <button class="btn btn-outline nav-signin-btn" style="padding: 0.35rem 0.85rem; font-size: 0.82rem;" onclick="signOut()">
+          🔓 Sign Out
         </button>
 
         <!-- Notification Bell -->
@@ -379,9 +379,9 @@
           <span class="notification-badge" id="notifBadgeCount">3</span>
         </div>
 
-        <!-- User Profile Dropdown -->
-        <div class="user-profile-menu" onclick="openModal('modalLogin')">
-          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" class="user-avatar" alt="Admin Avatar">
+        <!-- User Profile -->
+        <div class="user-profile-menu" onclick="signOut()" title="Sign out">
+          <img src="assets/icon.png" class="user-avatar" alt="">
           <span class="user-name" id="topbarUserName">Administrator</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
@@ -656,116 +656,6 @@
   </div>
 </nav>
 
-<!-- Modals now live with their module code in js/*-forms.js.
-     Only the login modal stays here (replaced by public/login.html in the backend phase). -->
-
-<!-- Modal 9: Certificate-grade Sign In / Auth Screen -->
-<div class="modal-overlay" id="modalLogin">
-  <div class="modal-box login-box">
-    <button class="modal-close-btn login-close" onclick="closeModal('modalLogin')" aria-label="Close">&times;</button>
-    <div class="login-grid">
-
-      <!-- Left: temple identity (certificate-grade) -->
-      <div class="login-hero">
-        <span class="login-corner c-tl"></span><span class="login-corner c-tr"></span>
-        <span class="login-corner c-bl"></span><span class="login-corner c-br"></span>
-        <img class="login-hero-wm" src="assets/temple.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
-        <div class="login-hero-inner">
-          <div class="login-emblem">
-            <img src="assets/icon.png" alt="Shri Vihat Meldi Mata Mandir"
-                 onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'login-emblem-fb',innerHTML:'🛕'}))">
-          </div>
-          <div class="login-ribbon">॥ જય શ્રી વિહત મેલડી માતાજી ॥</div>
-          <h2 class="login-temple">Shri Vihat Meldi Mata Mandir</h2>
-          <div class="login-temple-sub">શ્રી વિહત મેલડી માતા મંદિર &middot; સાણંદ</div>
-          <div class="login-flourish" aria-hidden="true">
-            <svg viewBox="0 0 200 12" preserveAspectRatio="xMidYMid meet">
-              <g fill="none" stroke="#E6C978" stroke-width="1.3">
-                <path d="M6 6H78"/><path d="M122 6H194"/><path d="M90 6q10-8 20 0"/>
-              </g>
-              <circle cx="100" cy="6" r="2.6" fill="#E6C978"/>
-              <circle cx="82" cy="6" r="1.7" fill="#C9A24A"/><circle cx="118" cy="6" r="1.7" fill="#C9A24A"/>
-            </svg>
-          </div>
-          <p class="login-loc">Temple Management &amp; Seva Operations Portal</p>
-
-          <div class="login-diya" aria-hidden="true">
-            <svg viewBox="0 0 120 120">
-              <defs>
-                <radialGradient id="lgDiyaAura" cx="50%" cy="44%" r="52%">
-                  <stop offset="0%" stop-color="#FFE9A8" stop-opacity="0.95"/>
-                  <stop offset="42%" stop-color="#F0A63C" stop-opacity="0.34"/>
-                  <stop offset="100%" stop-color="#F0A63C" stop-opacity="0"/>
-                </radialGradient>
-                <linearGradient id="lgDiyaFlame" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#FFFDF5"/><stop offset="30%" stop-color="#FFE7A0"/>
-                  <stop offset="63%" stop-color="#F6A83B"/><stop offset="100%" stop-color="#CE5E1C"/>
-                </linearGradient>
-                <linearGradient id="lgDiyaCore" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#FFFFFF"/><stop offset="68%" stop-color="#FFEEC2"/>
-                  <stop offset="100%" stop-color="#FFC766"/>
-                </linearGradient>
-                <linearGradient id="lgDiyaBody" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#EDBA5E"/><stop offset="45%" stop-color="#C6892F"/>
-                  <stop offset="100%" stop-color="#6B3B12"/>
-                </linearGradient>
-                <linearGradient id="lgDiyaRim" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stop-color="#EEC77E"/><stop offset="50%" stop-color="#FBEFC9"/>
-                  <stop offset="100%" stop-color="#DCAB53"/>
-                </linearGradient>
-              </defs>
-              <ellipse class="diya-aura" cx="60" cy="54" rx="48" ry="48" fill="url(#lgDiyaAura)"/>
-              <g class="diya-flame">
-                <path d="M60 18 C48 34 51 48 60 56 C69 48 72 34 60 18 Z" fill="url(#lgDiyaFlame)"/>
-                <path d="M60 30 C54 39 55 48 60 54 C65 48 66 39 60 30 Z" fill="url(#lgDiyaCore)"/>
-              </g>
-              <ellipse cx="60" cy="62" rx="5" ry="2.6" fill="#3F240F"/>
-              <path d="M16 66 Q60 60 104 66 Q106 75 92 84 Q60 98 28 84 Q14 75 16 66 Z" fill="url(#lgDiyaBody)"/>
-              <path d="M16 66 Q60 57 104 66 Q60 74 16 66 Z" fill="url(#lgDiyaRim)"/>
-              <path d="M16 66 Q5 65 1 71 Q9 73 18 70 Z" fill="url(#lgDiyaBody)"/>
-              <path d="M49 92 Q60 99 71 92 Q67 101 60 101 Q53 101 49 92 Z" fill="#7A4417"/>
-            </svg>
-          </div>
-        </div>
-        <div class="login-hero-foot">માતાજીની કૃપા, ભક્તોની શ્રદ્ધા &nbsp;·&nbsp; ખમ્મા માડી 🙏</div>
-      </div>
-
-      <!-- Right: sign-in form -->
-      <div class="login-form-pane">
-        <div class="login-form-head">
-          <img class="login-form-mark" src="assets/icon.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
-          <div>
-            <h3 class="login-form-title">Sign In to Portal</h3>
-            <p class="login-form-sub">Authorised temple staff only</p>
-          </div>
-        </div>
-        <form onsubmit="handleLogin(event)">
-          <div class="form-group">
-            <label class="form-label">Username / Mobile</label>
-            <input type="text" class="form-input" placeholder="admin@vihatmeldi.org" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Security PIN</label>
-            <input type="password" class="form-input" placeholder="••••••••" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Role Context</label>
-            <select class="form-select">
-              <option>Super Admin (Full Authority)</option>
-              <option>Management Lead</option>
-              <option>Pooja Coordinator</option>
-              <option>Committee Leader</option>
-              <option>Event In-charge</option>
-              <option>Temple Accountant</option>
-            </select>
-          </div>
-          <button class="btn btn-primary w-full login-submit" type="submit">Sign In To Platform</button>
-          <p class="login-legal">Shri Vihat Meldi Mata Mandir &middot; Sanand, Gujarat</p>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
 
 <div class="toast-container" id="toastContainer"></div>
 
@@ -797,6 +687,7 @@
 <script src="js/calendar.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/access.js"></script>
+<script src="js/access-api.js"></script>
 <script src="js/search.js"></script>
 <script src="js/hydrate.js"></script>
 <script>window.__boot && window.__boot(92, 'Almost ready');</script>

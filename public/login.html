@@ -4,83 +4,128 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Sign in — Shri Vihat Meldi Mata Mandir</title>
-<link rel="icon" href="assets/icon.png">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="stylesheet" href="css/styles.css">
 <style>
-  :root{
-    --maroon:#6B1F2A; --maroon-dark:#4A1217; --saffron:#C96A20;
-    --gold:#C9A24A; --gold-light:#E6C978; --ivory:#F8F2E7; --cream:#EFE3CF;
-    --muted:#806B58;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{
-    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    min-height:100vh; display:flex; align-items:center; justify-content:center;
-    padding:20px; color:var(--maroon-dark);
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
     background:
-      radial-gradient(circle at 20% 15%, rgba(201,162,74,.18), transparent 45%),
-      radial-gradient(circle at 85% 85%, rgba(201,106,32,.15), transparent 45%),
+      radial-gradient(circle at 20% 15%, rgba(201,162,74,.22), transparent 46%),
+      radial-gradient(circle at 84% 88%, rgba(201,106,32,.16), transparent 46%),
       linear-gradient(160deg, #FBF6EC, #EFE3CF);
   }
-  .card{
-    background:#fff; width:100%; max-width:400px; padding:38px 32px 32px;
-    border-radius:18px; border:1px solid var(--cream);
-    box-shadow:0 24px 60px rgba(74,18,23,.18);
-    text-align:center;
+  .login-box { width: 100%; margin: 0; }
+  .login-form-pane { gap: 0; }
+  #gbtn { display: flex; justify-content: center; min-height: 44px; margin: 6px 0 2px; }
+  .login-msg {
+    margin-top: 14px; padding: 10px 12px; border-radius: 9px;
+    font-size: 12.5px; display: none; text-align: left;
   }
-  .emblem{
-    width:76px; height:76px; margin:0 auto 16px; display:block;
-    border-radius:50%; border:2px solid var(--gold);
-    box-shadow:0 4px 14px rgba(201,162,74,.4); object-fit:cover;
-  }
-  .om{
-    width:72px;height:72px;margin:0 auto 16px;display:flex;align-items:center;
-    justify-content:center;border-radius:50%;border:2px solid var(--gold);
-    font-size:34px;color:var(--maroon);background:#FDF9EE;
-  }
-  h1{
-    font-family:'Cinzel',Georgia,serif; font-size:19px; font-weight:700;
-    color:var(--maroon); letter-spacing:.3px; line-height:1.35; margin-bottom:4px;
-  }
-  .sub{ font-size:12.5px; color:var(--muted); margin-bottom:26px }
-  .divider{
-    height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent);
-    margin:22px 0 20px;
-  }
-  #gbtn{ display:flex; justify-content:center; min-height:44px }
-  .hint{ font-size:12px; color:var(--muted); margin-top:18px; line-height:1.5 }
-  .msg{
-    margin-top:16px; padding:10px 12px; border-radius:9px; font-size:12.5px;
-    display:none; text-align:left;
-  }
-  .msg.err{ display:block; background:#FBF0EF; color:#B84A42; border:1px solid #E6C3BF }
-  .msg.ok{ display:block; background:#EAF3EC; color:#3F7A4C; border:1px solid #BFD9C4 }
-  .foot{ margin-top:22px; font-size:11px; color:#A99B87 }
-  a{ color:var(--saffron); text-decoration:none }
+  .login-msg.err { display: block; background: var(--danger-bg); color: var(--danger); border: 1px solid #E6C3BF; }
+  .login-msg.ok  { display: block; background: var(--success-bg); color: var(--success); border: 1px solid #BFD9C4; }
+  .login-hint { font-size: 12px; color: var(--muted-brown); margin: 16px 0 0; line-height: 1.55; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <img src="assets/icon.png" alt="" class="emblem"
-         onerror="this.outerHTML='&lt;div class=&quot;om&quot;&gt;ॐ&lt;/div&gt;'">
-    <h1>Shri Vihat Meldi Mata Mandir</h1>
-    <div class="sub">Sanand, Gujarat · Temple management</div>
+  <div class="modal-box login-box">
+    <div class="login-grid">
 
-    <div id="gbtn"></div>
-    <div id="msg" class="msg"></div>
+      <!-- Left: temple identity -->
+      <div class="login-hero">
+        <span class="login-corner c-tl"></span><span class="login-corner c-tr"></span>
+        <span class="login-corner c-bl"></span><span class="login-corner c-br"></span>
+        <img class="login-hero-wm" src="assets/temple.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
+        <div class="login-hero-inner">
+          <div class="login-emblem">
+            <img src="assets/icon.png" alt="Shri Vihat Meldi Mata Mandir"
+                 onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'login-emblem-fb',innerHTML:'🛕'}))">
+          </div>
+          <div class="login-ribbon">॥ જય શ્રી વિહત મેલડી માતાજી ॥</div>
+          <h2 class="login-temple">Shri Vihat Meldi Mata Mandir</h2>
+          <div class="login-temple-sub">શ્રી વિહત મેલડી માતા મંદિર &middot; સાણંદ</div>
+          <div class="login-flourish" aria-hidden="true">
+            <svg viewBox="0 0 200 12" preserveAspectRatio="xMidYMid meet">
+              <g fill="none" stroke="#E6C978" stroke-width="1.3">
+                <path d="M6 6H78"/><path d="M122 6H194"/><path d="M90 6q10-8 20 0"/>
+              </g>
+              <circle cx="100" cy="6" r="2.6" fill="#E6C978"/>
+              <circle cx="82" cy="6" r="1.7" fill="#C9A24A"/><circle cx="118" cy="6" r="1.7" fill="#C9A24A"/>
+            </svg>
+          </div>
+          <p class="login-loc">Temple Management &amp; Seva Operations Portal</p>
 
-    <div class="divider"></div>
-    <p class="hint">
-      Sign in with the Google account an administrator has registered for you.
-      There is no self sign-up.
-    </p>
-    <div class="foot">जय શ્રી વિહત મેલડી માતાજી</div>
+          <div class="login-diya" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <defs>
+                <radialGradient id="lgDiyaAura" cx="50%" cy="44%" r="52%">
+                  <stop offset="0%" stop-color="#FFE9A8" stop-opacity="0.95"/>
+                  <stop offset="42%" stop-color="#F0A63C" stop-opacity="0.34"/>
+                  <stop offset="100%" stop-color="#F0A63C" stop-opacity="0"/>
+                </radialGradient>
+                <linearGradient id="lgDiyaFlame" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#FFFDF5"/><stop offset="30%" stop-color="#FFE7A0"/>
+                  <stop offset="63%" stop-color="#F6A83B"/><stop offset="100%" stop-color="#CE5E1C"/>
+                </linearGradient>
+                <linearGradient id="lgDiyaCore" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#FFFFFF"/><stop offset="68%" stop-color="#FFEEC2"/>
+                  <stop offset="100%" stop-color="#FFC766"/>
+                </linearGradient>
+                <linearGradient id="lgDiyaBody" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#EDBA5E"/><stop offset="45%" stop-color="#C6892F"/>
+                  <stop offset="100%" stop-color="#6B3B12"/>
+                </linearGradient>
+                <linearGradient id="lgDiyaRim" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#EEC77E"/><stop offset="50%" stop-color="#FBEFC9"/>
+                  <stop offset="100%" stop-color="#DCAB53"/>
+                </linearGradient>
+              </defs>
+              <ellipse class="diya-aura" cx="60" cy="54" rx="48" ry="48" fill="url(#lgDiyaAura)"/>
+              <g class="diya-flame">
+                <path d="M60 18 C48 34 51 48 60 56 C69 48 72 34 60 18 Z" fill="url(#lgDiyaFlame)"/>
+                <path d="M60 30 C54 39 55 48 60 54 C65 48 66 39 60 30 Z" fill="url(#lgDiyaCore)"/>
+              </g>
+              <ellipse cx="60" cy="62" rx="5" ry="2.6" fill="#3F240F"/>
+              <path d="M16 66 Q60 60 104 66 Q106 75 92 84 Q60 98 28 84 Q14 75 16 66 Z" fill="url(#lgDiyaBody)"/>
+              <path d="M16 66 Q60 57 104 66 Q60 74 16 66 Z" fill="url(#lgDiyaRim)"/>
+              <path d="M16 66 Q5 65 1 71 Q9 73 18 70 Z" fill="url(#lgDiyaBody)"/>
+              <path d="M49 92 Q60 99 71 92 Q67 101 60 101 Q53 101 49 92 Z" fill="#7A4417"/>
+            </svg>
+          </div>
+        </div>
+        <div class="login-hero-foot">માતાજીની કૃપા, ભક્તોની શ્રદ્ધા &nbsp;·&nbsp; ખમ્મા માડી 🙏</div>
+      </div>
+
+      <!-- Right: Google sign-in -->
+      <div class="login-form-pane">
+        <div class="login-form-head">
+          <img class="login-form-mark" src="assets/icon.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
+          <div>
+            <h3 class="login-form-title">Sign In to Portal</h3>
+            <p class="login-form-sub">Authorised temple staff only</p>
+          </div>
+        </div>
+
+        <div id="gbtn"></div>
+        <div id="loginMsg" class="login-msg"></div>
+
+        <p class="login-hint">
+          Sign in with the Google account an administrator has registered for you.
+          There is no self&#8209;registration and no password to remember.
+        </p>
+        <p class="login-legal">Shri Vihat Meldi Mata Mandir &middot; Sanand, Gujarat</p>
+      </div>
+
+    </div>
   </div>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
   (function () {
-    var msg = document.getElementById('msg');
-    function show(kind, text) { msg.className = 'msg ' + kind; msg.textContent = text; }
+    var msg = document.getElementById('loginMsg');
+    function show(kind, text) { msg.className = 'login-msg ' + kind; msg.textContent = text; }
 
     function onGoogle(resp) {
       show('ok', 'Signing you in…');
@@ -92,26 +137,21 @@
       })
         .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
         .then(function (res) {
-          if (!res.ok) { show('err', res.b.error || 'Sign-in failed.'); return; }
+          if (!res.ok) { show('err', (res.b && res.b.error) || 'Sign-in failed.'); return; }
           window.location.href = '/';
         })
         .catch(function () { show('err', 'Network error — please try again.'); });
     }
 
     function init(clientId) {
-      if (!clientId) {
-        show('err', 'Google sign-in is not configured on the server (GOOGLE_CLIENT_ID missing).');
-        return;
-      }
-      function ready() {
+      if (!clientId) { show('err', 'Google sign-in is not configured (GOOGLE_CLIENT_ID missing on the server).'); return; }
+      (function ready() {
         if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(ready, 120); return; }
         google.accounts.id.initialize({ client_id: clientId, callback: onGoogle });
-        google.accounts.id.renderButton(document.getElementById('gbtn'), {
-          theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width: 300
-        });
+        google.accounts.id.renderButton(document.getElementById('gbtn'),
+          { theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill', width: 300 });
         google.accounts.id.prompt();
-      }
-      ready();
+      })();
     }
 
     fetch('/api/auth/config', { credentials: 'include' })

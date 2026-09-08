@@ -56,13 +56,12 @@ async function main() {
   console.log('▶ running migrations…');
   await runMigrations();
 
+  console.log('▶ seeding platform (settings + counters)…');
+  await require('./seed/platform').seedPlatform();
+
   if (process.argv.includes('--seed')) {
-    console.log('▶ seeding reference data…');
+    console.log('▶ seeding reference data (catalogs + sample committees)…');
     await require('./seed/reference-data').seedReferenceData();
-  }
-  if (process.argv.includes('--demo')) {
-    console.log('▶ seeding demo data…');
-    await require('./seed/demo-data').seedDemoData();
   }
   console.log('✔ done');
 }

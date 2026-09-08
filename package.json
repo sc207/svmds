@@ -9,7 +9,7 @@
     "dev": "node server/index.js",
     "migrate": "node server/db/migrate.js",
     "seed": "node server/db/migrate.js --seed",
-    "demo": "node server/db/migrate.js --seed --demo"
+    "wipe": "node server/db/wipe.js"
   },
   "engines": {
     "node": "20.x"
