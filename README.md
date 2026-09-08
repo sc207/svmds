@@ -15,7 +15,7 @@ The repo has two parts:
 | | Stack | State |
 | --- | --- | --- |
 | **Frontend** (`public/index.html`, `public/css/`, `public/js/`, `public/assets/`) | static, no-build, vanilla-JS single-page app | complete & in use |
-| **Backend** (`server/`) | Node 20 · Express · SQLite (dev) / Turso libsql (prod) · Google Sign-In auth · revocable sessions | Phase 2 — auth + sessions + accounts live; per-resource APIs next. See [`BACKEND_PLAN.md`](BACKEND_PLAN.md) |
+| **Backend** (`server/`) | Node 20 · Express · SQLite (dev) / Turso libsql (prod) · Google Sign-In auth · revocable sessions | REST API complete for every module (auth · settings · devotees · donations · poojas · committees · teams · events · visits · expenses · inventory · calendar/dashboard/activity/reports). Frontend still hydrates a subset. See [`BACKEND_PLAN.md`](BACKEND_PLAN.md) |
 
 ---
 
@@ -62,9 +62,18 @@ to that client's **Authorized JavaScript origins**. No SMTP, no client secret.
 | `POST /api/auth/impersonate` · `/stop-impersonate` | superadmin | short-lived "sign in as" |
 | `GET/POST/PATCH/DELETE /api/users` · `/:id/roles` | admin tier¹ | Accounts & Access |
 | `GET/DELETE /api/sessions` | cookie² | list / revoke devices |
+| `GET /api/settings` · `PUT /api/settings/{working-date,identity,language}` | cookie / admin | temple settings |
+| `/api/devotees` · `/api/donors` · `/api/donation-categories` · `/api/donations` | cookie³ | People & Donations (receipts + certificates) |
+| `/api/pooja-types` · `/api/poojas` (+ `/sessions` `/sevarthis` `/coordinators` `/guests`) · `/api/sevarthis` | cookie / scoped⁴ | Pooja module |
+| `/api/committees` (+ members, meetings, attendance, communication, drafts) | cookie / scoped⁴ | Committee module |
+| `/api/teams` (+ members, sessions, attendance, public-page, signups) · `POST /api/public/teams/:id/signups` | cookie / scoped⁴ / **public** | Management module + no-login volunteering page |
+| `/api/events` (+ `/types` `/days` `/incharge`) · `/api/visits` · `/api/expenses` · `/api/inventory` | cookie / scoped⁴ | Events · Visits · Expenses · Inventory |
+| `GET /api/calendar` · `/api/dashboard` · `/api/activity` · `/api/reports` | cookie | scope-aware aggregate reads |
 
 ¹ granting `admin`/`superadmin` or touching such an account is **superadmin only**.
 ² listing/revoking *other* users' sessions is admin tier.
+³ delete is admin tier throughout; catalog writes are admin tier.
+⁴ a scoped persona (pooja_coordinator / committee_leader / management_lead / event_incharge) sees and edits only the poojas / committees / teams / events they own; create, delete and lead assignment stay admin tier.
 
 ### npm scripts
 

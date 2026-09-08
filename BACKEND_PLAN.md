@@ -1774,21 +1774,37 @@ with `TURSO_*` set (per the reference `DEPLOY.md`).
 remote session revoke + disabled-user-is-immediately-locked-out. (Needs a real
 `GOOGLE_CLIENT_ID` from a Google Cloud **OAuth Web client**.)
 
-**Phase 3 — one module end to end as the template.** Do **Donations** fully:
-`routes/donations.js` + `donors.js` + `donationCategories.js`,
-`services/receiptNumber.js`, `services/entityCode.js`, `mapDonation` etc.,
-`services/audit.js`. Wire `donations-*.js` to `api.js` / `store.js` /
-`persistDonation`. This nails the CRUD + scope + numbering + audit + mapper
-pattern every other router then copies.
+**Phase 3 — DONE — Donations as the template.** `routes/donations.js` +
+`donors.js` + `donationCategories.js`, `services/receiptNumber.js` +
+`entityCode.js` + `audit.js`, `mapDonation`/`mapDonor`/`mapDonationCategory`.
+CRUD + cash-vs-in-kind rules + receipt/cert numbering + audit + mapper pattern
+that every later router copies. (`persistDonation` frontend wiring: pending —
+part of the remaining §10.1-10.2 work.)
 
-**Phase 4 — remaining modules.** Devotees → Pooja → Committee → Management →
-Events → Visits → Expenses/Inventory, in the §10.4 order. Each: one router file
-(or a few), one `mapX`, `counters` seed rows, wire the `-forms.js`.
+**Phase 4 — DONE — all modules.** `routes/`: `devotees` · `poojaTypes` +
+`poojas` (+ sessions / sevarthis / coordinators / guests) + `sevarthis` ·
+`committees` (+ members / meetings / attendance / communication / drafts) ·
+`teams` (+ members / sessions / attendance / public-page / signups) +
+`publicSignups` (unauth) · `events` (+ types / days / incharge) · `visits` ·
+`expenses` · `inventory`. `services/sharedTables.js` for the attendance /
+communication / drafts tables shared by Committee + Management. Scoped personas
+enforced server-side via `req.scope`.
 
-**Phase 5 — derived reads.** `services/calendar.js` + the `v_cal_*` VIEWs,
-`services/dashboard.js`, `services/reports.js`, `routes/activity.js`. Switch
-`calendar.js` / `dashboard.js` / `access.js` to the endpoints; remove client
-fallbacks.
+**Phase 5 — DONE — derived reads.** `services/calendar.js` (UNION the `v_cal_*`
+VIEWs, scope filter) + `services/dashboard.js` + `routes/derived.js`
+(`/api/calendar` `/api/dashboard` `/api/activity` `/api/reports`). Also fixed
+the migration runner to use `runBatch()` (libsql `client.batch('write')` /
+better-sqlite3 transaction) since libsql over HTTP has no BEGIN/COMMIT session.
+(Switching the frontend `calendar.js` / `dashboard.js` / `access.js` off their
+client fallbacks: pending — §10.1-10.2.)
+
+**Phase 5.5 — remaining frontend integration (NOT DONE).** `public/js/api.js`
+(done) + inline auth gate (done) + `public/js/hydrate.js` (done — hydrates
+settings / devotees / inventory / expenses). Still to do: hydrate the
+`DON`/`POOJA`/`CMT`/`MG`/`EV`/`VISITS` stores, replace every `-forms.js` direct
+store mutation with a `persistX()` API call, delete `changeRoleScope()` /
+`signInAs()` / the client `nextId()` family, drive the persona from
+`/api/auth/me` instead of the role selector. Needs live browser verification.
 
 **Phase 6 — deploy + cutover.** Push to GitHub; Render **New → Blueprint** reads
 `render.yaml`; set `sync:false` env vars (`ADMIN_EMAIL`, `GOOGLE_CLIENT_ID`,
