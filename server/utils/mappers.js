@@ -205,6 +205,110 @@ function mapPooja(row, extra = {}) {
   };
 }
 
+function mapCommittee(row, extra = {}) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    name: row.name,
+    leaderId: row.leader_id || null,
+    samaj: row.samaj || '',
+    purpose: row.purpose || '',
+    color: row.color || '#6B1F2A',
+    expectedSize: Number(row.expected_size || 0),
+    status: row.status || 'active',
+    notes: row.notes || '',
+    createdDate: row.created_date || row.created_at,
+    members: extra.members || [],
+    meetings: extra.meetings || [],
+    communication: extra.communication || null,
+    drafts: extra.drafts || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapCommitteeMember(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    committeeId: row.committee_id,
+    devoteeId: row.devotee_id || null,
+    firstName: row.first_name || '',
+    lastName: row.last_name || '',
+    name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+    mobile: row.mobile || '',
+    city: row.city || '',
+    state: row.state || 'Gujarat',
+    role: row.role || 'Member',
+    status: row.status === 'inactive' ? 'inactive' : 'active',
+    notes: row.notes || '',
+    joinedDate: row.joined_date || row.created_at,
+  };
+}
+
+function mapMeeting(row, attendance = []) {
+  if (!row) return null;
+  let memberIds = [];
+  try { memberIds = JSON.parse(row.member_ids_json || '[]'); } catch (_) {}
+  return {
+    id: row.code || row.id,
+    uuid: row.id,
+    code: row.code || '',
+    committeeId: row.committee_id,
+    title: row.title,
+    date: row.date,
+    startTime: row.start_time || '',
+    endTime: row.end_time || '',
+    venue: row.venue || '',
+    agenda: row.agenda || '',
+    memberIds,
+    notes: row.notes || '',
+    completed: !!row.completed,
+    attendance,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapCommunication(row) {
+  if (!row) return { groupName: '', groupLink: '', broadcastName: '', broadcastLink: '' };
+  return {
+    groupName: row.group_name || '',
+    groupLink: row.group_link || '',
+    broadcastName: row.broadcast_name || '',
+    broadcastLink: row.broadcast_link || '',
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapDraft(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    title: row.title || '',
+    message: row.message || '',
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapAttendance(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    contextType: row.context_type,
+    contextId: row.context_id,
+    memberId: row.member_id,
+    status: row.status,
+    markedAt: row.marked_at,
+  };
+}
+
 function mapSession(row, currentJti) {
   if (!row) return null;
   return {
@@ -242,4 +346,5 @@ module.exports = {
   mapUser, mapDevotee, mapSession, mapAudit,
   mapDonationCategory, mapDonor, mapDonation,
   mapPoojaType, mapPoojaSession, mapSevarthi, mapGuest, mapPooja,
+  mapCommittee, mapCommitteeMember, mapMeeting, mapCommunication, mapDraft, mapAttendance,
 };
