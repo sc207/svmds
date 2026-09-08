@@ -37,6 +37,7 @@ function assertRootOwnerSafe(targetUser, action) {
 
 /** Can `actor` grant or revoke `role` on someone? */
 function assertCanGrant(actor, role) {
+  if (isRootOwner(actor)) return;                    // the primary owner may manage anyone
   if (!isAdminTier(actor)) throw httpError(403, 'Forbidden');
   if (PRIVILEGED_ROLES.includes(role) && !isSuper(actor)) {
     throw httpError(403, 'Only a superadmin can grant or revoke admin / superadmin');
@@ -62,6 +63,10 @@ async function assertSingleSuperadmin(role, targetUserId) {
 
 /** Can `actor` edit / disable `targetUser` (row with roles[])? */
 function assertCanTouchUser(actor, targetUser) {
+  // The primary owner (ADMIN_EMAIL) may manage any account — including cleaning
+  // up a stray second superadmin. assertRootOwnerSafe still protects the owner
+  // row itself from being disabled / deleted by anyone.
+  if (isRootOwner(actor)) return;
   if (!isAdminTier(actor)) throw httpError(403, 'Forbidden');
   const targetRoles = targetUser.roles || [];
   const targetIsPrivileged = targetRoles.some(r => PRIVILEGED_ROLES.includes(r));
@@ -69,7 +74,7 @@ function assertCanTouchUser(actor, targetUser) {
     throw httpError(403, 'Only a superadmin can modify an admin / superadmin account');
   }
   if (targetRoles.includes('superadmin') && actor.id !== targetUser.id) {
-    // even a superadmin cannot disable another superadmin via this API
+    // a non-owner superadmin still cannot touch another superadmin
     throw httpError(403, 'A superadmin account cannot be modified here');
   }
 }

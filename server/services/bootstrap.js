@@ -13,7 +13,25 @@ async function ensureAdminUser() {
 
   let user = await queryOne('SELECT * FROM users WHERE lower(email) = ?', [email]);
 
+  // Is there ALREADY a superadmin (any address)? If so we must never mint a
+  // second one — a typo in ADMIN_EMAIL previously created a duplicate.
+  const existingSuper = await queryOne(
+    `SELECT u.id, u.email FROM user_roles ur
+       JOIN users u ON u.id = ur.user_id
+     WHERE ur.role = 'superadmin' AND u.is_deleted = 0
+     LIMIT 1`
+  );
+
   if (!user) {
+    if (existingSuper) {
+      console.warn(
+        `⚠ ADMIN_EMAIL (${email}) has no account, but a superadmin already exists ` +
+        `(${existingSuper.email}). NOT creating a second superadmin. If ADMIN_EMAIL ` +
+        `is wrong, fix it; if it is a genuine new owner, add the account from ` +
+        `Accounts & Access and grant it there.`
+      );
+      return;
+    }
     await run(
       'INSERT INTO users (email, name, active) VALUES (?, ?, 1)',
       [email, 'Administrator']
@@ -30,6 +48,13 @@ async function ensureAdminUser() {
     [user.id, 'superadmin']
   );
   if (!hasRole) {
+    if (existingSuper && existingSuper.id !== user.id) {
+      console.warn(
+        `⚠ ${email} exists but is not superadmin, and ${existingSuper.email} already is. ` +
+        `Not granting a second superadmin. Fix ADMIN_EMAIL or manage roles from the UI.`
+      );
+      return;
+    }
     await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [user.id, 'superadmin']);
     console.log(`  ✓ granted superadmin role to ${email}`);
   }
