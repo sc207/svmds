@@ -93,17 +93,40 @@
 
       '<div class="card mg-mt"><div class="card-header"><div class="card-title">Active sessions <span class="mg-muted-xs">(' + SESSIONS.length + ')</span></div></div>' +
         '<div class="card-body" style="padding:0"><div class="mg-table-scroll"><table class="custom-table acc-table acc-table-sm">' +
-        '<thead><tr><th>User</th><th>Device</th><th>IP</th><th>Last seen</th><th></th></tr></thead><tbody>' +
+        '<thead><tr><th>Signed-in device</th><th style="text-align:right">Action</th></tr></thead><tbody>' +
         (SESSIONS.length ? SESSIONS.map(function (s) {
           return '<tr>' +
-            '<td>' + esc(s.userEmail) + (s.current ? ' <span class="badge badge-confirmed">this device</span>' : '') + '</td>' +
-            '<td class="acc-wrap mg-muted-xs">' + esc((s.userAgent || '—').slice(0, 60)) + '</td>' +
-            '<td class="mg-muted-xs">' + esc(s.ip || '—') + '</td>' +
-            '<td class="mg-muted-xs">' + esc(s.lastSeen || '—') + '</td>' +
-            '<td>' + (s.current ? '' : '<button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="accRevokeSession(\'' + s.id + '\')">Revoke</button>') + '</td>' +
+            '<td class="acc-wrap">' +
+              '<strong>' + esc(s.userEmail || '—') + '</strong>' +
+              (s.current ? ' <span class="badge badge-confirmed">this device</span>' : '') +
+              '<div class="mg-muted-xs" style="margin-top:2px">' +
+                esc(shortUA(s.userAgent)) +
+                (s.ip ? ' · ' + esc(s.ip) : '') +
+                (s.lastSeen ? ' · ' + esc(String(s.lastSeen).replace('T', ' ').slice(0, 16)) : '') +
+              '</div>' +
+            '</td>' +
+            '<td style="text-align:right;white-space:nowrap">' +
+              (s.current ? '<span class="mg-muted-xs">—</span>'
+                         : '<button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="accRevokeSession(\'' + s.id + '\')">Revoke</button>') +
+            '</td>' +
           '</tr>';
-        }).join('') : '<tr><td colspan="5" class="mg-muted-xs" style="padding:1rem">No other active sessions.</td></tr>') +
+        }).join('') : '<tr><td colspan="2" class="mg-muted-xs" style="padding:1rem">No other active sessions.</td></tr>') +
         '</tbody></table></div></div></div>';
+  }
+
+  /* "Chrome on Windows" style label from a UA string, with a raw fallback */
+  function shortUA(ua) {
+    ua = String(ua || '');
+    if (!ua) return 'unknown device';
+    var b = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera'
+          : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox'
+          : /Safari\//.test(ua) ? 'Safari' : '';
+    var o = /Windows NT/.test(ua) ? 'Windows'
+          : /iPhone|iPad/.test(ua) ? 'iOS'
+          : /Android/.test(ua) ? 'Android'
+          : /Mac OS X/.test(ua) ? 'macOS'
+          : /Linux/.test(ua) ? 'Linux' : '';
+    return (b && o) ? (b + ' on ' + o) : (b || o || ua.slice(0, 40));
   }
 
   function kpi(label, value, meta, icon) {
