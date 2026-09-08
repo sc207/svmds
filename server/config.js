@@ -10,11 +10,9 @@ const config = {
   adminEmail: (process.env.ADMIN_EMAIL || '').toLowerCase().trim(),
   appName:   process.env.APP_NAME || 'Shri Vihat Meldi Mata Mandir',
 
-  smtp: {
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_APP_PASSWORD || '',
-  },
-  smtpFrom:  process.env.SMTP_FROM || process.env.SMTP_USER || '',
+  // Google OAuth Web client id — used client-side by the GIS button and
+  // server-side as the ID-token audience to verify. No client secret needed.
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 
   turso: {
     url:   process.env.TURSO_DATABASE_URL || '',
@@ -24,7 +22,6 @@ const config = {
   allowedOrigins: (process.env.ALLOWED_ORIGINS || '')
     .split(',').map(s => s.trim()).filter(Boolean),
 
-  otpTtlMin:   parseInt(process.env.OTP_TTL_MIN || '10', 10),
   sessionDays: parseInt(process.env.SESSION_DAYS || '7', 10),
 };
 

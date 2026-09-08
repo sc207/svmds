@@ -19,11 +19,7 @@ services:
         value: Shri Vihat Meldi Mata Mandir
       - key: ADMIN_EMAIL
         sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_APP_PASSWORD
-        sync: false
-      - key: SMTP_FROM
+      - key: GOOGLE_CLIENT_ID
         sync: false
       - key: TURSO_DATABASE_URL
         sync: false

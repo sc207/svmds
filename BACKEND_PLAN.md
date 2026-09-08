@@ -12,7 +12,7 @@ temple-identity form, language and the working-date clock touch `localStorage`.
 Personas are a **client-side role selector** with no real authentication.
 
 The goal: a real Node/Express backend on Render with Turso (prod) / local SQLite
-(dev), passwordless TOTP auth, revocable sessions, server-side authorization that
+(dev), Google Sign-In auth (§5), revocable sessions, server-side authorization that
 replaces the client persona guard, and per-resource REST APIs that the existing
 modules hydrate from on boot — **keeping the fixed script load order and the
 in-memory store objects (`MG` / `POOJA` / `DON` / `CMT` / `EV` / `VISITS` /
@@ -28,7 +28,7 @@ in-memory store objects (`MG` / `POOJA` / `DON` / `CMT` / `EV` / `VISITS` /
 | --- | --- | --- |
 | Server | none (static host) | Node 20 web service, `node server/index.js` |
 | Data | in-memory seed | Turso (libsql) in prod, `data/temple.db` (better-sqlite3) in dev |
-| Auth | client role selector | httpOnly-cookie JWT + TOTP + revocable sessions |
+| Auth | client role selector | Google Sign-In → httpOnly-cookie session JWT + revocable sessions |
 | Base path | project sub-path `/<repo>/` | domain root `/` |
 | `.nojekyll` | needed (disable Jekyll) | irrelevant — Render serves files verbatim. Leave it; harmless. |
 | Relative paths (`css/`, `js/`, `assets/`) | required for sub-path | still work from domain root; the sub-path fallback in `assetURL()` becomes moot but stays (print popups still need an absolute URL). |
@@ -71,8 +71,8 @@ app.get('*', (req, res) => {
 4. Middleware stack: `helmet({ contentSecurityPolicy: … })` (§7) → `cors({ origin:
    ALLOWED_ORIGINS, credentials: true })` → `express.json({ limit: '1mb' })` →
    `express.urlencoded({ extended: true })` → `cookieParser()`.
-5. `otpLimiter` (`express-rate-limit`, 10 / 15 min) mounted on
-   `/api/auth/request-setup-otp`.
+5. `authLimiter` (`express-rate-limit`, 20 / 15 min) mounted on
+   `/api/auth/google` — caps Google-token verification attempts per IP.
 6. `GET /health` → `{ status: 'ok' }` (Render `healthCheckPath`).
 7. Mount `/api/auth` (public), then `app.use('/api', authRequired)`, then every
    protected router, then `/api/backup/*` (admin), then static + SPA fallback,
@@ -81,7 +81,7 @@ app.get('*', (req, res) => {
    ```js
    await runMigrations();          // db/migrate.js — applies pending numbered migrations
    await seedReferenceData();      // idempotent upserts: catalogs + committees/samaj
-   await ensureAdminUser();        // idempotent upsert from ADMIN_EMAIL  (reference GAP — added)
+   await ensureAdminUser();        // idempotent upsert from ADMIN_EMAIL (Google address) — reference GAP, added
    if (process.argv.includes('--demo')) await seedDemoData();
    app.listen(process.env.PORT || config.port || 3000);
    ```
@@ -91,9 +91,10 @@ app.get('*', (req, res) => {
 ```yaml
 services:
   - type: web
-    name: svmmm-temple
+    name: svmds
     runtime: node
     plan: free
+    region: singapore
     buildCommand: npm install
     startCommand: node server/index.js
     healthCheckPath: /health
@@ -102,13 +103,11 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
-      - key: ADMIN_EMAIL
-        sync: false
       - key: APP_NAME
         value: Shri Vihat Meldi Mata Mandir
-      - key: SMTP_USER
+      - key: ADMIN_EMAIL
         sync: false
-      - key: SMTP_APP_PASSWORD
+      - key: GOOGLE_CLIENT_ID
         sync: false
       - key: TURSO_DATABASE_URL
         sync: false
@@ -134,11 +133,9 @@ module.exports = {
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
   adminEmail:(process.env.ADMIN_EMAIL || '').toLowerCase().trim(),
   appName:   process.env.APP_NAME || 'Shri Vihat Meldi Mata Mandir',
-  smtp: { user: process.env.SMTP_USER || '', pass: process.env.SMTP_APP_PASSWORD || '' },
-  smtpFrom:  process.env.SMTP_FROM || process.env.SMTP_USER || '',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   turso: { url: process.env.TURSO_DATABASE_URL || '', token: process.env.TURSO_AUTH_TOKEN || '' },
   allowedOrigins: (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
-  otpTtlMin: parseInt(process.env.OTP_TTL_MIN || '10', 10),
   sessionDays: parseInt(process.env.SESSION_DAYS || '7', 10),
 };
 ```
@@ -147,17 +144,18 @@ module.exports = {
 | --- | --- | --- |
 | `NODE_ENV` | yes | `production` toggles secure cookies, CSP strictness, error masking, fail-fast |
 | `PORT` | auto (Render) | listen port |
-| `JWT_SECRET` | yes | HS256 signing key; boot aborts if weak/short in prod |
-| `ADMIN_EMAIL` | yes | bootstrapped as the first `superadmin` user on every boot (idempotent) |
-| `APP_NAME` | no | OTP email subject/body + TOTP issuer label shown in the authenticator app |
-| `SMTP_USER` | prod | Gmail address for OTP mail |
-| `SMTP_APP_PASSWORD` | prod | Gmail App Password (2FA required); missing ⇒ OTP printed to server log (dev) |
-| `SMTP_FROM` | no | `From:` header; defaults to `SMTP_USER` |
-| `TURSO_DATABASE_URL` | prod | libsql URL; empty ⇒ local `data/temple.db` via better-sqlite3 |
+| `JWT_SECRET` | yes | HS256 signing key for **our** session cookie; boot aborts if weak/short in prod |
+| `ADMIN_EMAIL` | yes | the Google address bootstrapped as the first `superadmin` on every boot (idempotent) |
+| `GOOGLE_CLIENT_ID` | yes | Google OAuth **Web** client id; used client-side by the GIS button and server-side as the ID-token audience to verify. No client *secret* needed. |
+| `APP_NAME` | no | display string (page titles) |
+| `TURSO_DATABASE_URL` | prod | libsql URL; empty ⇒ local `data/svmds.db` via better-sqlite3 |
 | `TURSO_AUTH_TOKEN` | prod | libsql token |
 | `ALLOWED_ORIGINS` | prod | comma-separated origin allowlist for CORS; empty ⇒ all origins (dev only) |
-| `OTP_TTL_MIN` | no | OTP lifetime, default 10 |
-| `SESSION_DAYS` | no | JWT + cookie lifetime, default 7 |
+| `SESSION_DAYS` | no | our JWT + cookie lifetime, default 7 |
+
+(No `SMTP_*` — authentication is Google Sign-In, §5. `UPLOADS_DIR` is not used —
+there is no file-upload feature; the temple/emblem images ship in
+`public/assets/`.)
 
 ### 1.5 Database driver abstraction (`server/db/connection.js`)
 
@@ -339,17 +337,18 @@ CREATE TABLE IF NOT EXISTS users (
   mobile        TEXT NOT NULL DEFAULT '',
   city          TEXT NOT NULL DEFAULT '',
   active        INTEGER NOT NULL DEFAULT 1,
-  totp_secret   TEXT,
-  totp_enabled  INTEGER NOT NULL DEFAULT 0,
+  totp_secret   TEXT,                           -- dead columns (shipped in 001); Google Sign-In
+  totp_enabled  INTEGER NOT NULL DEFAULT 0,     -- replaced TOTP — left in place, never written
   is_deleted    INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT
+  -- migration 003 adds:  google_sub TEXT   (Google account subject id, recorded on first login)
 );
 
 CREATE TABLE IF NOT EXISTS user_roles (        -- multi-role (Amit Shah = lead + coordinator)
   user_id INTEGER NOT NULL REFERENCES users(id),
-  role    TEXT NOT NULL CHECK (role IN
-            ('superadmin','management_lead','pooja_coordinator',
+  role    TEXT NOT NULL CHECK (role IN         -- migration 002 rebuilds this CHECK to add 'admin'
+            ('superadmin','admin','management_lead','pooja_coordinator',
              'committee_leader','event_incharge','accountant')),
   PRIMARY KEY (user_id, role)
 );
@@ -1011,7 +1010,7 @@ server/
     visits.js  expenses.js  inventory.js
     calendar.js  dashboard.js  reports.js  activity.js  backup.js
   services/                 logic, no req/res
-    otp.js  mailer.js  audit.js
+    google.js  audit.js
     receiptNumber.js  entityCode.js
     calendar.js  dashboard.js  reports.js  authz.js
   utils/
@@ -1091,7 +1090,7 @@ Standard CRUD shape unless noted. All under `/api`, all behind
 
 | Router | Endpoints | Notes |
 | --- | --- | --- |
-| `auth` | `POST /start-login` · `POST /request-setup-otp` · `POST /setup-authenticator` · `POST /verify-authenticator` · `GET /me` · `POST /logout` · `POST /impersonate` · `POST /stop-impersonate` | public; `/me` returns `{ user, pages }`; impersonation = superadmin only (§6) |
+| `auth` | `POST /google` · `GET /me` · `POST /logout` · `POST /impersonate` · `POST /stop-impersonate` | `/google` + `/me` public; `/me` returns `{ user, pages, isSuperadmin }`; impersonation = superadmin only (§6) |
 | `sessions` | `GET /` · `DELETE /:id` · `DELETE /?others=1` | own sessions always; all sessions if admin |
 | `users` | `GET /` · `POST /` · `PUT /:id` · `PUT /:id/roles` · `PUT /:id/activate` · `DELETE /:id` | `superadmin` **+ `admin`** for non-privileged targets; `assertCanGrant` / `assertCanTouchUser` reserve `admin`/`superadmin` rows for `superadmin` (§5.2a). `DELETE` = `active=0` **+ revoke that user's sessions** |
 | `devotees` | `GET /` · `POST /` · `PUT /:id` · `DELETE /:id` | shared registry |
@@ -1168,39 +1167,57 @@ Standard CRUD shape unless noted. All under `/api`, all behind
 
 ---
 
-## 5. Passwordless TOTP authentication
+## 5. Google Sign-In authentication
 
-Copy the reference flow **exactly** (`speakeasy` + `qrcode`, `server/routes/auth.js`),
-renaming the product string to `config.appName`.
+**No SMTP, no email OTP, no TOTP/authenticator app.** A user signs in with their
+Google account; the server verifies the Google-issued ID token, matches it to a
+pre-provisioned `users` row, and issues **its own** httpOnly-cookie session JWT
+(the `jsonwebtoken` + revocable `sessions` machinery from the reference stays —
+only the "prove who you are" step changes). No self-signup: the email must
+already exist and be `active = 1`, exactly as before.
 
-### 5.1 Flow (unchanged from ChallanPro)
+Deps: drop `speakeasy` / `qrcode` / `nodemailer`; add **`google-auth-library`**.
 
-1. `POST /api/auth/start-login { email }` → `findUser` (`WHERE email = ? AND
-   active = 1`); `403` if unknown/disabled; else `{ ok, totpEnabled, step:
-   totpEnabled ? 'verify' : 'setup' }`.
-2. First-time only: `POST /api/auth/request-setup-otp { email }` — always
-   returns `{ ok: true }` (enumeration-safe); if the user exists and no live
-   OTP, generate a 6-digit code (`services/otp.js`) and email it
-   (`services/mailer.js`; console fallback in dev). Rate-limited 10 / 15 min.
-3. `POST /api/auth/setup-authenticator { email, otp }` — `verifyOtp` gate;
-   issue a fresh `speakeasy` secret (or reuse a pending one), store
-   `totp_secret`, `totp_enabled = 0`; return `{ qr, secret }` — a
-   `otpauth://totp/<APP_NAME>:<email>?secret=…&issuer=<APP_NAME>` data-URI QR.
-4. `POST /api/auth/verify-authenticator { email, code }` — in-process
-   `email:ip` attempt bucket (5 / 5 min → `429`); `speakeasy.totp.verify({
-   window: 1 })`; on success `totp_enabled = 1`, **create a `sessions` row**
-   (`jti = crypto.randomUUID()`), `signToken(user, jti)`, set the cookie,
-   `logAudit LOGIN`, return `{ user: { id, email, roles } }`.
-5. `GET /api/auth/me` — verify cookie; if `jti` revoked → `{ user: null }`;
-   else `{ user, pages }` where `pages = authz.pagesForUser(user)`.
-6. `POST /api/auth/logout` — `UPDATE sessions SET revoked = 1 WHERE id = jti`,
+### 5.1 Flow
+
+Frontend (`public/login.html`) renders Google Identity Services — the
+[GIS button / `google.accounts.id`](https://developers.google.com/identity/gsi/web)
+configured with `client_id = GOOGLE_CLIENT_ID`. On success GIS hands the page a
+**Google ID token** (a JWT signed by Google).
+
+1. `POST /api/auth/google { credential }` — `credential` is the Google ID token.
+   - `services/google.js`: `new OAuth2Client(GOOGLE_CLIENT_ID).verifyIdToken({
+     idToken: credential, audience: GOOGLE_CLIENT_ID })` → payload. Rejects on
+     bad signature / wrong `aud` / wrong `iss` (`accounts.google.com`) / expiry.
+     `403` if `payload.email_verified !== true`.
+   - `const user = await findUser(payload.email)` (`WHERE lower(email) = ? AND
+     active = 1 AND is_deleted = 0`). **`403 "This Google account has no access
+     — ask an administrator"`** if absent/disabled (enumeration is not a concern
+     here — the caller already proved they own that Google address).
+   - First successful sign-in for a user records `users.google_sub =
+     payload.sub` (stable Google id) and `users.name` if empty.
+   - Create a `sessions` row (`jti = crypto.randomUUID()`, `user_agent`, `ip`),
+     `signToken(user, jti)` (7-day HS256, `{ id, email, roles, jti }`), set the
+     cookie (`httpOnly`, `secure` in prod, `sameSite:'lax'`, `maxAge =
+     SESSION_DAYS`), `logAudit({ module:'Auth', action:'LOGIN' })`, return
+     `{ user: { id, email, name, roles } }`.
+2. `GET /api/auth/me` — verify cookie; if `jti` missing/revoked → `{ user: null }`;
+   else `{ user, pages, isSuperadmin }` (`pages = authz.pagesForUser(user)`).
+3. `POST /api/auth/logout` — `UPDATE sessions SET revoked = 1 WHERE id = jti`,
    clear cookie.
+
+`sameSite` is `'lax'` (not `'strict'`) so the cookie survives the top-level
+redirect back from Google. GIS runs entirely in the browser; the server never
+talks to Google's token endpoint and needs **no client secret** — only the
+`GOOGLE_CLIENT_ID` (as the audience to check).
 
 ### 5.2 `people.js` → server
 
 - `ACCOUNTS` becomes the `users` + `user_roles` tables. `email` unique,
-  `active`, `totp_secret`, `totp_enabled`. `GET /api/users` feeds the existing
-  **Accounts & Access** table.
+  `active`, `google_sub` (added in migration `003`). `GET /api/users` feeds the
+  existing **Accounts & Access** table. (`totp_secret` / `totp_enabled` from
+  `001` are now unused — left in place, harmless; a later migration may drop
+  them.)
 - `ROLE_META` (role → pages) becomes `ROLE_PAGES` in `middleware/authz.js`,
   identical keys:
 
@@ -1266,8 +1283,8 @@ async function assertCanTouchUser(actorRoles, targetUserId) {
 Bootstrap is unchanged — `ensureAdminUser()` still creates the **one**
 `superadmin` from `ADMIN_EMAIL`; that account then creates `admin` accounts
 through the Accounts & Access UI. Provisioning flow: superadmin → **+ Add
-Account** → email + name → tick **Administrator** → save; the person completes the
-passwordless login (email OTP → authenticator) and now holds an `admin` session.
+Account** → email (their Google address) + name → tick **Administrator** → save;
+the person signs in with Google and now holds an `admin` session.
 
 Frontend: `people.js` `ROLE_META.admin = { icon:'🛡️', pages:['*'] }`, i18n
 `role_admin` = *Administrator / एडमिन / એડમિન*, `accountPages()` short-circuits to
@@ -1299,11 +1316,22 @@ scoped data** (services apply the same `req.scope`).
 
 ### 5.4 `login.html`
 
-A standalone page in `public/`, adapted from the reference `login.html`
-(4-step: email → email-OTP → QR → 6-digit code), restyled in the temple palette
-(maroon `#6B1F2A` / saffron `#C96A20`, `Cinzel` heading). It is **outside** the
-SPA — no `i18n.js` / module load order, no splash loader. `api.js` redirects
-here on any `401`. On success it `window.location = '/'`.
+A standalone page in `public/`, restyled in the temple palette (maroon
+`#6B1F2A` / saffron `#C96A20`, `Cinzel` heading, `icon.png` emblem). Its whole
+body is: the emblem + "Shri Vihat Meldi Mata Mandir", one line "Authorised
+temple staff — sign in with your Google account", the **Google Sign-In button**
+(`<div id="g_id_onload" data-client_id="…" data-callback="onGoogle">` +
+`<div class="g_id_signin">`, plus `<script src="https://accounts.google.com/gsi/client" async>`),
+and a slot for the `403` message. `onGoogle(resp)` → `fetch('/api/auth/google',
+{ method:'POST', credentials:'include', body: JSON.stringify({ credential:
+resp.credential }) })` → on `200` `location = '/'`, on `403` show the message.
+It is **outside** the SPA — no `i18n.js` / module load order, no splash loader.
+`api.js` redirects here on any `401`.
+
+CSP: `login.html`'s own `<meta http-equiv="Content-Security-Policy">` (or the
+Helmet config) must allow `script-src https://accounts.google.com/gsi/`,
+`connect-src https://accounts.google.com`, `frame-src https://accounts.google.com`
+and `style-src https://accounts.google.com/gsi/style`.
 
 ---
 
@@ -1312,7 +1340,7 @@ here on any `401`. On success it `window.location = '/'`.
 Copy the reference `sessions` table, `middleware/auth.js` and
 `routes/sessions.js` almost verbatim.
 
-- **`sessions`** row per successful `verify-authenticator`
+- **`sessions`** row per successful `/api/auth/google`
   (`id = jti`, `user_id`, `user_email`, `user_agent`, `ip`, `created_at`,
   `last_seen`, `revoked`, plus **`impersonated_by`** for §6.2).
 - **`signToken(user, jti)`** puts `{ id, email, roles, jti }` in a 7-day HS256
@@ -1366,22 +1394,30 @@ Keep the training/support affordance, but make it a real, audited,
 
 ## 7. Login hardening
 
-All copied from the reference unless marked **new**.
-
-- **OTP endpoint rate limit** — `express-rate-limit`, 10 / 15 min, on
-  `/api/auth/request-setup-otp` (`app.set('trust proxy', 1)` makes `req.ip`
-  correct behind Render).
-- **Verify attempt bucket** — in-process `loginAttempts[`email`:`ip`]` array,
-  5 attempts / 5 min → `429`, with `pruneLoginAttempts()` so the map can't grow
-  unbounded (verbatim from `auth.js`).
-- **Enumeration-safe OTP request** — `request-setup-otp` always returns
-  `{ ok: true }`; it never reveals whether the email is registered.
-- **Hashed OTPs** — `services/otp.js` stores `sha256(email + ':' + otp)` with a
-  10-min TTL (`config.otpTtlMin`) and a 5-attempt cap; the plaintext code only
-  ever lives in the email. In-memory `Map` — fine for a single Render instance;
-  **new (note):** if the service is ever scaled to >1 instance, back it with an
-  `otp` table (`email PK, hash, expires_at, attempts`) — same API.
-- **Helmet CSP** — must permit the Google Fonts `@import` in `css/styles.css`
+- **Verify the Google ID token properly** — `google-auth-library`
+  `verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID })` checks the RS256
+  signature against Google's JWKS, `aud === GOOGLE_CLIENT_ID`, `iss ∈
+  {accounts.google.com, https://accounts.google.com}`, and `exp`. Additionally
+  require `payload.email_verified === true`. Never trust `email` from an
+  unverified token; never decode the token yourself.
+- **`/api/auth/google` rate limit** — `express-rate-limit`, 20 / 15 min per IP
+  (`app.set('trust proxy', 1)` makes `req.ip` correct behind Render). One more
+  gate against brute-forcing the "which emails have access" oracle, though the
+  token requirement already makes that expensive.
+- **No account enumeration beyond what the caller already knows** — the `403`
+  for an unknown/disabled email is fine: the caller has already proven (to
+  Google) that they own that address.
+- **Cookie** — `httpOnly`, `secure: config.isProd`, **`sameSite: 'lax'`** (must
+  survive the Google redirect), `maxAge = SESSION_DAYS * 86400_000`. No token or
+  session id is ever exposed to page JS.
+- **Disabled / role-revoked users** — session revocation (§6, §9) applies
+  unchanged; a `DELETE /api/users/:id` also revokes that user's `sessions` rows
+  so the Google cookie stops working immediately.
+- **Helmet CSP** — must permit the Google Sign-In script + endpoints
+  (`script-src https://accounts.google.com/gsi/client`, `connect-src
+  https://accounts.google.com`, `frame-src https://accounts.google.com`,
+  `style-src https://accounts.google.com/gsi/style`), the Google Fonts `@import`
+  in `css/styles.css`,
   and the app's pervasive inline `onclick=` / inline `<style>` / inline splash
   `<script>`:
 
@@ -1389,13 +1425,16 @@ All copied from the reference unless marked **new**.
   helmet({
     contentSecurityPolicy: { directives: {
       defaultSrc:    ["'self'"],
-      scriptSrc:     ["'self'", "'unsafe-inline'"],          // inline splash + inline handlers
+      scriptSrc:     ["'self'", "'unsafe-inline'", "https://accounts.google.com/gsi/client",
+                      "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
       scriptSrcAttr: ["'unsafe-inline'"],                    // onclick= everywhere
-      styleSrc:      ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrc:      ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com",
+                      "https://accounts.google.com/gsi/style"],
       styleSrcAttr:  ["'unsafe-inline'"],
       fontSrc:       ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc:        ["'self'", "data:", "blob:"],            // inline SVG mandala, emblem data-URIs
-      connectSrc:    ["'self'"],
+      connectSrc:    ["'self'", "https://accounts.google.com"],
+      frameSrc:      ["https://accounts.google.com"],         // GIS renders its prompt in an iframe
       objectSrc:     ["'none'"],
       frameAncestors:["'self'"],
     }},
@@ -1412,8 +1451,8 @@ All copied from the reference unless marked **new**.
   'Internal server error' : err.message })`; never leak stack traces or SQL in
   prod.
 - **Fail-fast weak secret** — see §1.2 (also enforce length ≥ 32).
-- **Cookie** — `httpOnly`, `secure: config.isProd`, `sameSite: 'strict'`,
-  `maxAge: config.sessionDays * 86400_000`.
+- **Cookie** — `httpOnly`, `secure: config.isProd`, `sameSite: 'lax'` (the
+  Google redirect breaks `'strict'`), `maxAge: config.sessionDays * 86400_000`.
 - `express.json({ limit: '1mb' })`; Helmet also strips `X-Powered-By`.
 
 ---
@@ -1713,8 +1752,8 @@ then splice locally.
 ## 11. Migration / rollout phases
 
 **Phase 0 — scaffold.** `npm init`, add deps
-(`express cors helmet cookie-parser express-rate-limit jsonwebtoken speakeasy
-qrcode nodemailer dotenv better-sqlite3 @libsql/client`), `engines.node = 20`.
+(`express cors helmet cookie-parser express-rate-limit jsonwebtoken
+google-auth-library dotenv better-sqlite3 @libsql/client`), `engines.node = 20`.
 Create `server/` tree (§4.1), `config.js`, `db/connection.js` (copy + libsql FK
 pragma), `.env.example`, `render.yaml`. `GET /health` + static `public/` +
 `git mv` the front-end into `public/`.
@@ -1725,11 +1764,15 @@ pragma), `.env.example`, `render.yaml`. `GET /health` + static `public/` +
 guarded). `npm run migrate` locally against `data/temple.db`; then against Turso
 with `TURSO_*` set (per the reference `DEPLOY.md`).
 
-**Phase 2 — auth + sessions.** `services/otp.js`, `services/mailer.js`,
-`middleware/auth.js`, `middleware/authz.js` (`ROLE_PAGES`, `requireRole`,
-`attachScope`), `routes/auth.js`, `routes/sessions.js`, `routes/users.js`,
-`ensureAdminUser()` in boot. Build `public/login.html`. Verify the full TOTP
-loop + remote session revoke + disabled-user-is-immediately-locked-out.
+**Phase 2 — auth + sessions.** `migrations/003_google_auth.sql`
+(`ALTER TABLE users ADD COLUMN google_sub TEXT`), `services/google.js`
+(`verifyGoogleToken` via `google-auth-library`), `middleware/auth.js`,
+`middleware/authz.js` (`ROLE_PAGES`, `requireRole`, `attachScope`),
+`routes/auth.js` (`POST /google`, `GET /me`, `POST /logout`, `POST /impersonate`),
+`routes/sessions.js`, `routes/users.js`, `ensureAdminUser()` in boot. Build
+`public/login.html` with the GIS button. Verify the Google Sign-In round-trip +
+remote session revoke + disabled-user-is-immediately-locked-out. (Needs a real
+`GOOGLE_CLIENT_ID` from a Google Cloud **OAuth Web client**.)
 
 **Phase 3 — one module end to end as the template.** Do **Donations** fully:
 `routes/donations.js` + `donors.js` + `donationCategories.js`,
@@ -1748,8 +1791,9 @@ Events → Visits → Expenses/Inventory, in the §10.4 order. Each: one router 
 fallbacks.
 
 **Phase 6 — deploy + cutover.** Push to GitHub; Render **New → Blueprint** reads
-`render.yaml`; set `sync:false` env vars (`ADMIN_EMAIL`, `SMTP_*`, `TURSO_*`,
-`ALLOWED_ORIGINS`). Run `npm run migrate` from the Render shell. Smoke-test the
+`render.yaml`; set `sync:false` env vars (`ADMIN_EMAIL`, `GOOGLE_CLIENT_ID`,
+`TURSO_*`, `ALLOWED_ORIGINS`). Add the Render URL to the Google OAuth client's
+**Authorized JavaScript origins**. Run `npm run migrate` from the Render shell. Smoke-test the
 post-deploy checklist (login, dashboard, one CRUD per module, scoped-user
 cannot see another's data, PDF/CSV export, working-date change). Keep the
 GitHub Pages build alive as a read-only demo until the Render app is signed off,
@@ -1767,7 +1811,7 @@ the cleanup list.
 | No `CHECK` constraints — any string is a valid status | `CHECK (col IN (...))` on every status / kind / type / purpose column (§2.4, §3.2) |
 | Derived reads (`calEntries`, `dashFigures`, `mergedActivity`, `accessSummary`) live only in the browser and can't be trusted for a scoped user | server VIEWs + `services/calendar.js` / `dashboard.js` / `reports.js` / `authz.js`, all scope-aware; endpoints `/api/calendar`, `/api/dashboard`, `/api/reports`, `/api/activity` (§3.5, §8) |
 | `formatActivity()` guesses the entity from `details_json` | `audit_logs.module` + `audit_logs.scope_id` columns for reliable per-persona filtering (§2.4) |
-| OTP store is process memory only (breaks with >1 instance) | fine for a single Render free instance; documented `otp` table fallback with the same API if scaled (§7) |
+| Email-OTP / SMTP delivery was a moving part that can silently fail | removed entirely — Google Sign-In does the identity step; the server holds no OTP state (§5) |
 | Numbering logic (`billNumber.js`) exists but there's no code-allocation service for entity ids | `services/entityCode.js` backed by a `counters` table replaces the client `nextId()` family; `services/receiptNumber.js` mirrors `billNumber.js` for `REC-`/`CERT-` numbers (§3.5) |
 
 ---

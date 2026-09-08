@@ -31,13 +31,14 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://accounts.google.com/gsi/client"],
       scriptSrcAttr:  ["'unsafe-inline'"],
-      styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://accounts.google.com/gsi/style"],
       styleSrcAttr:   ["'unsafe-inline'"],
       fontSrc:        ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc:         ["'self'", "data:", "blob:"],
-      connectSrc:     ["'self'"],
+      connectSrc:     ["'self'", "https://accounts.google.com"],
+      frameSrc:       ["https://accounts.google.com"],
       objectSrc:      ["'none'"],
       frameAncestors: ["'self'"],
     },
@@ -57,8 +58,8 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many OTP requests' } });
-app.use('/api/auth/request-setup-otp', otpLimiter);
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many sign-in attempts' } });
+app.use('/api/auth/google', authLimiter);
 
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
