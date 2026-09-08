@@ -73,6 +73,7 @@ const { authRequired } = require('./middleware/auth');
 const { attachScope } = require('./middleware/authz');
 
 app.use('/api/auth', require('./routes/auth'));                 // public
+app.use('/api/public', require('./routes/publicSignups'));      // public (no session)
 
 app.use('/api', authRequired);                                  // everything below needs a session
 app.use('/api', attachScope);
@@ -88,8 +89,9 @@ app.use('/api/pooja-types', require('./routes/poojaTypes'));
 app.use('/api/poojas', require('./routes/poojas'));
 app.use('/api/sevarthis', require('./routes/sevarthis'));
 app.use('/api/committees', require('./routes/committees'));
+app.use('/api/teams', require('./routes/teams'));
 
-// Phase 6+: teams, events, visits, expenses, inventory,
+// Phase 7+: events, visits, expenses, inventory,
 //           calendar, dashboard, reports, activity — see BACKEND_PLAN.md §4.4.
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));

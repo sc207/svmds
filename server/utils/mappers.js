@@ -309,6 +309,103 @@ function mapAttendance(row) {
   };
 }
 
+function mapTeam(row, extra = {}) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    name: row.name,
+    leadId: row.lead_id || null,
+    description: row.description || '',
+    color: row.color || '#6B1F2A',
+    expectedTeamSize: Number(row.expected_team_size || 0),
+    status: row.status || 'active',
+    notes: row.notes || '',
+    createdDate: row.created_date || row.created_at,
+    members: extra.members || [],
+    sessions: extra.sessions || [],
+    publicPage: extra.publicPage || null,
+    communication: extra.communication || null,
+    drafts: extra.drafts || [],
+    pendingSignups: extra.pendingSignups != null ? extra.pendingSignups : 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapTeamMember(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    teamId: row.team_id,
+    devoteeId: row.devotee_id || null,
+    firstName: row.first_name || '',
+    lastName: row.last_name || '',
+    name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+    mobile: row.mobile || '',
+    city: row.city || '',
+    state: row.state || 'Gujarat',
+    role: row.role || 'Volunteer',
+    status: row.status === 'inactive' ? 'inactive' : 'active',
+    notes: row.notes || '',
+    joinedDate: row.joined_date || row.created_at,
+  };
+}
+
+function mapVolunteeringSession(row, attendance = []) {
+  if (!row) return null;
+  let memberIds = [];
+  try { memberIds = JSON.parse(row.member_ids_json || '[]'); } catch (_) {}
+  return {
+    id: row.code || row.id,
+    uuid: row.id,
+    code: row.code || '',
+    teamId: row.team_id,
+    title: row.title,
+    date: row.date,
+    startTime: row.start_time || '',
+    endTime: row.end_time || '',
+    location: row.location || '',
+    memberIds,
+    notes: row.notes || '',
+    completed: !!row.completed,
+    publicOpen: !!row.public_open,
+    attendance,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapPublicPage(row) {
+  if (!row) return { enabled: false, intro: '', contact: '' };
+  return {
+    enabled: !!row.enabled,
+    intro: row.intro || '',
+    contact: row.contact || '',
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapSignup(row) {
+  if (!row) return null;
+  return {
+    id: row.code || row.id,
+    uuid: row.id,
+    code: row.code || '',
+    teamId: row.team_id,
+    sessionId: row.session_id,
+    name: row.name,
+    mobile: row.mobile || '',
+    city: row.city || '',
+    note: row.note || '',
+    status: row.status || 'pending',
+    submittedAt: row.submitted_at,
+  };
+}
+
 function mapSession(row, currentJti) {
   if (!row) return null;
   return {
@@ -347,4 +444,5 @@ module.exports = {
   mapDonationCategory, mapDonor, mapDonation,
   mapPoojaType, mapPoojaSession, mapSevarthi, mapGuest, mapPooja,
   mapCommittee, mapCommitteeMember, mapMeeting, mapCommunication, mapDraft, mapAttendance,
+  mapTeam, mapTeamMember, mapVolunteeringSession, mapPublicPage, mapSignup,
 };
