@@ -205,10 +205,10 @@ function viewPoojaDirectory() {
       <div class="card mg-mt">
         <div class="card-header flex justify-between items-center">
           <div>
-            <div class="card-title">${window.t('pj_people_registry', 'Guests & Pandits')} <span class="mg-muted-xs">(${POOJA.people.length})</span></div>
+            <div class="card-title">${window.t('pj_people_registry', 'Guests')} <span class="mg-muted-xs">(${POOJA.people.length})</span></div>
             <span class="mg-muted-xs">${window.t('pj_guests_hint', 'Priests & special guests you can attach to any Pooja.')}</span>
           </div>
-          <button class="btn btn-primary mg-btn-xs" onclick="openAddGuest('directory')">+ ${window.t('pj_add_guest', 'Add Guest / Pandit')}</button>
+          <button class="btn btn-primary mg-btn-xs" onclick="openAddGuest('directory')">+ ${window.t('pj_add_guest', 'Add Guest')}</button>
         </div>
         <div class="card-body" style="padding:0;">
           <div class="mg-table-scroll">
@@ -246,7 +246,7 @@ function viewPoojaDirectory() {
     ${kpiCard(window.t('pj_kpi_sevarthis'), sevCount, 'Devotees sponsoring seva', '🙏')}
     ${admin
       ? kpiCard(window.t('pj_kpi_types'), typeCatalogCount() + ' / 36', 'Catalog templates', '📜')
-      : kpiCard(window.t('pj_guests_pandits', 'Guests / Pandits'), guestCount, 'Across your poojas', '🧑‍🎓')}
+      : kpiCard(window.t('pj_guests_pandits', 'Guests'), guestCount, 'Across your poojas', '🧑‍🎓')}
   </div>
 
   ${listBlock}
@@ -256,7 +256,7 @@ function viewPoojaDirectory() {
 }
 
 function guestRegistryRows() {
-  if (!POOJA.people.length) return `<tr><td colspan="6" class="mg-empty-cell">No guests or pandits on record yet.</td></tr>`;
+  if (!POOJA.people.length) return `<tr><td colspan="6" class="mg-empty-cell">No guests on record yet.</td></tr>`;
   return POOJA.people.map(x => {
     const used = POOJA.poojas.filter(p => (p.guestIds || []).indexOf(x.id) !== -1).length;
     return `
@@ -334,7 +334,7 @@ function poojaCard(p) {
       <div><span>Schedule</span><strong>${dateRangeText(p)}</strong></div>
       <div><span>Venue</span><strong>${esc(venues[0] || p.defaultVenue || '—')}</strong></div>
       <div><span>Sevarthi</span><strong>${sevs.length ? esc(sevs.map(s => s.firstName).join(', ')) : '—'}</strong></div>
-      <div><span>Guests / Pandits</span><strong>${guests.length || '—'}</strong></div>
+      <div><span>Guests</span><strong>${guests.length || '—'}</strong></div>
       <div><span>Coordinator</span><strong>${esc(coordinatorNames(p) || '—')}</strong></div>
       <div><span>Est. Seva</span><strong>${seva}</strong></div>
     </div>
@@ -500,7 +500,7 @@ function panePoojaOverview(p) {
     ${kpiCard('Schedule', p.scheduleMode === 'multi' ? `${sess.length} sessions` : 'Single event', dateRangeText(p), '🗓️')}
     ${kpiCard('Next Session', nx ? fmtDate(nx.date).replace(/ \d{4}$/, '') : '—', nx ? `${fmtTime(nx.startTime)} · ${esc(nx.label || p.name)}` : 'Nothing upcoming', '⏭️')}
     ${kpiCard('Days To Go', daysToGo, nx ? esc(nx.venue || p.defaultVenue || '') : '', '📅')}
-    ${kpiCard('People', `${sevs.length} sevarthi`, `${people.length} guest / pandit`, '🙏')}
+    ${kpiCard('People', `${sevs.length} sevarthi`, `${people.length} guest`, '🙏')}
   </div>
 
   <div class="dashboard-2col mg-mt">
@@ -576,7 +576,7 @@ function panePoojaOverview(p) {
     </div>
     <div class="card">
       <div class="card-header flex justify-between items-center">
-        <div class="card-title">Guests &amp; Pandits</div>
+        <div class="card-title">Guests</div>
         <button class="btn btn-outline mg-btn-xs" onclick="openEditPooja('${p.id}')">Manage</button>
       </div>
       <div class="card-body">
@@ -584,7 +584,7 @@ function panePoojaOverview(p) {
           <div class="summary-item">
             <div><strong>${esc(personName(g))}</strong><div class="mg-muted-xs">${esc(g.role || 'Guest')}${g.mobile ? ' · ' + esc(g.mobile) : ''}</div></div>
             ${g.mobile ? `<a class="btn btn-outline mg-btn-xs" href="https://wa.me/91${esc(g.mobile)}" target="_blank" rel="noopener">💬</a>` : ''}
-          </div>`).join('')}</div>` : '<div class="mg-pad-note">No guests or pandits added. Use “Manage” or the Edit Pooja form.</div>'}
+          </div>`).join('')}</div>` : '<div class="mg-pad-note">No guests added. Use “Manage” or the Edit Pooja form.</div>'}
       </div>
     </div>
   </div>
@@ -809,7 +809,7 @@ function panePoojaInvitation(p) {
           <div class="form-group">
             <label class="mg-check-inline"><input type="checkbox" id="invShowSchedule" ${inv.showSchedule !== false ? 'checked' : ''} onchange="updateInvitationPreview()"> <span>${window.t('pj_inv_show_schedule', 'Show full session schedule')}</span></label>
             <label class="mg-check-inline"><input type="checkbox" id="invShowSevarthi" ${inv.showSevarthi !== false ? 'checked' : ''} onchange="updateInvitationPreview()"> <span>${window.t('pj_inv_show_sevarthi', 'Show sevarthi name(s)')}</span></label>
-            <label class="mg-check-inline"><input type="checkbox" id="invShowGuests" ${inv.showGuests !== false ? 'checked' : ''} onchange="updateInvitationPreview()"> <span>${window.t('pj_inv_show_guests', 'Show guests / pandits')}</span></label>
+            <label class="mg-check-inline"><input type="checkbox" id="invShowGuests" ${inv.showGuests !== false ? 'checked' : ''} onchange="updateInvitationPreview()"> <span>${window.t('pj_inv_show_guests', 'Show guests')}</span></label>
           </div>
           <div class="flex gap-2 mg-mt-sm" style="flex-wrap:wrap">
             <button class="btn btn-primary" type="submit">${window.t('pj_inv_save', 'Save Card')}</button>

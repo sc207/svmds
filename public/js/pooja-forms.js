@@ -58,8 +58,8 @@
 
         <div class="form-group">
           <div class="flex justify-between items-center">
-            <label class="form-label" style="margin:0;">Guests &amp; Pandits</label>
-            <button class="btn btn-outline mg-btn-xs" type="button" onclick="openAddGuest('poojaForm')">+ Add new Guest / Pandit</button>
+            <label class="form-label" style="margin:0;">Guests</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" onclick="openAddGuest('poojaForm')">+ Add new Guest</button>
           </div>
           <div class="mg-muted-xs" style="margin-bottom:0.4rem;">Tick everyone attending. Your form stays saved while you add or edit a person.</div>
           <div id="pjGuestPicker"></div>
@@ -154,11 +154,11 @@
   </div>
 </div>
 
-<!-- Add / Edit Guest or Pandit (opens on top of the Pooja form; that form is preserved) -->
+<!-- Add / Edit Guest (opens on top of the Pooja form; that form is preserved) -->
 <div class="modal-overlay" id="modalGuest">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-title" id="guestFormTitle">Add Guest / Pandit</div>
+      <div class="modal-title" id="guestFormTitle">Add Guest</div>
       <button class="modal-close-btn" onclick="closeModal('modalGuest')">&times;</button>
     </div>
     <div class="modal-body">
@@ -176,7 +176,7 @@
         <div class="grid mg-2col-form">
           <div class="form-group">
             <label class="form-label" for="gstFieldRole">Role</label>
-            <input type="text" class="form-input" id="gstFieldRole" list="gstRoleList" placeholder="e.g. Pandit, Chief Guest">
+            <input type="text" class="form-input" id="gstFieldRole" list="gstRoleList" placeholder="e.g. Chief Guest, Priest">
             <datalist id="gstRoleList">
               <option value="Chief Guest"></option>
               <option value="Guest of Honour"></option>
@@ -210,7 +210,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modalGuest')">Cancel</button>
-      <button class="btn btn-primary" type="submit" form="formGuest" id="guestFormSubmitBtn">Add Guest / Pandit</button>
+      <button class="btn btn-primary" type="submit" form="formGuest" id="guestFormSubmitBtn">Add Guest</button>
     </div>
   </div>
 </div>
@@ -351,11 +351,11 @@ function syncDefaultVenue() {
   document.querySelectorAll('#pjSessionRows .pj-sess-venue').forEach(inp => { if (!inp.value.trim()) inp.value = venue; });
 }
 
-/* ---- Guest & Pandit picker inside the Pooja form ---- */
+/* ---- Guest picker inside the Pooja form ---- */
 function guestPickerHTML(selectedIds) {
   const sel = selectedIds || [];
   if (!POOJA.people.length) {
-    return `<div class="mg-pad-note">No guests or pandits on record yet. Use “+ Add new Guest / Pandit”.</div>`;
+    return `<div class="mg-pad-note">No guests on record yet. Use “+ Add new Guest”.</div>`;
   }
   return `<div class="pj-people-list">` + POOJA.people.map(x => `
     <label class="pj-people-row">
@@ -664,8 +664,8 @@ let _guestReturnTo = null;   // 'poojaForm' | 'directory' | null
 function openAddGuest(returnTo) {
   _guestReturnTo = returnTo || null;
   POOJA.editingGuestId = null;
-  document.getElementById('guestFormTitle').textContent = 'Add Guest / Pandit';
-  document.getElementById('guestFormSubmitBtn').textContent = 'Add Guest / Pandit';
+  document.getElementById('guestFormTitle').textContent = 'Add Guest';
+  document.getElementById('guestFormSubmitBtn').textContent = 'Add Guest';
   document.getElementById('formGuest').reset();
   document.getElementById('gstFieldState').value = 'Gujarat';
   openModal('modalGuest');
@@ -675,7 +675,7 @@ function openEditGuest(id, returnTo) {
   if (!x) return;
   _guestReturnTo = returnTo || null;
   POOJA.editingGuestId = id;
-  document.getElementById('guestFormTitle').textContent = 'Edit Guest / Pandit';
+  document.getElementById('guestFormTitle').textContent = 'Edit Guest';
   document.getElementById('guestFormSubmitBtn').textContent = 'Save Changes';
   document.getElementById('gstFieldFirst').value = x.firstName || '';
   document.getElementById('gstFieldLast').value = x.lastName || '';
@@ -710,7 +710,7 @@ function handleSaveGuest(e) {
     if (dupe && mobile) { pjToast(`${personName(dupe)} already has this mobile — edit that record instead.`); return; }
     savedId = nextId('GST', POOJA.people, 3);
     POOJA.people.push({ id: savedId, firstName: first, lastName: last, role, mobile, city, state, notes });
-    pjToast(`${first} ${last} added to Guests & Pandits.`);
+    pjToast(`${first} ${last} added to Guests.`);
   }
 
   POOJA.editingGuestId = null;
@@ -729,7 +729,7 @@ function confirmDeleteGuest(id) {
   if (!x) return;
   const used = POOJA.poojas.filter(p => (p.guestIds || []).indexOf(id) !== -1);
   openConfirm({
-    title: 'Delete Guest / Pandit',
+    title: 'Delete Guest',
     danger: true,
     body: `<p>Delete <strong>${esc(personName(x))}</strong> from the registry?</p>
            ${used.length ? `<p class="mg-muted-xs mg-mt-sm">They are attached to ${used.length} pooja(s); they will be removed from those too.</p>` : ''}`,
@@ -737,7 +737,7 @@ function confirmDeleteGuest(id) {
     onConfirm: () => {
       POOJA.poojas.forEach(p => { if (p.guestIds) p.guestIds = p.guestIds.filter(g => g !== id); });
       POOJA.people = POOJA.people.filter(x => x.id !== id);
-      pjToast('Guest / Pandit deleted.');
+      pjToast('Guest deleted.');
       renderPooja();
     }
   });

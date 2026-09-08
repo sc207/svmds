@@ -59,7 +59,7 @@ const POOJA = {
   /* --- Coordinator pool (grantable authorized members) ---- */
   coordinators: [],
 
-  /* --- Guests & Pandits registry (shared across poojas) --- */
+  /* --- Guests registry (shared across poojas) --- */
   people: [],
 
   /* --- Per-pooja activity log ----------------------------- */
@@ -94,7 +94,7 @@ function sevarthisOf(p) {
   return (p.sevarthiIds || []).map(sevarthiById).filter(Boolean);
 }
 
-/** Guests & Pandits attached to a pooja (from the shared registry). */
+/** Guests attached to a pooja (from the shared registry). */
 function peopleOf(p) {
   if (!p) return [];
   return (p.guestIds || []).map(personById).filter(Boolean);

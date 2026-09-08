@@ -55,7 +55,7 @@
           go: nav('puja', function () { if (typeof openSevarthiProfile === 'function') openSevarthiProfile(s.id); }) });
       });
       (POOJA.people || []).forEach(function (g) {
-        add({ type: 'Guest / Pandit', icon: '🎫', page: 'puja', label: nm(g.firstName, g.lastName),
+        add({ type: 'Guest', icon: '🎫', page: 'puja', label: nm(g.firstName, g.lastName),
           sub: [g.role, g.mobile].filter(Boolean).join(' · '), go: nav('puja') });
       });
       (POOJA.poojaTypes || []).forEach(function (ty) {
