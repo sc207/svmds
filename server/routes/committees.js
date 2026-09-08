@@ -10,6 +10,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
+const { ensureDevotee } = require('../services/people');
 const shared = require('../services/sharedTables');
 const {
   mapCommittee, mapCommitteeMember, mapMeeting,
@@ -165,11 +166,11 @@ router.post('/:id/members', async (req, res, next) => {
       const dup = await queryOne('SELECT id FROM committee_members WHERE committee_id = ? AND mobile = ? AND is_deleted = 0', [row.id, mobile]);
       if (dup) return res.status(409).json({ error: 'Already a member of this committee' });
     }
-    let devoteeId = null;
-    if (mobile) {
-      const dev = await queryOne('SELECT id FROM devotees WHERE mobile = ? AND is_deleted = 0', [mobile]);
-      devoteeId = dev ? dev.id : null;
-    }
+    // one person = one devotee row (create if the mobile is new, else reuse)
+    const devoteeId = await ensureDevotee({
+      firstName: first, lastName: b.lastName, mobile,
+      city: b.city, state: b.state, samaj: b.samaj || row.samaj,
+    });
     const code = await nextCode('committee_member');
     await run(
       `INSERT INTO committee_members (code, committee_id, devotee_id, first_name, last_name, mobile, city, state, role, status, notes, joined_date)

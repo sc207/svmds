@@ -9,6 +9,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
+const { ensureDevotee } = require('../services/people');
 const { mapPooja, mapPoojaSession, mapSevarthi, mapGuest } = require('../utils/mappers');
 
 const router = express.Router();
@@ -255,11 +256,10 @@ router.post('/:id/sevarthis', async (req, res, next) => {
       if (mobile && !/^[0-9]{10}$/.test(mobile)) return res.status(400).json({ error: 'mobile must be 10 digits' });
       if (mobile) sev = await queryOne('SELECT * FROM sevarthis WHERE mobile = ? AND is_deleted = 0', [mobile]);
       if (!sev) {
-        let devoteeId = null;
-        if (mobile) {
-          const dev = await queryOne('SELECT id FROM devotees WHERE mobile = ? AND is_deleted = 0', [mobile]);
-          devoteeId = dev ? dev.id : null;
-        }
+        const devoteeId = await ensureDevotee({
+          firstName: first, lastName: b.lastName, mobile,
+          city: b.city, state: b.state, samaj: b.committee,
+        });
         const code = await nextCode('sevarthi');
         const r = await run(
           `INSERT INTO sevarthis (code, devotee_id, first_name, last_name, mobile, city, state, committee, status, notes, added_date)
