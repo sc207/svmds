@@ -61,7 +61,10 @@
       '<div class="card mg-mt ann-section">' +
         '<div class="card-header flex justify-between items-center" style="flex-wrap:wrap;gap:.6rem">' +
           '<div class="card-title">🗓️ ' + esc(T('ann_title', 'Annual Temple Events')) +
-            ' <span class="mg-muted-xs">' + esc(T('ann_title_gu', 'મંદિરના વાર્ષિક પ્રસંગો')) + '</span></div>' +
+            ((typeof currentLang === 'function' && currentLang() === 'gu')
+              ? ''
+              : ' <span class="mg-muted-xs">' + esc(T('ann_title_gu', 'મંદિરના વાર્ષિક પ્રસંગો')) + '</span>') +
+            '</div>' +
           '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">' +
             '<label class="mg-muted-xs" for="annYearSel">' + esc(T('ann_year', 'Year')) + '</label>' +
             '<select id="annYearSel" class="form-select mg-inline-select" onchange="annualSetYear(this.value)">' +
