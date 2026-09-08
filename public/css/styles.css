@@ -2777,7 +2777,16 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
   .welcome-banner { justify-content: center; padding-right: 420px; }
 }
 @media (min-width: 769px) and (max-width: 999px) {
-  .banner-mandir-graphic { opacity: 0.22; right: -3rem; width: 320px; max-width: 60%; }
+  /* keep the temple crisp and fully inside the banner (no faded / clipped
+     ghost) — reserve room on the right and centre the greeting beside it */
+  .welcome-banner { justify-content: center; padding-right: 260px; }
+  .banner-mandir-graphic {
+    opacity: 1;
+    right: 0.75rem;
+    bottom: 0;
+    width: 244px;
+    max-width: 40%;
+  }
   .banner-text-area { position: relative; z-index: 3; }
 }
 

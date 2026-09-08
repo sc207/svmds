@@ -27,6 +27,7 @@ const state = {
 // Initialize Application Engine
 document.addEventListener('DOMContentLoaded', () => {
   setupNavigation();
+  applySessionChrome();
   renderDevoteeTable();
   renderInventoryTable();
   renderExpensesTable();
@@ -67,10 +68,41 @@ function toggleSidebarMenu() {
  * Kept here (not in a module -ui.js) so switchPage can enforce it centrally.
  */
 function currentAllowedPages() {
+  // Preview personas (topbar "view as" switcher) — one restricted module at a time.
   if (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader') return ['dashboard', 'committees'];
   if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator') return ['dashboard', 'puja'];
   if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead') return ['dashboard', 'management'];
+  // Real signed-in session — honour the page list the backend computed for this
+  // user's roles (accountant, event_incharge, committee_leader, …). '*' or no
+  // backend (demo mode) → unrestricted.
+  var s = (typeof window !== 'undefined' && window.__SESSION) || null;
+  if (s && Array.isArray(s.pages) && s.pages.length && s.pages.indexOf('*') === -1) {
+    return s.pages.slice();
+  }
   return null;
+}
+
+/* Trim the sidebar / mobile nav to what the signed-in session may actually open,
+   and bounce off any forbidden page. No-op for admins and demo mode. */
+function applySessionChrome() {
+  var allowed = currentAllowedPages();
+  if (!allowed) return;
+  // the "view as" preview switcher is an admin-only tool
+  var sw = document.getElementById('viewSwitchWrap');
+  if (sw) sw.style.display = 'none';
+  document.querySelectorAll('.nav-item[data-page], .mobile-nav-item[data-page]').forEach(function (el) {
+    el.style.display = allowed.indexOf(el.getAttribute('data-page')) === -1 ? 'none' : '';
+  });
+  // the sidebar nav is flat: a .nav-group-title followed by its .nav-items as
+  // siblings. Hide a heading when every item under it is now hidden.
+  document.querySelectorAll('.sidebar-nav .nav-group-title').forEach(function (title) {
+    var anyVisible = false;
+    for (var n = title.nextElementSibling; n && !n.classList.contains('nav-group-title'); n = n.nextElementSibling) {
+      if (n.classList.contains('nav-item') && n.style.display !== 'none') { anyVisible = true; break; }
+    }
+    title.style.display = anyVisible ? '' : 'none';
+  });
+  if (allowed.indexOf(state.activePage || 'dashboard') === -1) switchPage('dashboard');
 }
 
 /** True when the active session is allowed to open pageId. */
