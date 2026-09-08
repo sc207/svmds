@@ -206,6 +206,18 @@
           use_fedcm_for_button: false
         });
 
+        /* One Tap prompt — the "Continue as …" auto-detect for a returning user.
+           auto_select stays false (no silent pick among several accounts). If it
+           can't show (multiple accounts / dismissed / cooldown) the notification
+           callback just steps aside — the button below still works, no error. */
+        try {
+          google.accounts.id.prompt(function (n) {
+            if (n && (n.isNotDisplayed && n.isNotDisplayed() || n.isSkippedMoment && n.isSkippedMoment())) {
+              /* silently fall back to the rendered button — do nothing */
+            }
+          });
+        } catch (e) { /* button remains the path */ }
+
         /* dev-only diagnostics — safe values only, never tokens/cookies */
         if (/^(localhost|127\.|\[::1\])/.test(location.hostname)) {
           console.info('[login] origin           :', window.location.origin);
