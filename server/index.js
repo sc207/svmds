@@ -84,8 +84,11 @@ app.use('/api/devotees', require('./routes/devotees'));
 app.use('/api/donation-categories', require('./routes/donationCategories'));
 app.use('/api/donors', require('./routes/donors'));
 app.use('/api/donations', require('./routes/donations'));
+app.use('/api/pooja-types', require('./routes/poojaTypes'));
+app.use('/api/poojas', require('./routes/poojas'));
+app.use('/api/sevarthis', require('./routes/sevarthis'));
 
-// Phase 4+: poojas, committees, teams, events, visits, expenses, inventory,
+// Phase 5+: committees, teams, events, visits, expenses, inventory,
 //           calendar, dashboard, reports, activity — see BACKEND_PLAN.md §4.4.
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));

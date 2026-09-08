@@ -108,6 +108,103 @@ function mapDonation(row) {
   };
 }
 
+function mapPoojaType(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    name: row.name,
+    category: row.category || '',
+    description: row.description || '',
+    defaultDurationMin: Number(row.default_duration_min || 60),
+    suggestedOfferings: row.suggested_offerings || '',
+    icon: row.icon || '',
+  };
+}
+
+function mapPoojaSession(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    poojaId: row.pooja_id,
+    label: row.label || '',
+    date: row.date,
+    startTime: row.start_time || '',
+    endTime: row.end_time || '',
+    venue: row.venue || '',
+  };
+}
+
+function mapSevarthi(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    devoteeId: row.devotee_id || null,
+    firstName: row.first_name || '',
+    lastName: row.last_name || '',
+    name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+    mobile: row.mobile || '',
+    city: row.city || '',
+    state: row.state || 'Gujarat',
+    committee: row.committee || '',
+    status: row.status === 'inactive' ? 'inactive' : 'active',
+    notes: row.notes || '',
+    addedDate: row.added_date || row.created_at,
+  };
+}
+
+function mapGuest(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    firstName: row.first_name || '',
+    lastName: row.last_name || '',
+    name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+    role: row.role || '',
+    title: row.role || '',
+    mobile: row.mobile || '',
+    city: row.city || '',
+    state: row.state || 'Gujarat',
+    notes: row.notes || '',
+  };
+}
+
+function mapPooja(row, extra = {}) {
+  if (!row) return null;
+  let custom = [], invitation = {};
+  try { custom = JSON.parse(row.custom_json || '[]'); } catch (_) {}
+  try { invitation = JSON.parse(row.invitation_json || '{}'); } catch (_) {}
+  return {
+    id: row.code || row.id,
+    uuid: row.id,
+    code: row.code || '',
+    typeId: row.type_code || (row.type_id != null ? String(row.type_id) : null),
+    name: row.name,
+    scheduleMode: row.schedule_mode || 'single',
+    defaultVenue: row.default_venue || '',
+    status: row.status || 'planned',
+    color: row.color || '#6B1F2A',
+    estimatedSevaAmount: Number(row.estimated_seva_amount || 0),
+    notes: row.notes || '',
+    custom,
+    invitation,
+    extendedUntil: row.extended_until || null,
+    completedOn: row.completed_on || null,
+    createdDate: row.created_date || row.created_at,
+    sessions: extra.sessions || [],
+    sevarthiIds: extra.sevarthiIds || [],
+    coordinatorIds: extra.coordinatorIds || [],
+    guests: extra.guests || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
 function mapSession(row, currentJti) {
   if (!row) return null;
   return {
@@ -144,4 +241,5 @@ function mapAudit(row) {
 module.exports = {
   mapUser, mapDevotee, mapSession, mapAudit,
   mapDonationCategory, mapDonor, mapDonation,
+  mapPoojaType, mapPoojaSession, mapSevarthi, mapGuest, mapPooja,
 };
