@@ -14,15 +14,39 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
 function dashToday() { return (typeof MG !== 'undefined' && MG.today) ? MG.today : '2026-09-06'; }
 function dashMonthKey() { return dashToday().slice(0, 7); }
 
-/** Which persona is currently switched on in the topbar. */
+var SCOPED_ROLES = ['committee_leader', 'pooja_coordinator', 'management_lead', 'event_incharge', 'accountant'];
+
+/** Which persona's dashboard to show.
+ *  1. a topbar "view as" preview persona wins (admin previewing a leader);
+ *  2. otherwise the REAL signed-in session — a restricted login (one or more
+ *     scoped roles, no admin/superadmin) gets a scoped dashboard, not the
+ *     full admin cockpit;
+ *  3. otherwise admin. */
 function activePersona() {
   if (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader')
-    return { kind: 'committee_leader', name: CMT.session.userName, id: CMT.session.userId };
+    return { kind: 'committee_leader', roles: ['committee_leader'], name: CMT.session.userName, id: CMT.session.userId };
   if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator')
-    return { kind: 'pooja_coordinator', name: POOJA.session.userName, id: POOJA.session.userId };
+    return { kind: 'pooja_coordinator', roles: ['pooja_coordinator'], name: POOJA.session.userName, id: POOJA.session.userId };
   if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead')
-    return { kind: 'management_lead', name: MG.session.userName, id: MG.session.userId };
-  return { kind: 'admin', name: window.t('administrator', 'Admin'), id: 'DEV-001' };
+    return { kind: 'management_lead', roles: ['management_lead'], name: MG.session.userName, id: MG.session.userId };
+
+  var s = (typeof window !== 'undefined' && window.__SESSION) || null;
+  if (s && s.user) {
+    var r = s.user.roles || [];
+    var isAdmin = r.indexOf('superadmin') !== -1 || r.indexOf('admin') !== -1;
+    if (!isAdmin) {
+      var scoped = r.filter(function (x) { return SCOPED_ROLES.indexOf(x) !== -1; });
+      if (scoped.length) {
+        return {
+          kind: scoped.length === 1 ? scoped[0] : 'multi',
+          roles: scoped,
+          name: s.user.name || s.user.email || window.t('staff', 'Staff'),
+          id: s.user.id,
+        };
+      }
+    }
+  }
+  return { kind: 'admin', roles: ['admin'], name: window.t('administrator', 'Admin'), id: 'DEV-001' };
 }
 
 /* ---- live figures ---- */
@@ -214,19 +238,27 @@ function dashActivityCard(limit, filterFn) {
 /** Access scope for a non-admin persona: which calendar types + owned ids
     the dashboard is allowed to surface. null = admin (everything). */
 function personaScope(persona) {
-  if (persona.kind === 'committee_leader' && typeof CMT !== 'undefined') {
-    const ids = CMT.committees.filter(c => c.leaderId === persona.id).map(c => c.id);
-    return { tag: 'Committee', types: ['committee'], ids: ids, own: e => ids.indexOf(e.scopeId) !== -1 };
-  }
-  if (persona.kind === 'pooja_coordinator' && typeof POOJA !== 'undefined') {
-    const ids = (typeof poojasOfCoordinator === 'function' ? poojasOfCoordinator(persona.id) : []).map(p => p.id);
-    return { tag: 'Pooja', types: ['pooja'], ids: ids, own: e => ids.indexOf(e.scopeId) !== -1 };
-  }
-  if (persona.kind === 'management_lead' && typeof MG !== 'undefined') {
-    const ids = MG.managements.filter(m => m.leadId === persona.id).map(m => m.id);
-    return { tag: 'Management', types: [], ids: ids, own: () => false };
-  }
-  return null;
+  if (!persona || persona.kind === 'admin') return null;
+  const roles = persona.roles && persona.roles.length ? persona.roles : [persona.kind];
+  const types = new Set();
+  const ids = [];
+  roles.forEach(r => {
+    if (r === 'committee_leader' && typeof CMT !== 'undefined') {
+      types.add('committee');
+      (CMT.committees || []).filter(c => c.leaderId === persona.id).forEach(c => ids.push(c.id));
+    } else if (r === 'pooja_coordinator' && typeof POOJA !== 'undefined') {
+      types.add('pooja');
+      (typeof poojasOfCoordinator === 'function' ? poojasOfCoordinator(persona.id) : []).forEach(p => ids.push(p.id));
+    } else if (r === 'management_lead' && typeof MG !== 'undefined') {
+      (MG.managements || []).filter(m => m.leadId === persona.id).forEach(m => ids.push(m.id));
+    } else if (r === 'event_incharge' && typeof EV !== 'undefined') {
+      types.add('event'); types.add('annual');
+      (EV.events || []).filter(e => e.inChargeId === persona.id).forEach(e => ids.push(e.id));
+    } else if (r === 'accountant') {
+      types.add('donation');
+    }
+  });
+  return { tag: persona.kind, types: [...types], ids, own: e => ids.indexOf(e.scopeId) !== -1 };
 }
 
 function dashTodayCard(scope) {
@@ -293,58 +325,93 @@ function dashboardAdmin() {
   </div>`;
 }
 
-/* ---- leader mini-dashboard ---- */
-function dashboardLeader(persona) {
-  const scope = personaScope(persona);
-  let scopeCards = '', openBtn = '', tag = '';
-  if (persona.kind === 'committee_leader' && typeof CMT !== 'undefined') {
-    tag = 'Committee'; openBtn = `<button class="btn btn-primary" onclick="switchPage('committees')">${window.t('cmt_open_ws', 'Open my committee')} →</button>`;
-    const mine = CMT.committees.filter(c => c.leaderId === persona.id);
-    scopeCards = mine.map(c => {
-      const s = cmtMonthStats(c.id, dashMonthKey());
-      const nx = cmtNextMeeting(c.id);
-      return dashScopeCard(c.name, [
-        [window.t('cmt_members', 'Members'), cmtMembersOf(c.id).length],
-        [window.t('cmt_kpi_meetings', 'Meetings (month)'), s.meetings],
-        [window.t('cmt_attendance', 'Attendance'), (s.rate || 0) + '%'],
-        [window.t('cmt_next', 'Next'), nx ? fmtDate(nx.date) + ' ' + fmtTime(nx.startTime) : '—']
-      ], () => openCommittee(c.id));
-    }).join('');
-  } else if (persona.kind === 'pooja_coordinator' && typeof POOJA !== 'undefined') {
-    tag = 'Pooja'; openBtn = `<button class="btn btn-primary" onclick="switchPage('puja')">${window.t('pj_open_ws', 'Open my poojas')} →</button>`;
-    const mine = poojasOfCoordinator(persona.id);
-    scopeCards = mine.map(p => dashScopeCard(p.name, [
-      [window.t('pj_type', 'Type'), (typeById(p.typeId) || {}).name || '—'],
-      [window.t('pj_schedule', 'Schedule'), dateRangeText(p)],
-      [window.t('pj_sevarthi', 'Sevarthi'), sevarthisOf(p).length],
-      [window.t('status'), poojaStatusLabel(poojaStatus(p))]
-    ], () => openPooja(p.id))).join('');
-  } else if (persona.kind === 'management_lead' && typeof MG !== 'undefined') {
-    tag = 'Management'; openBtn = `<button class="btn btn-primary" onclick="switchPage('management')">${window.t('cmt_open_ws', 'Open my team')} →</button>`;
-    const mine = MG.managements.filter(m => m.leadId === persona.id);
-    scopeCards = mine.map(m => {
-      const st = (typeof mgmtMonthStats === 'function') ? mgmtMonthStats(m.id, MG.reportMonth) : { sessions: 0, rate: 0 };
-      return dashScopeCard(m.name, [
-        [window.t('cmt_members', 'Members'), membersOf(m.id).length],
-        [window.t('cmt_kpi_meetings', 'Sessions (month)'), st.sessions],
-        [window.t('cmt_attendance', 'Attendance'), (st.rate || 0) + '%'],
-        [window.t('status'), m.status]
-      ], () => openManagement(m.id));
-    }).join('');
+/* ---- one section per scoped role the person holds ---- */
+function dashLeaderSection(role, personaId) {
+  const A = (page, label) => `<button class="btn btn-outline mg-btn-xs" onclick="switchPage('${page}')">${esc(label)} →</button>`;
+  if (role === 'committee_leader' && typeof CMT !== 'undefined') {
+    const mine = (CMT.committees || []).filter(c => c.leaderId === personaId);
+    return { tag: 'Committee', title: window.t('cmt_title', 'Committee / Samaj'), open: A('committees', window.t('open', 'Open')),
+      cards: mine.map(c => {
+        const s = cmtMonthStats(c.id, dashMonthKey()); const nx = cmtNextMeeting(c.id);
+        return dashScopeCard(c.name, [
+          [window.t('cmt_members', 'Members'), cmtMembersOf(c.id).length],
+          [window.t('cmt_kpi_meetings', 'Meetings (month)'), s.meetings],
+          [window.t('cmt_attendance', 'Attendance'), (s.rate || 0) + '%'],
+          [window.t('cmt_next', 'Next'), nx ? fmtDate(nx.date) + ' ' + fmtTime(nx.startTime) : '—']
+        ], () => openCommittee(c.id));
+      }) };
   }
+  if (role === 'pooja_coordinator' && typeof POOJA !== 'undefined') {
+    const mine = (typeof poojasOfCoordinator === 'function') ? poojasOfCoordinator(personaId) : [];
+    return { tag: 'Pooja', title: window.t('pj_title', 'Pooja & Seva'), open: A('puja', window.t('open', 'Open')),
+      cards: mine.map(p => dashScopeCard(p.name, [
+        [window.t('pj_type', 'Type'), (typeById(p.typeId) || {}).name || '—'],
+        [window.t('pj_schedule', 'Schedule'), dateRangeText(p)],
+        [window.t('pj_sevarthi', 'Sevarthi'), sevarthisOf(p).length],
+        [window.t('status'), poojaStatusLabel(poojaStatus(p))]
+      ], () => openPooja(p.id))) };
+  }
+  if (role === 'management_lead' && typeof MG !== 'undefined') {
+    const mine = (MG.managements || []).filter(m => m.leadId === personaId);
+    return { tag: 'Management', title: window.t('nav_management_s', 'Management Apps'), open: A('management', window.t('open', 'Open')),
+      cards: mine.map(m => {
+        const st = (typeof mgmtMonthStats === 'function') ? mgmtMonthStats(m.id, MG.reportMonth) : { sessions: 0, rate: 0 };
+        return dashScopeCard(m.name, [
+          [window.t('cmt_members', 'Members'), membersOf(m.id).length],
+          [window.t('cmt_kpi_meetings', 'Sessions (month)'), st.sessions],
+          [window.t('cmt_attendance', 'Attendance'), (st.rate || 0) + '%'],
+          [window.t('status'), m.status]
+        ], () => openManagement(m.id));
+      }) };
+  }
+  if (role === 'event_incharge' && typeof EV !== 'undefined') {
+    const mine = (EV.events || []).filter(e => e.inChargeId === personaId || e.inchargeId === personaId);
+    return { tag: 'Event', title: window.t('ev_title', 'Temple Events'), open: A('events', window.t('open', 'Open')),
+      cards: mine.map(e => dashScopeCard(e.name, [
+        [window.t('date'), (typeof evDateRange === 'function') ? evDateRange(e) : ''],
+        [window.t('ev_footfall', 'Footfall'), e.expectedFootfall || 0],
+        [window.t('status'), (typeof evStatusLabel === 'function') ? evStatusLabel(evStatus(e)) : (e.status || '')]
+      ], () => openEvent(e.id))) };
+  }
+  if (role === 'accountant') {
+    return { tag: 'Donations', title: window.t('don_title', 'Donations'), open: A('donations', window.t('open', 'Open')),
+      cards: [dashScopeCard(window.t('rep_title', 'Reports & Analytics'), [
+        [window.t('don_kpi_cash', 'Cash this month'), '₹' + (dashFigures().donCash || 0).toLocaleString('en-IN')],
+        [window.t('don_kpi_pledged', 'Pledged'), dashFigures().donPledged || 0],
+        [window.t('rep_exp', 'Expenses'), (typeof state !== 'undefined' ? (state.expenses || []).length : 0)]
+      ], () => switchPage('reports'))] };
+  }
+  return null;
+}
+
+/* ---- leader / staff mini-dashboard (one or more scoped roles) ---- */
+function dashboardLeader(persona) {
+  const roles = persona.roles && persona.roles.length ? persona.roles : [persona.kind];
+  const sections = roles.map(r => dashLeaderSection(r, persona.id)).filter(Boolean);
+  const scope = personaScope(persona);
+  const tags = sections.map(s => s.tag);
+
+  const body = sections.map(sec => `
+    <div class="dash-leader-sec">
+      <div class="section-title flex justify-between items-center">
+        <span>${esc(sec.title)}</span>${sec.open}
+      </div>
+      <div class="dash-tiles">${sec.cards.join('') || `<div class="mg-pad-note">${window.t('dash_no_assign', 'Nothing assigned to you yet.')}</div>`}</div>
+    </div>`).join('');
+
+  const roleBadges = roles.map(r => `<span class="badge badge-maroon">${esc(window.t('role_' + r, r.replace(/_/g, ' ')))}</span>`).join(' ');
 
   return `
   <div class="dash-leader-head">
     <div>
-      <span class="badge badge-maroon">${esc(window.t('role_' + persona.kind, tag + ' Leader'))}</span>
+      ${roleBadges}
       <h2 class="mg-pane-title" style="margin-top:6px">${window.t('dash_your_area', 'Your area')}</h2>
     </div>
-    ${openBtn}
   </div>
-  <div class="dash-tiles">${scopeCards || `<div class="mg-pad-note">${window.t('dash_no_assign', 'Nothing assigned to you yet.')}</div>`}</div>
+  ${body || `<div class="mg-pad-note">${window.t('dash_no_assign', 'Nothing assigned to you yet.')}</div>`}
   <div class="dashboard-2col mg-mt">
     ${dashTodayCard(scope || { types: [], own: () => false })}
-    ${dashActivityCard(8, x => x.tag === tag && (!scope || scope.ids.indexOf(x.scopeId) !== -1))}
+    ${dashActivityCard(8, x => tags.indexOf(x.tag) !== -1 && (!scope || !scope.ids || scope.ids.indexOf(x.scopeId) !== -1))}
   </div>`;
 }
 function dashScopeCard(title, rows, onOpen) {
