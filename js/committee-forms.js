@@ -1,3 +1,134 @@
+/* ---- Committee: modal markup moved out of index.html (injected at load) ---- */
+(function () {
+  if (typeof document === 'undefined' || document.getElementById('modalCommittee')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<div class="modal-overlay" id="modalCommittee">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="committeeFormTitle">Add Committee</div>
+      <button class="modal-close-btn" onclick="closeModal('modalCommittee')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formCommittee" onsubmit="handleSaveCommittee(event)">
+        <div class="form-group"><label class="form-label" for="cmtFieldName">Committee Name *</label>
+          <input type="text" class="form-input" id="cmtFieldName" placeholder="e.g. Rabari Samaj Committee" required></div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="cmtLeadSelect">Leader *</label><select class="form-select" id="cmtLeadSelect" required></select></div>
+          <div class="form-group"><label class="form-label" for="cmtFieldSamaj">Samaj</label>
+            <input type="text" class="form-input" id="cmtFieldSamaj" list="donCommitteeList" placeholder="e.g. Rabari Samaj"></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="cmtFieldSize">Expected Size *</label><input type="number" class="form-input" id="cmtFieldSize" min="1" value="20" required></div>
+          <div class="form-group"><label class="form-label" for="cmtFieldStatus">Status *</label><select class="form-select" id="cmtFieldStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="cmtColorSelect">Colour</label><select class="form-select" id="cmtColorSelect"></select></div>
+          <div class="form-group"></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="cmtFieldPurpose">Purpose *</label>
+          <textarea class="form-input mg-textarea" id="cmtFieldPurpose" rows="3" placeholder="What this committee is responsible for" required></textarea></div>
+        <div class="form-group"><label class="form-label" for="cmtFieldNotes">Notes</label>
+          <textarea class="form-input mg-textarea" id="cmtFieldNotes" rows="2"></textarea></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalCommittee')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formCommittee" id="committeeFormSubmitBtn">Create Committee</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalCmtMember">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div><div class="modal-title" id="cmtMemberFormTitle">Add Member</div>
+        <span class="mg-muted-xs">Committee: <strong id="cmtMemberFormCmt">—</strong></span></div>
+      <button class="modal-close-btn" onclick="closeModal('modalCmtMember')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formCmtMember" onsubmit="handleSaveCmtMember(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="cmmFieldFirst">First Name *</label><input type="text" class="form-input" id="cmmFieldFirst" required></div>
+          <div class="form-group"><label class="form-label" for="cmmFieldLast">Last Name *</label><input type="text" class="form-input" id="cmmFieldLast" required></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="cmmFieldMobile">Mobile Number *</label>
+          <input type="tel" class="form-input" id="cmmFieldMobile" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile" required oninput="checkExistingCmtMember()">
+          <div id="cmmExistingHint"></div></div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="cmmFieldCity">City</label><input type="text" class="form-input" id="cmmFieldCity"></div>
+          <div class="form-group"><label class="form-label" for="cmmFieldState">State</label><input type="text" class="form-input" id="cmmFieldState"></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="cmmFieldRole">Role</label>
+            <input type="text" class="form-input" id="cmmFieldRole" list="cmtRoleList" placeholder="e.g. Treasurer, Member">
+            <datalist id="cmtRoleList"><option value="Member"></option><option value="Secretary"></option><option value="Treasurer"></option><option value="Coordinator"></option><option value="Village In-charge"></option><option value="Mahila Wing"></option></datalist></div>
+          <div class="form-group"><label class="form-label" for="cmmFieldStatus">Status</label><select class="form-select" id="cmmFieldStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="cmmFieldNotes">Notes</label><textarea class="form-input mg-textarea" id="cmmFieldNotes" rows="2"></textarea></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalCmtMember')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formCmtMember" id="cmtMemberFormSubmitBtn">Add Member</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalMeeting">
+  <div class="modal-box" style="max-width: 720px;">
+    <div class="modal-header">
+      <div><div class="modal-title" id="meetingFormTitle">Schedule Meeting</div>
+        <span class="mg-muted-xs">Committee: <strong id="meetingFormCmt">—</strong></span></div>
+      <button class="modal-close-btn" onclick="closeModal('modalMeeting')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formMeeting" onsubmit="handleSaveMeeting(event)">
+        <div class="form-group"><label class="form-label" for="mtgFieldTitle">Meeting Title *</label>
+          <input type="text" class="form-input" id="mtgFieldTitle" placeholder="e.g. Monthly Governance Meeting" required></div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="mtgFieldDate">Date *</label><input type="date" class="form-input" id="mtgFieldDate" required></div>
+          <div class="form-group"><label class="form-label" for="mtgFieldVenue">Venue</label><input type="text" class="form-input" id="mtgFieldVenue" placeholder="e.g. Trust Office, Sanand"></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="mtgFieldStart">Start *</label><input type="time" class="form-input" id="mtgFieldStart" required></div>
+          <div class="form-group"><label class="form-label" for="mtgFieldEnd">End *</label><input type="time" class="form-input" id="mtgFieldEnd" required></div>
+        </div>
+        <div class="form-group"><label class="form-label">Invite Members *</label><div class="mg-picker" id="mtgMemberPicker"></div></div>
+        <div class="form-group"><label class="form-label" for="mtgFieldAgenda">Agenda</label>
+          <textarea class="form-input mg-textarea" id="mtgFieldAgenda" rows="2" placeholder="Points to discuss"></textarea></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalMeeting')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formMeeting" id="meetingFormSubmitBtn">Schedule Meeting</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalCmtDraft">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="cmtDraftFormTitle">New Draft</div>
+      <button class="modal-close-btn" onclick="closeModal('modalCmtDraft')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formCmtDraft" onsubmit="handleSaveCmtDraft(event)">
+        <div class="form-group"><label class="form-label" for="cmtDraftFieldTitle">Draft Title *</label>
+          <input type="text" class="form-input" id="cmtDraftFieldTitle" placeholder="e.g. Meeting Reminder" required></div>
+        <div class="form-group"><label class="form-label" for="cmtDraftFieldMsg">Message *</label>
+          <textarea class="form-input mg-textarea" id="cmtDraftFieldMsg" rows="7" required placeholder="Jai Mataji 🙏&#10;&#10;..."></textarea></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalCmtDraft')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formCmtDraft">Save Draft</button>
+    </div>
+  </div>
+</div>
+
+`);
+})();
+
 /* ============================================================
    COMMITTEE / SAMAJ — MODALS, FORMS & CRUD
    ============================================================ */

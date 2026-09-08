@@ -1,3 +1,278 @@
+/* ---- Pooja: modal markup moved out of index.html (injected at load) ---- */
+(function () {
+  if (typeof document === 'undefined' || document.getElementById('modalPooja')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<!-- Add / Edit Pooja -->
+<div class="modal-overlay" id="modalPooja">
+  <div class="modal-box" style="max-width: 760px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="poojaFormTitle">Schedule a Pooja / Seva</div>
+        <span class="mg-muted-xs">A dated event — pick a ritual type from the catalog, set the date(s), then add sevarthi &amp; guests.</span>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal('modalPooja')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formPooja" onsubmit="handleSavePooja(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="pjFieldType">Ritual Type * <span class="mg-muted-xs">(from catalog)</span></label>
+            <select class="form-select" id="pjFieldType" onchange="onPoojaTypeChange()"></select>
+            <div class="mg-muted-xs" id="pjTypeHint">Not listed? <a href="#" onclick="closeModal('modalPooja');openAddPoojaType();return false;">Add it to the catalog first &rarr;</a></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pjFieldName">Pooja / Seva Name *</label>
+            <input type="text" class="form-input" id="pjFieldName" placeholder="e.g. Vihat Maa Moorti Sthapan Pooja" required>
+            <div class="mg-muted-xs">Auto-fills from the type — edit for this specific occasion.</div>
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="pjFieldMode">Schedule Type *</label>
+            <select class="form-select" id="pjFieldMode" onchange="onPoojaModeChange()">
+              <option value="single">Single dated event</option>
+              <option value="multi">Multi-session (series of dates)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pjFieldAccent">Card / Calendar Colour</label>
+            <select class="form-select" id="pjFieldAccent"></select>
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="pjFieldDefaultVenue">Default Venue</label>
+            <input type="text" class="form-input" id="pjFieldDefaultVenue" placeholder="e.g. Main Sabha Mandap" oninput="syncDefaultVenue()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pjFieldSevaAmount">Estimated Seva Contribution (₹)</label>
+            <input type="number" class="form-input" id="pjFieldSevaAmount" min="0" placeholder="Optional">
+            <div class="mg-muted-xs">Sevarthi's own estimated spend for reference — <strong>not a joining fee</strong>. No pooja has a fee.</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="flex justify-between items-center">
+            <label class="form-label" style="margin:0;">Sessions (date &amp; time) *</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" id="pjAddSessionBtn" onclick="addSessionRow()">+ Add session</button>
+          </div>
+          <div id="pjSessionRows"></div>
+        </div>
+
+        <div class="form-group">
+          <div class="flex justify-between items-center">
+            <label class="form-label" style="margin:0;">Guests &amp; Pandits</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" onclick="openAddGuest('poojaForm')">+ Add new Guest / Pandit</button>
+          </div>
+          <div class="mg-muted-xs" style="margin-bottom:0.4rem;">Tick everyone attending. Your form stays saved while you add or edit a person.</div>
+          <div id="pjGuestPicker"></div>
+        </div>
+
+        <div class="form-group">
+          <div class="flex justify-between items-center">
+            <label class="form-label" style="margin:0;">Custom Fields</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" onclick="addPoojaCustomRow()">+ Add field</button>
+          </div>
+          <div id="pjCustomRows"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pjFieldNotes">Notes</label>
+          <textarea class="form-input mg-textarea" id="pjFieldNotes" rows="2" placeholder="Internal notes, preparation instructions, etc."></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalPooja')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formPooja" id="poojaFormSubmitBtn">Schedule Pooja</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Sevarthi -->
+<div class="modal-overlay" id="modalSevarthi">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="sevarthiFormTitle">Add Sevarthi</div>
+        <span class="mg-muted-xs">Pooja: <strong id="sevFormPooja">—</strong></span>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal('modalSevarthi')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formSevarthi" onsubmit="handleSaveSevarthi(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="sevFieldFirst">First Name *</label>
+            <input type="text" class="form-input" id="sevFieldFirst" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sevFieldLast">Last Name *</label>
+            <input type="text" class="form-input" id="sevFieldLast" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sevFieldMobile">Mobile Number *</label>
+          <input type="tel" class="form-input" id="sevFieldMobile" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile" required oninput="checkExistingSevarthi()">
+          <div id="sevExistingHint"></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="sevFieldCity">City</label>
+            <input type="text" class="form-input" id="sevFieldCity" placeholder="e.g. Sanand">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sevFieldState">State</label>
+            <input type="text" class="form-input" id="sevFieldState" placeholder="e.g. Gujarat">
+          </div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="sevFieldCommittee">Committee / Samaj</label>
+            <input type="text" class="form-input" id="sevFieldCommittee" list="sevCommitteeList" placeholder="e.g. Rabari Samaj">
+            <datalist id="sevCommitteeList">
+              <option value="Rabari Samaj"></option>
+              <option value="Marvadi Samaj"></option>
+              <option value="General Committee"></option>
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sevFieldStatus">Status</label>
+            <select class="form-select" id="sevFieldStatus">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sevFieldNotes">Notes</label>
+          <textarea class="form-input mg-textarea" id="sevFieldNotes" rows="2" placeholder="Seva details, contribution, preferences"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalSevarthi')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formSevarthi" id="sevarthiFormSubmitBtn">Add Sevarthi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Guest or Pandit (opens on top of the Pooja form; that form is preserved) -->
+<div class="modal-overlay" id="modalGuest">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="guestFormTitle">Add Guest / Pandit</div>
+      <button class="modal-close-btn" onclick="closeModal('modalGuest')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formGuest" onsubmit="handleSaveGuest(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="gstFieldFirst">First Name *</label>
+            <input type="text" class="form-input" id="gstFieldFirst" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="gstFieldLast">Last Name</label>
+            <input type="text" class="form-input" id="gstFieldLast">
+          </div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="gstFieldRole">Role</label>
+            <input type="text" class="form-input" id="gstFieldRole" list="gstRoleList" placeholder="e.g. Pandit, Chief Guest">
+            <datalist id="gstRoleList">
+              <option value="Pandit"></option>
+              <option value="Chief Guest"></option>
+              <option value="Guest of Honour"></option>
+              <option value="Trust President"></option>
+              <option value="Trustee"></option>
+              <option value="Yagna Acharya"></option>
+              <option value="Path Acharya"></option>
+              <option value="Mahila Mandal Head"></option>
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="gstFieldMobile">Mobile Number</label>
+            <input type="tel" class="form-input" id="gstFieldMobile" maxlength="10" placeholder="10-digit mobile">
+          </div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="gstFieldCity">City</label>
+            <input type="text" class="form-input" id="gstFieldCity" placeholder="e.g. Sanand">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="gstFieldState">State</label>
+            <input type="text" class="form-input" id="gstFieldState" placeholder="e.g. Gujarat">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gstFieldNotes">Notes</label>
+          <textarea class="form-input mg-textarea" id="gstFieldNotes" rows="2" placeholder="Travel, hospitality, speciality, etc."></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalGuest')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formGuest" id="guestFormSubmitBtn">Add Guest / Pandit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Pooja Type -->
+<div class="modal-overlay" id="modalPoojaType">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="poojaTypeFormTitle">Add Ritual Type (catalog)</div>
+        <span class="mg-muted-xs">A reusable template — <strong>no dates here</strong>. You set dates when you schedule a Pooja.</span>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal('modalPoojaType')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formPoojaType" onsubmit="handleSavePoojaType(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="ptyFieldName">Type Name *</label>
+            <input type="text" class="form-input" id="ptyFieldName" placeholder="e.g. Kalash Sthapana" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ptyFieldCategory">Category</label>
+            <input type="text" class="form-input" id="ptyFieldCategory" placeholder="e.g. Sthapana, Havan, Path">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ptyFieldDesc">Description</label>
+          <textarea class="form-input mg-textarea" id="ptyFieldDesc" rows="2" placeholder="Short description of the ritual"></textarea>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="ptyFieldDuration">Default Duration (minutes)</label>
+            <input type="number" class="form-input" id="ptyFieldDuration" min="0" placeholder="e.g. 90">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ptyFieldIcon">Icon (emoji)</label>
+            <input type="text" class="form-input" id="ptyFieldIcon" maxlength="2" placeholder="🪔">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ptyFieldOfferings">Suggested Offerings / Samagri</label>
+          <input type="text" class="form-input" id="ptyFieldOfferings" placeholder="e.g. Ghee, flowers, kumkum, coconut">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalPoojaType')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formPoojaType" id="poojaTypeFormSubmitBtn">Save to Catalog</button>
+    </div>
+  </div>
+</div>
+
+`);
+})();
+
 /* ============================================================
    POOJA APP — MODALS, FORMS & CRUD
    Depends on pooja.js (POOJA store + helpers) and pooja-ui.js

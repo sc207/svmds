@@ -139,7 +139,10 @@ function signInAs(id) {
   const a = (typeof accountById === 'function') ? accountById(id) : null;
   if (!a || typeof changeRoleScope !== 'function') return;
   const sel = document.getElementById('roleScopeSelect');
-  if (a.roles.indexOf('superadmin') !== -1) { if (sel) sel.value = 'admin'; changeRoleScope('admin'); return; }
+  // superadmin and the second-tier admin both get the full unscoped view
+  if (a.roles.indexOf('superadmin') !== -1 || a.roles.indexOf('admin') !== -1) {
+    if (sel) sel.value = 'admin'; changeRoleScope('admin'); return;
+  }
   const r = a.roles[0];
   const map = { committee_leader: 'cmt:', pooja_coordinator: 'coord:', management_lead: 'lead:' };
   if (map[r]) { const v = map[r] + id; if (sel) sel.value = v; changeRoleScope(v); }

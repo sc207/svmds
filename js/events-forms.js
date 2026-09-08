@@ -1,3 +1,75 @@
+/* ---- Events: modal markup moved out of index.html (injected at load) ---- */
+(function () {
+  if (typeof document === 'undefined' || document.getElementById('modalEvent')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<div class="modal-overlay" id="modalEvent">
+  <div class="modal-box" style="max-width: 720px;">
+    <div class="modal-header">
+      <div class="modal-title" id="eventFormTitle">Add Event</div>
+      <button class="modal-close-btn" onclick="closeModal('modalEvent')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formEvent" onsubmit="handleSaveEvent(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="evFieldType">Event Type *</label><select class="form-select" id="evFieldType" onchange="onEventTypeChange()"></select></div>
+          <div class="form-group"><label class="form-label" for="evFieldName">Event Name *</label><input type="text" class="form-input" id="evFieldName" placeholder="e.g. Navratri Mahotsav 2026" required></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="evFieldVenue">Venue</label><input type="text" class="form-input" id="evFieldVenue" placeholder="e.g. Mahotsav Ground"></div>
+          <div class="form-group"><label class="form-label" for="evFieldIncharge">In-charge</label><select class="form-select" id="evFieldIncharge"></select></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="evFieldFootfall">Expected Footfall</label><input type="number" class="form-input" id="evFieldFootfall" min="0" placeholder="e.g. 3000"></div>
+          <div class="form-group"><label class="form-label" for="evFieldBudget">Budget (₹)</label><input type="number" class="form-input" id="evFieldBudget" min="0" placeholder="e.g. 250000"></div>
+        </div>
+        <div class="form-group">
+          <div class="flex justify-between items-center"><label class="form-label" style="margin:0;">Days (date &amp; time) *</label>
+            <button class="btn btn-outline mg-btn-xs" type="button" onclick="evAddDayRow()">+ Add day</button></div>
+          <div id="evDayRows"></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="evFieldAccent">Colour</label><select class="form-select" id="evFieldAccent"></select></div>
+          <div class="form-group"></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="evFieldNotes">Notes</label><textarea class="form-input mg-textarea" id="evFieldNotes" rows="2"></textarea></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalEvent')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formEvent" id="eventFormSubmitBtn">Add Event</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalEventType">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="evTypeFormTitle">Add Event Type</div>
+      <button class="modal-close-btn" onclick="closeModal('modalEventType')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formEventType" onsubmit="handleSaveEventType(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="evTypeFieldName">Type Name *</label><input type="text" class="form-input" id="evTypeFieldName" required></div>
+          <div class="form-group"><label class="form-label" for="evTypeFieldCategory">Category</label><input type="text" class="form-input" id="evTypeFieldCategory" placeholder="e.g. Utsav, Seva, Yatra"></div>
+        </div>
+        <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="evTypeFieldIcon">Icon (emoji)</label><input type="text" class="form-input" id="evTypeFieldIcon" maxlength="2" placeholder="📅"></div>
+          <div class="form-group"></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="evTypeFieldDesc">Description</label><input type="text" class="form-input" id="evTypeFieldDesc"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalEventType')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formEventType">Save</button>
+    </div>
+  </div>
+</div>
+
+`);
+})();
+
 /* ============================================================
    EVENTS — MODALS, FORMS & CRUD
    ============================================================ */

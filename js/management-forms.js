@@ -1,3 +1,332 @@
+/* ---- Management: modal markup moved out of index.html (injected at load) ---- */
+(function () {
+  if (typeof document === 'undefined' || document.getElementById('modalManagement')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<!-- Add / Edit Management (Admin only) -->
+<div class="modal-overlay" id="modalManagement">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="mgFormTitle">Add Management</div>
+      <button class="modal-close-btn" onclick="closeModal('modalManagement')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formManagement" onsubmit="handleSaveManagement(event)">
+        <div class="form-group">
+          <label class="form-label" for="mgFieldName">Management Name *</label>
+          <input type="text" class="form-input" id="mgFieldName" placeholder="e.g. Parking Management, Prasad Management" required>
+          <span class="mg-muted-xs">Any operational team — the platform is not limited to a fixed set of management types.</span>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="mgLeadSelect">Management Lead *</label>
+            <select class="form-select" id="mgLeadSelect" required></select>
+            <span class="mg-muted-xs">The Lead can only manage the Management(s) assigned to them.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="mgFieldSize">Expected Team Size *</label>
+            <input type="number" class="form-input" id="mgFieldSize" min="1" value="15" required>
+            <span class="mg-muted-xs" id="mgCurrentTeamNote">Current team members: 0</span>
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="mgFieldStatus">Status *</label>
+            <select class="form-select" id="mgFieldStatus" required>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="mgColorSelect">Team Colour Code *</label>
+            <select class="form-select" id="mgColorSelect" required onchange="previewMgColor(this.value)"></select>
+            <div class="mg-color-swatch" id="mgColorSwatch"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="mgFieldDesc">Description *</label>
+          <textarea class="form-input mg-textarea" id="mgFieldDesc" rows="3" placeholder="What this management team is responsible for" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="mgFieldNotes">Additional Notes</label>
+          <textarea class="form-input mg-textarea" id="mgFieldNotes" rows="2" placeholder="Internal notes, coordination details, escalation contacts"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalManagement')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formManagement" id="mgFormSubmitBtn">Create Management</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Volunteer -->
+<div class="modal-overlay" id="modalMember">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="memberFormTitle">Add Volunteer</div>
+        <span class="mg-muted-xs">Management: <strong id="memberFormMgmt">—</strong></span>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal('modalMember')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formMember" onsubmit="handleSaveMember(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="memFieldFirst">First Name *</label>
+            <input type="text" class="form-input" id="memFieldFirst" placeholder="e.g. Rajesh" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="memFieldLast">Last Name *</label>
+            <input type="text" class="form-input" id="memFieldLast" placeholder="e.g. Rabari" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="memFieldMobile">Mobile Number *</label>
+          <input type="tel" class="form-input" id="memFieldMobile" placeholder="10-digit mobile number"
+                 pattern="[0-9]{10}" maxlength="10" required oninput="checkExistingDevotee()">
+          <span class="mg-muted-xs">If this devotee already volunteers elsewhere, they are linked — not duplicated.</span>
+          <div id="memExistingHint"></div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="memFieldCity">City</label>
+            <input type="text" class="form-input" id="memFieldCity" placeholder="e.g. Sanand">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="memFieldState">State</label>
+            <input type="text" class="form-input" id="memFieldState" placeholder="e.g. Gujarat">
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="memFieldRole">Role in Team</label>
+            <input type="text" class="form-input" id="memFieldRole" placeholder="e.g. Volunteer, Coordinator" value="Volunteer">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="memFieldStatus">Status *</label>
+            <select class="form-select" id="memFieldStatus" required>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="memFieldNotes">Additional Notes</label>
+          <textarea class="form-input mg-textarea" id="memFieldNotes" rows="2" placeholder="Availability, language, special skills"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalMember')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formMember" id="memberFormSubmitBtn">Add Volunteer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule / Edit Volunteering -->
+<div class="modal-overlay" id="modalSession">
+  <div class="modal-box" style="max-width: 720px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="sessionFormTitle">Schedule Volunteering</div>
+        <span class="mg-muted-xs">Management: <strong id="sessionFormMgmt">—</strong></span>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal('modalSession')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formSession" onsubmit="handleSaveSession(event)">
+        <div class="form-group">
+          <label class="form-label" for="sesFieldTitle">Volunteering Title *</label>
+          <input type="text" class="form-input" id="sesFieldTitle" placeholder="e.g. Navratri Evening Aarti Duty" required>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="sesFieldDate">Date *</label>
+            <input type="date" class="form-input" id="sesFieldDate" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sesFieldLocation">Location</label>
+            <input type="text" class="form-input" id="sesFieldLocation" placeholder="e.g. Main Gate, Sabha Mandap">
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="sesFieldStart">Start Time *</label>
+            <input type="time" class="form-input" id="sesFieldStart" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sesFieldEnd">End Time *</label>
+            <input type="time" class="form-input" id="sesFieldEnd" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Select Volunteers *</label>
+          <div class="mg-pick-toolbar">
+            <span class="mg-muted-xs" id="sesPickCount">0 volunteer(s) selected</span>
+            <div class="flex gap-1">
+              <button class="btn btn-outline mg-btn-xs" type="button" onclick="toggleAllVolunteers(true)">Select All</button>
+              <button class="btn btn-outline mg-btn-xs" type="button" onclick="toggleAllVolunteers(false)">Clear</button>
+            </div>
+          </div>
+          <div class="mg-picker" id="sesVolunteerPicker"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="sesFieldNotes">Notes</label>
+          <textarea class="form-input mg-textarea" id="sesFieldNotes" rows="2" placeholder="Instructions for volunteers, reporting point, dress code"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="mg-check-inline">
+            <input type="checkbox" id="sesFieldPublic">
+            <span>Open this slot on the <strong>public volunteering page</strong> — devotees can sign up for this date &amp; time without logging in. Manage sign-ups from the <strong>Public Page</strong> tab.</span>
+          </label>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalSession')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formSession" id="sessionFormSubmitBtn">Schedule Volunteering</button>
+    </div>
+  </div>
+</div>
+
+<!-- Message Draft -->
+<div class="modal-overlay" id="modalDraft">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="draftFormTitle">New Message Draft</div>
+      <button class="modal-close-btn" onclick="closeModal('modalDraft')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formDraft" onsubmit="handleSaveDraft(event)">
+        <div class="form-group">
+          <label class="form-label" for="draftFieldTitle">Draft Title *</label>
+          <input type="text" class="form-input" id="draftFieldTitle" placeholder="e.g. Duty Reminder, Thank You Message" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="draftFieldMessage">Message *</label>
+          <textarea class="form-input mg-textarea" id="draftFieldMessage" rows="7" required
+                    placeholder="Jay Meldi Maa 🙏&#10;&#10;Reminder: your volunteering duty is scheduled for..."
+                    oninput="updateDraftCount()"></textarea>
+          <span class="mg-muted-xs" id="draftCharCount">0 characters</span>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalDraft')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formDraft" id="draftFormSubmitBtn">Create Draft</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic Sheet (badge preview, send message) -->
+<div class="modal-overlay" id="mgSheet">
+  <div class="modal-box" id="mgSheetBox">
+    <div class="modal-header">
+      <div class="modal-title" id="mgSheetTitle"></div>
+      <button class="modal-close-btn" onclick="closeSheet()">&times;</button>
+    </div>
+    <div class="modal-body" id="mgSheetBody"></div>
+    <div class="modal-footer" id="mgSheetFooter"></div>
+  </div>
+</div>
+
+<!-- Generic Confirm -->
+<div class="modal-overlay" id="mgConfirm">
+  <div class="modal-box" style="max-width: 460px;">
+    <div class="modal-header">
+      <div class="modal-title" id="mgConfirmTitle">Please confirm</div>
+      <button class="modal-close-btn" onclick="closeConfirm()">&times;</button>
+    </div>
+    <div class="modal-body" id="mgConfirmBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-primary" id="mgConfirmBtn" onclick="runConfirm()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 6: Public Join Team -->
+<div class="modal-overlay" id="modalJoinTeam">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">👷 Public Volunteer Application</div>
+      <button class="modal-close-btn" onclick="closeModal('modalJoinTeam')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size: 0.85rem; color: var(--muted-brown); margin-bottom: 1rem;">Apply to serve as a volunteer at Shri Vihat Meldi Mata Mandir, Sanand.</p>
+      <form id="joinTeamForm" onsubmit="handleJoinTeam(event)">
+        <div class="form-group">
+          <label class="form-label">Full Name *</label>
+          <input type="text" class="form-input" id="inputVolunteerName" placeholder="Your Name" required>
+        </div>
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Mobile Number *</label>
+            <input type="tel" class="form-input" id="inputVolunteerPhone" placeholder="10-digit phone" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Select Team *</label>
+            <select class="form-select" id="inputVolunteerTeam">
+              <option value="Parking Management">Parking Management</option>
+              <option value="Mandir Handling Team">Mandir Handling Team</option>
+              <option value="Bhojan Shala & Prasad">Bhojan Shala & Prasad</option>
+              <option value="VIP Guest Escort">VIP Guest Escort</option>
+            </select>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalJoinTeam')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="joinTeamForm">Submit Application</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 8: Member QR Badge -->
+<div class="modal-overlay" id="modalBadgeViewer">
+  <div class="modal-box" style="max-width: 420px;">
+    <div class="modal-header">
+      <div class="modal-title">Team Member Identity QR Badge</div>
+      <button class="modal-close-btn" onclick="closeModal('modalBadgeViewer')">&times;</button>
+    </div>
+    <div class="modal-body" style="text-align: center;">
+      <div style="background: linear-gradient(135deg, var(--primary-maroon), var(--primary-maroon-dark)); color: #FFF; padding: 1.75rem; border-radius: var(--radius-md); border: 2px solid var(--antique-gold); box-shadow: var(--shadow-md);">
+        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80" style="width: 85px; height: 85px; border-radius: 50%; border: 3px solid var(--gold-light); margin-bottom: 0.6rem;" alt="Member Photo">
+        <h3 style="font-family: var(--font-heading); color: var(--gold-light); font-size: 1.25rem;">Rameshbhai Rabari</h3>
+        <p style="font-size: 0.88rem; opacity: 0.95; font-weight: 600;">Team Lead — Parking Management</p>
+        <div style="margin: 1rem 0; background: #FFF; padding: 0.65rem; display: inline-block; border-radius: 10px;">
+          <!-- SVG QR Code -->
+          <svg width="110" height="110" viewBox="0 0 100 100">
+            <rect width="100" height="100" fill="#FFF"/>
+            <path d="M10 10h30v30H10zM60 10h30v30H60zM10 60h30v30H10z" fill="#3B2418"/>
+            <path d="M20 20h10v10H20zM70 20h10v10H70zM20 70h10v10H20z" fill="#FFF"/>
+            <path d="M50 20h5v10h-5zM50 50h30v30H50zM20 50h10v5h-10z" fill="#3B2418"/>
+          </svg>
+        </div>
+        <div style="font-size: 0.78rem; color: var(--gold-light); font-weight: 700;">ID: #TMB-9021 | Shri Vihat Meldi Mata Mandir</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+`);
+})();
+
 /* ============================================================
    MANAGEMENT APP — MODALS, FORMS & CRUD
    Depends on management.js (MG store + helpers)

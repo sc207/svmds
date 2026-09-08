@@ -6,7 +6,10 @@
    from this list, and the Accounts & Access page reports on it.
    ------------------------------------------------------------
    role keys:
-     superadmin          - full platform
+     superadmin          - full platform + manages Admin/Super Admin accounts,
+                           impersonation, backup import / wipe
+     admin               - sees & does everything superadmin does EXCEPT the
+                           four privileged operations above (a second tier)
      management_lead     - runs one or more Management teams
      pooja_coordinator   - runs one or more Poojas
      committee_leader    - runs one or more Samaj committees
@@ -21,6 +24,7 @@
 
   var ROLE_META = {
     superadmin:        { icon: '🛡️', pages: ['*'] },
+    admin:             { icon: '🛡️', pages: ['*'] },
     management_lead:   { icon: '🗂️', pages: ['dashboard', 'management'] },
     pooja_coordinator: { icon: '🪔', pages: ['dashboard', 'puja'] },
     committee_leader:  { icon: '🏛️', pages: ['dashboard', 'committees'] },
@@ -33,6 +37,8 @@
   var ACCOUNTS = [
     { id: 'DEV-001', name: 'Rajesh Patel',      mobile: '9876500001', city: 'Sanand',
       roles: ['superadmin'] },
+    { id: 'DEV-002', name: 'Suresh Bapa',       mobile: '9876500006', city: 'Sanand',
+      roles: ['admin'] },
     { id: 'DEV-010', name: 'Amit Shah',         mobile: '9876500002', city: 'Ahmedabad',
       roles: ['management_lead', 'pooja_coordinator'] },
     { id: 'DEV-011', name: 'Kiran Patel',       mobile: '9876500003', city: 'Sanand',
@@ -61,7 +67,7 @@
   function accountPages(id) {
     var a = accountById(id);
     if (!a) return [];
-    if (a.roles.indexOf('superadmin') !== -1) return ['*'];
+    if (a.roles.indexOf('superadmin') !== -1 || a.roles.indexOf('admin') !== -1) return ['*'];
     var set = {};
     a.roles.forEach(function (r) { rolePages(r).forEach(function (p) { set[p] = true; }); });
     return Object.keys(set);

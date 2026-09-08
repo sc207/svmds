@@ -1,3 +1,253 @@
+/* ---- Donations: modal markup moved out of index.html (injected at load) ---- */
+(function () {
+  if (typeof document === 'undefined' || document.getElementById('modalDonation')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<!-- Record / Edit Donation -->
+<div class="modal-overlay" id="modalDonation">
+  <div class="modal-box" style="max-width: 720px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="donationFormTitle">Record Donation</div>
+        <span class="mg-muted-xs">Cash or in-kind offering to the mandir</span>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal('modalDonation')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formDonation" onsubmit="handleSaveDonation(event)">
+        <div class="form-group">
+          <label class="form-label" for="donFieldCategory">Donation Category *</label>
+          <select class="form-select" id="donFieldCategory" onchange="onDonationCategoryChange()"></select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="donFieldDonor">Donor *</label>
+          <div class="flex gap-2">
+            <select class="form-select" id="donFieldDonor" onchange="onDonorSelectChange()"></select>
+            <button class="btn btn-outline" type="button" onclick="openAddDonor('donationForm')">+ New Donor</button>
+          </div>
+          <div class="mg-muted-xs" id="donDonorHint" style="margin-top:0.35rem;"></div>
+        </div>
+
+        <!-- CASH fields -->
+        <div id="donCashFields" class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="donFieldAmount">Amount (₹) *</label>
+            <input type="number" class="form-input" id="donFieldAmount" min="1" placeholder="e.g. 11000">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="donFieldMode">Payment Mode *</label>
+            <select class="form-select" id="donFieldMode">
+              <option value="Cash">Cash</option>
+              <option value="UPI">UPI / GPay</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Cheque">Cheque</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- IN-KIND fields -->
+        <div id="donKindFields" hidden>
+          <div class="form-group">
+            <label class="form-label" for="donFieldItem">Item / Article Donated *</label>
+            <input type="text" class="form-input" id="donFieldItem" placeholder="e.g. Diamond ring — 3.2 ct, VVS1, 18k gold band">
+          </div>
+          <div class="grid mg-2col-form">
+            <div class="form-group">
+              <label class="form-label" for="donFieldQty">Quantity</label>
+              <input type="text" class="form-input" id="donFieldQty" placeholder="e.g. 1 pc / 2 kg / 1 cow">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="donFieldValuation">Estimated Value (₹) *</label>
+              <input type="number" class="form-input" id="donFieldValuation" min="0" placeholder="e.g. 20000000">
+            </div>
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="donFieldDate">Date *</label>
+            <input type="date" class="form-input" id="donFieldDate" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="donFieldStatus">Status</label>
+            <select class="form-select" id="donFieldStatus">
+              <option value="received">Received</option>
+              <option value="pledged">Pledged</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="donFieldCommittee">Committee / Samaj</label>
+            <input type="text" class="form-input" id="donFieldCommittee" list="donCommitteeList" placeholder="Auto-filled from donor">
+            <datalist id="donCommitteeList">
+              <option value="Rabari Samaj"></option>
+              <option value="Marvadi Samaj"></option>
+              <option value="General Committee"></option>
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="donFieldPurpose">Purpose / Earmark</label>
+            <input type="text" class="form-input" id="donFieldPurpose" placeholder="e.g. Sabha Mandap flooring">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="donFieldNotes">Notes</label>
+          <textarea class="form-input mg-textarea" id="donFieldNotes" rows="2" placeholder="Condition, hallmark, cheque no., anything to record"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalDonation')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formDonation" id="donationFormSubmitBtn">Save &amp; Issue Receipt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Donor (individual, organization or trust) -->
+<div class="modal-overlay" id="modalDonor">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="donorFormTitle">Add Donor</div>
+      <button class="modal-close-btn" onclick="closeModal('modalDonor')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formDonor" onsubmit="handleSaveDonor(event)">
+        <div class="form-group">
+          <label class="form-label" for="donorFieldType">Donor Type *</label>
+          <select class="form-select" id="donorFieldType" onchange="onDonorTypeChange()">
+            <option value="individual">Individual / Devotee</option>
+            <option value="organization">Company</option>
+            <option value="trust">Trust / Foundation</option>
+          </select>
+        </div>
+
+        <div id="donorIndividualFields">
+          <div class="grid mg-2col-form">
+            <div class="form-group">
+              <label class="form-label" for="donorFieldFirst">First Name *</label>
+              <input type="text" class="form-input" id="donorFieldFirst">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="donorFieldLast">Last Name *</label>
+              <input type="text" class="form-input" id="donorFieldLast">
+            </div>
+          </div>
+        </div>
+
+        <div id="donorOrgFields" hidden>
+          <div class="form-group">
+            <label class="form-label" for="donorFieldOrg">Organisation / Trust Name *</label>
+            <input type="text" class="form-input" id="donorFieldOrg" placeholder="e.g. Shree Rabari Seva Trust">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="donorFieldContact">Contact Person</label>
+            <input type="text" class="form-input" id="donorFieldContact" placeholder="Authorised signatory">
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="donorFieldMobile">Mobile Number *</label>
+            <input type="tel" class="form-input" id="donorFieldMobile" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile" oninput="checkExistingDonor()">
+            <div id="donorExistingHint"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="donorFieldPan">PAN (for 80G)</label>
+            <input type="text" class="form-input" id="donorFieldPan" maxlength="10" placeholder="ABCDE1234F" style="text-transform:uppercase">
+          </div>
+        </div>
+
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="donorFieldCity">City</label>
+            <input type="text" class="form-input" id="donorFieldCity" placeholder="e.g. Sanand">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="donorFieldState">State</label>
+            <input type="text" class="form-input" id="donorFieldState" placeholder="e.g. Gujarat">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="donorFieldCommittee">Committee / Samaj</label>
+          <input type="text" class="form-input" id="donorFieldCommittee" list="donCommitteeList" placeholder="e.g. Rabari Samaj">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="donorFieldNotes">Notes</label>
+          <textarea class="form-input mg-textarea" id="donorFieldNotes" rows="2"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalDonor')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formDonor" id="donorFormSubmitBtn">Add Donor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Donation Category -->
+<div class="modal-overlay" id="modalDonCategory">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="donCatFormTitle">Add Donation Category</div>
+      <button class="modal-close-btn" onclick="closeModal('modalDonCategory')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formDonCategory" onsubmit="handleSaveDonCategory(event)">
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="donCatFieldName">Category Name *</label>
+            <input type="text" class="form-input" id="donCatFieldName" placeholder="e.g. Gold / Suvarna Daan" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="donCatFieldIcon">Icon (emoji)</label>
+            <input type="text" class="form-input" id="donCatFieldIcon" maxlength="2" placeholder="💰">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="donCatFieldKind">Kind *</label>
+          <select class="form-select" id="donCatFieldKind">
+            <option value="cash">Cash / money</option>
+            <option value="kind">In-kind (goods, gold, cattle, etc.)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="donCatFieldDesc">Description</label>
+          <input type="text" class="form-input" id="donCatFieldDesc" placeholder="Short note about this category">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalDonCategory')">Cancel</button>
+      <button class="btn btn-primary" type="submit" form="formDonCategory" id="donCatFormSubmitBtn">Add Category</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 7: Donation document viewer (80G receipt / Dhanyavaad certificate) -->
+<div class="modal-overlay" id="modalReceiptViewer">
+  <div class="modal-box mg-sheet-wide">
+    <div class="modal-header">
+      <div class="modal-title" id="receiptViewerTitle">Official Temple Receipt</div>
+      <button class="modal-close-btn" onclick="closeModal('modalReceiptViewer')">&times;</button>
+    </div>
+    <div class="modal-body" id="receiptContent">
+      <!-- Rendered dynamically by donations-ui.js -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalReceiptViewer')">Close</button>
+      <button class="btn btn-primary" id="receiptViewerPrintBtn" onclick="printCurrentDonationDoc()">Print / Save PDF</button>
+    </div>
+  </div>
+</div>
+
+`);
+})();
+
 /* ============================================================
    DONATIONS APP — MODALS, FORMS & CRUD
    Depends on donations.js + donations-ui.js. Reuses openConfirm,

@@ -1059,7 +1059,8 @@ jti, impersonatedBy }` from the JWT. `attachScope` (runs right after, on
 
 ```js
 req.scope = {
-  isAdmin:      roles.includes('superadmin'),
+  isAdmin:      roles.includes('superadmin') || roles.includes('admin'),  // full unfiltered access
+  isSuperadmin: roles.includes('superadmin'),                            // + the 4 privileged ops (§5.2a)
   roles,
   teamIds:      [...],   // teams.lead_id       = req.user.id
   committeeIds: [...],   // committees.leader_id = req.user.id
@@ -1092,7 +1093,7 @@ Standard CRUD shape unless noted. All under `/api`, all behind
 | --- | --- | --- |
 | `auth` | `POST /start-login` · `POST /request-setup-otp` · `POST /setup-authenticator` · `POST /verify-authenticator` · `GET /me` · `POST /logout` · `POST /impersonate` · `POST /stop-impersonate` | public; `/me` returns `{ user, pages }`; impersonation = superadmin only (§6) |
 | `sessions` | `GET /` · `DELETE /:id` · `DELETE /?others=1` | own sessions always; all sessions if admin |
-| `users` | `GET /` · `POST /` · `PUT /:id` · `PUT /:id/roles` · `PUT /:id/activate` · `DELETE /:id` | admin only; `DELETE` = `active=0` **+ revoke that user's sessions** |
+| `users` | `GET /` · `POST /` · `PUT /:id` · `PUT /:id/roles` · `PUT /:id/activate` · `DELETE /:id` | `superadmin` **+ `admin`** for non-privileged targets; `assertCanGrant` / `assertCanTouchUser` reserve `admin`/`superadmin` rows for `superadmin` (§5.2a). `DELETE` = `active=0` **+ revoke that user's sessions** |
 | `devotees` | `GET /` · `POST /` · `PUT /:id` · `DELETE /:id` | shared registry |
 | `settings` | `GET /` · `PUT /identity` · `PUT /language` · `PUT /working-date` | `app_settings` KV |
 | `teams` | CRUD | list/read/write scoped to `req.scope.teamIds` |
@@ -1144,7 +1145,7 @@ Standard CRUD shape unless noted. All under `/api`, all behind
 5. **`attachScope`.** `SELECT id FROM committees WHERE leader_id = ?` →
    `req.scope.committeeIds`; `req.scope.isAdmin` from roles.
 6. **Router `routes/meetings.js`**, handler chain
-   `requireRole('superadmin','committee_leader')` → the `POST /` body.
+   `requireRole('superadmin','admin','committee_leader')` → the `POST /` body.
    - Guard: `if (!req.scope.isAdmin &&
      !req.scope.committeeIds.includes(committeeId)) return res.status(403)…`.
    - Validate: `title` and `date` present, `date` matches `YYYY-MM-DD`, else
@@ -1206,13 +1207,76 @@ renaming the product string to `config.appName`.
   ```js
   const ROLE_PAGES = {
     superadmin:        ['*'],
+    admin:             ['*'],          // second tier — see §5.2a
     management_lead:   ['dashboard', 'management'],
     pooja_coordinator: ['dashboard', 'puja'],
     committee_leader:  ['dashboard', 'committees'],
     event_incharge:    ['dashboard', 'events', 'calendar'],
     accountant:        ['dashboard', 'donations', 'expenses', 'reports'],
   };
+
+  // Roles only a superadmin may grant/revoke, and whose holders only a
+  // superadmin may disable. Everything else about `admin` == `superadmin`.
+  const PRIVILEGED_ROLES = ['superadmin', 'admin'];
   ```
+
+### 5.2a The two-tier `admin` role
+
+`admin` sits **directly below `superadmin`**: it opens every page and performs
+every module operation a superadmin can — full CRUD across poojas, sevas,
+donations (+ receipts + certificates), committees + meetings + attendance,
+events, volunteer teams + volunteering + badges, Bhuvaji visits, devotees,
+expenses, inventory and all catalogs; it sees the whole unscoped dashboard, the
+Unified Calendar with every entry, Reports & Analytics, the Accounts & Access
+page (full account list + live audit trail) and Settings.
+
+Only **`superadmin`** keeps these four operations:
+
+| Operation | Endpoint(s) | Guard |
+| --- | --- | --- |
+| Grant / revoke the `admin` or `superadmin` role | `POST /api/users`, `PUT /api/users/:id/roles` | `requireRole('superadmin','admin')` **+** `assertCanGrant()` |
+| Disable / re-enable a user holding a privileged role | `DELETE /api/users/:id`, `PUT /api/users/:id/activate` | `requireRole('superadmin','admin')` **+** `assertCanTouchUser()` |
+| Impersonate ("Sign in as") | `POST /api/auth/impersonate` · `POST /api/auth/stop-impersonate` | `requireRole('superadmin')` |
+| Import a backup / wipe the database | `POST /api/backup/import` · `DELETE /api/backup/wipe` | `requireRole('superadmin')` |
+
+`GET /api/backup/export` is read-only → `requireRole('superadmin','admin')`.
+
+**`services/authz.js`:**
+
+```js
+function isFullAccess(roles)  { return roles.includes('superadmin') || roles.includes('admin'); }
+function isSuperadmin(roles)  { return roles.includes('superadmin'); }
+
+// throw {status:403} unless the actor may set exactly these roles on a target
+function assertCanGrant(actorRoles, targetRoles) {
+  if (isSuperadmin(actorRoles)) return;
+  if (targetRoles.some(r => PRIVILEGED_ROLES.includes(r)))
+    throw Object.assign(new Error('Only a Super Admin can assign the Admin or Super Admin role'), { status: 403 });
+}
+
+// throw unless the actor may disable / edit / re-enable this target user
+async function assertCanTouchUser(actorRoles, targetUserId) {
+  if (isSuperadmin(actorRoles)) return;
+  const rows = await queryAll('SELECT role FROM user_roles WHERE user_id = ?', [targetUserId]);
+  if (rows.some(r => PRIVILEGED_ROLES.includes(r.role)))
+    throw Object.assign(new Error('Only a Super Admin can manage an Admin or Super Admin account'), { status: 403 });
+}
+```
+
+Bootstrap is unchanged — `ensureAdminUser()` still creates the **one**
+`superadmin` from `ADMIN_EMAIL`; that account then creates `admin` accounts
+through the Accounts & Access UI. Provisioning flow: superadmin → **+ Add
+Account** → email + name → tick **Administrator** → save; the person completes the
+passwordless login (email OTP → authenticator) and now holds an `admin` session.
+
+Frontend: `people.js` `ROLE_META.admin = { icon:'🛡️', pages:['*'] }`, i18n
+`role_admin` = *Administrator / एडमिन / એડમિન*, `accountPages()` short-circuits to
+`['*']` for `admin` too. `dashboard.js activePersona()` and `app.js
+currentAllowedPages()` already treat "not a scoped module session" as
+full-access, so an `admin` user gets the superadmin view unchanged. The
+Accounts & Access page hides the **Sign in as** button and the Admin/Super Admin
+role checkboxes when the logged-in user is not `superadmin` (`/me` returns
+`isSuperadmin` for this).
 - `accountPages(id)` (union of a user's roles' pages) → `authz.pagesForUser` —
   returned by `/me` so the SPA can hide nav (cosmetic; the API is the real
   gate). `accessSummary()` → `services/authz.js` from `SELECT role,
@@ -1222,7 +1286,8 @@ renaming the product string to `config.appName`.
 
 | Role | `requireRole` on | Scoped by |
 | --- | --- | --- |
-| `superadmin` | everything; also the only role for `users`, `sessions`, `inventory`, `backup`, catalog writes | no filter |
+| `superadmin` | everything, and the **only** role for impersonation + `backup/import` + `backup/wipe` + granting privileged roles | no filter |
+| `admin` | every module router + `users` (create/edit non-privileged) + `sessions` + `inventory` + catalog writes + `reports` + `backup/export` | no filter (`req.scope.isAdmin = true`) |
 | `management_lead` | `teams`, `teamMembers`, `volunteeringSessions`, `attendance`, `publicPages`, `publicSignups`, `messageDrafts`, `communication` | `teams.lead_id = me` → `req.scope.teamIds` |
 | `pooja_coordinator` | `poojas`, `poojaSessions`, `sevarthis`, `guests` (read), `attendance` (n/a) | `pooja_coordinator_links.user_id = me` → `req.scope.poojaIds` |
 | `committee_leader` | `committees`, `committeeMembers`, `meetings`, `attendance`, `messageDrafts`, `communication` | `committees.leader_id = me` → `req.scope.committeeIds` |
@@ -1275,10 +1340,11 @@ already keys on: `management_lead` → `MG.session = { role:'lead', userId }`,
 etc.). A user with multiple roles gets multiple module sessions active (the app
 already tolerates this via `resetOthers`).
 
-### 6.2 Admin "Sign in as" → real impersonation (recommended, gated)
+### 6.2 "Sign in as" → real impersonation (recommended, gated)
 
 Keep the training/support affordance, but make it a real, audited,
-**superadmin-only** server action:
+**superadmin-only** server action — a second-tier `admin` **cannot** impersonate
+(that would let an admin act as a superadmin):
 
 - `POST /api/auth/impersonate { userId }` — `requireRole('superadmin')`;
   creates a **new** `sessions` row with `impersonated_by = req.user.id`, issues a
@@ -1377,7 +1443,7 @@ the ownership column:
 
 ```js
 // committees.js — GET  (mirrors clients.js GET with company_id)
-router.get('/', requireRole('superadmin','committee_leader'), async (req, res) => {
+router.get('/', requireRole('superadmin','admin','committee_leader'), async (req, res) => {
   try {
     const rows = req.scope.isAdmin
       ? await queryAll('SELECT * FROM committees WHERE is_deleted = 0 ORDER BY name')
@@ -1426,15 +1492,19 @@ else is readable or writable unauthenticated.
   (ChallanPro's `DEPLOY.md` claims first login "creates" the admin, but the code
   never does — `findUser` requires the row to already exist. This closes that
   gap.)
-- **Admin creates accounts** — `POST /api/users { email, name, mobile,
-  roles: [] }` writes `users` + `user_roles`. The existing **Accounts & Access**
-  UI (`access.js renderAccess()`, currently reading `ACCOUNTS`) is rewired to
-  `GET`/`POST` `/api/users`.
+- **Admin (or superadmin) creates accounts** — `POST /api/users { email, name,
+  mobile, roles: [] }` writes `users` + `user_roles`, running `assertCanGrant()`
+  first so an `admin` cannot mint an `admin` / `superadmin` (§5.2a). The existing
+  **Accounts & Access** UI (`access.js renderAccess()`, currently reading
+  `ACCOUNTS`) is rewired to `GET`/`POST` `/api/users`; the Admin/Super Admin
+  role checkboxes and the "Sign in as" button render only when `/me` reports
+  `isSuperadmin`.
 - **Disable = `active = 0` AND revoke sessions (reference GAP — added).**
 
   ```js
-  router.delete('/:id', requireRole('superadmin'), async (req, res) => {
+  router.delete('/:id', requireRole('superadmin', 'admin'), async (req, res) => {
     if (+req.params.id === req.user.id) return res.status(400).json({ error: 'Cannot disable yourself' });
+    await assertCanTouchUser(req.user.roles, req.params.id);   // 403 if target is admin|superadmin and actor isn't superadmin (§5.2a)
     await run('UPDATE users SET active = 0 WHERE id = ?', [req.params.id]);
     await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [req.params.id]); // <- added
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Admin',
