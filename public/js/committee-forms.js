@@ -21,10 +21,6 @@
           <div class="form-group"><label class="form-label" for="cmtFieldSize">Expected Size *</label><input type="number" class="form-input" id="cmtFieldSize" min="1" value="20" required></div>
           <div class="form-group"><label class="form-label" for="cmtFieldStatus">Status *</label><select class="form-select" id="cmtFieldStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
         </div>
-        <div class="grid mg-2col-form">
-          <div class="form-group"><label class="form-label" for="cmtColorSelect">Colour</label><select class="form-select" id="cmtColorSelect"></select></div>
-          <div class="form-group"></div>
-        </div>
         <div class="form-group"><label class="form-label" for="cmtFieldPurpose">Purpose *</label>
           <textarea class="form-input mg-textarea" id="cmtFieldPurpose" rows="3" placeholder="What this committee is responsible for" required></textarea></div>
         <div class="form-group"><label class="form-label" for="cmtFieldNotes">Notes</label>
@@ -139,18 +135,13 @@ function cmtLeadOptions(sel) {
   return `<option value="">— ${window.t('cmt_select_leader', 'Select leader')} —</option>` +
     CMT.leaders.map(l => `<option value="${l.id}" ${l.id === sel ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
 }
-function cmtColorOptions(sel) {
-  return CMT.palette.map(p => `<option value="${p.hex}" ${p.hex === sel ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
-}
 function openAddCommittee() {
   if (!isCmtAdmin()) { cmtToast(window.t('cmt_admin_only', 'Only an administrator can do this.')); return; }
   CMT.editingCmtId = null;
   document.getElementById('committeeFormTitle').textContent = window.t('cmt_add', 'Add Committee');
   document.getElementById('committeeFormSubmitBtn').textContent = window.t('cmt_create', 'Create Committee');
   document.getElementById('formCommittee').reset();
-  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions('');
-  document.getElementById('cmtColorSelect').innerHTML = cmtColorOptions(CMT.palette[0].hex);
-  document.getElementById('cmtFieldSize').value = 20;
+  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions('');  document.getElementById('cmtFieldSize').value = 20;
   document.getElementById('cmtFieldStatus').value = 'active';
   openModal('modalCommittee');
 }
@@ -159,9 +150,7 @@ function openEditCommittee(id) {
   CMT.editingCmtId = id;
   document.getElementById('committeeFormTitle').textContent = window.t('cmt_edit', 'Edit Committee');
   document.getElementById('committeeFormSubmitBtn').textContent = window.t('save');
-  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(c.leaderId);
-  document.getElementById('cmtColorSelect').innerHTML = cmtColorOptions(c.color);
-  document.getElementById('cmtFieldName').value = c.name;
+  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(c.leaderId);  document.getElementById('cmtFieldName').value = c.name;
   document.getElementById('cmtFieldSamaj').value = c.samaj || '';
   document.getElementById('cmtFieldSize').value = c.expectedSize;
   document.getElementById('cmtFieldStatus').value = c.status;
@@ -182,9 +171,10 @@ function handleSaveCommittee(e) {
     name, leaderId, expectedSize: size || 20, purpose,
     samaj: document.getElementById('cmtFieldSamaj').value.trim(),
     status: document.getElementById('cmtFieldStatus').value,
-    color: document.getElementById('cmtColorSelect').value,
     notes: document.getElementById('cmtFieldNotes').value.trim()
   };
+  // card colour is auto-assigned in creation order — never picked by the user
+  if (!CMT.editingCmtId) payload.color = nextCardColor((CMT.committees || []).length);
   if (CMT.editingCmtId) {
     Object.assign(cmtById(CMT.editingCmtId), payload);
     cmtLogActivity(CMT.editingCmtId, window.t('cmt_updated_by', 'Committee updated by') + ' ' + CMT.session.userName);
@@ -464,7 +454,6 @@ function saveCmtSettings(e, cid) {
   c.samaj = document.getElementById('setCmtSamaj').value.trim();
   c.expectedSize = parseInt(document.getElementById('setCmtSize').value, 10) || c.expectedSize;
   c.status = document.getElementById('setCmtStatus').value;
-  c.color = document.getElementById('setCmtColor').value;
   c.purpose = document.getElementById('setCmtPurpose').value.trim() || c.purpose;
   c.notes = document.getElementById('setCmtNotes').value.trim();
   if (isCmtAdmin()) c.leaderId = document.getElementById('setCmtLead').value;

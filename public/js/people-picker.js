@@ -53,6 +53,15 @@
     });
   }
 
+  /* Card / calendar accent colours are assigned automatically in creation
+     order — the user never picks one. Mirrors server/services/palette.js. */
+  var CARD_PALETTE = ['#6B1F2A', '#C96A20', '#C9A24A', '#4C8B5A', '#7A3B62',
+                      '#3B5C8A', '#A6432E', '#2E7D6B', '#8A6D3B', '#5A4B8A'];
+  window.nextCardColor = function (existingCount) {
+    var n = Number(existingCount) || 0;
+    return CARD_PALETTE[((n % CARD_PALETTE.length) + CARD_PALETTE.length) % CARD_PALETTE.length];
+  };
+
   /* Real committee names from the live store (kept in sync with the DB when
      hydration lands); a small fallback keeps the app usable offline. */
   window.committeeNames = function () {

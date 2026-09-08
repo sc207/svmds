@@ -1579,9 +1579,7 @@ function paneSettings(m) {
   const team = membersOf(m.id).length;
   const leadOpts = (typeof personOptions === 'function')
     ? personOptions(m.leadId, '— ' + (window.t ? window.t('mg_select_lead', 'Select Management Lead') : 'Select Management Lead') + ' —')
-    : MG.leads.map(l => `<option value="${l.id}" ${l.id===m.leadId?'selected':''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
-  const colorOpts = MG.palette.map(p => `<option value="${p.hex}" ${p.hex===m.color?'selected':''}>${esc(p.name)}</option>`).join('');
-  const lockLead = !isAdmin();
+    : MG.leads.map(l => `<option value="${l.id}" ${l.id===m.leadId?'selected':''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');  const lockLead = !isAdmin();
 
   return `
   <div class="flex justify-between items-center mg-pane-head">
@@ -1619,13 +1617,7 @@ function paneSettings(m) {
               <option value="active" ${m.status==='active'?'selected':''}>Active</option>
               <option value="inactive" ${m.status==='inactive'?'selected':''}>Inactive</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="setMgColor">Team Colour *</label>
-            <select class="form-select" id="setMgColor" required onchange="previewSettingsColor(this.value)">${colorOpts}</select>
-            <div class="mg-color-preview" id="mgColorPreview" style="background:${m.color}"></div>
-          </div>
-        </div>
+          </div>        </div>
 
         <div class="form-group">
           <label class="form-label" for="setMgDesc">Description *</label>
@@ -1679,11 +1671,6 @@ function paneSettings(m) {
   </div>`;
 }
 
-function previewSettingsColor(hex) {
-  const el = document.getElementById('mgColorPreview');
-  if (el) el.style.background = hex;
-}
-
 function saveManagementSettings(e, mgmtId) {
   e.preventDefault();
   const m = mgmtById(mgmtId);
@@ -1698,7 +1685,6 @@ function saveManagementSettings(e, mgmtId) {
   m.expectedTeamSize = size;
   m.description = desc;
   m.status = document.getElementById('setMgStatus').value;
-  m.color = document.getElementById('setMgColor').value;
   m.notes = document.getElementById('setMgNotes').value.trim();
   if (isAdmin()) m.leadId = document.getElementById('setMgLead').value;
 

@@ -491,7 +491,6 @@ function paneCmtSettings(c) {
   const leadOpts = (typeof personOptions === 'function')
     ? personOptions(c.leaderId, '— ' + window.t('cmt_select_leader', 'Select leader') + ' —')
     : CMT.leaders.map(l => `<option value="${l.id}" ${l.id === c.leaderId ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
-  const colorOpts = CMT.palette.map(p => `<option value="${p.hex}" ${p.hex === c.color ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
   return `
   <div class="flex justify-between items-center mg-pane-head"><div><h2 class="mg-pane-title">${window.t('cmt_settings', 'Committee Settings')}</h2>
     <p class="mg-page-sub">${admin ? window.t('cmt_settings_admin', 'Full settings including leader assignment') : window.t('cmt_settings_lead', 'Leaders can edit committee details. Leader assignment is admin-only.')}</p></div></div>
@@ -506,10 +505,6 @@ function paneCmtSettings(c) {
       <div class="form-group"><label class="form-label">${window.t('status')} *</label><select class="form-select" id="setCmtStatus">
         <option value="active" ${c.status === 'active' ? 'selected' : ''}>${window.t('active')}</option>
         <option value="inactive" ${c.status === 'inactive' ? 'selected' : ''}>${window.t('inactive')}</option></select></div>
-    </div>
-    <div class="grid mg-2col-form">
-      <div class="form-group"><label class="form-label">${window.t('cmt_colour', 'Colour')}</label><select class="form-select" id="setCmtColor">${colorOpts}</select></div>
-      <div class="form-group"></div>
     </div>
     <div class="form-group"><label class="form-label">${window.t('cmt_purpose', 'Purpose')} *</label><textarea class="form-input mg-textarea" id="setCmtPurpose" rows="3" required>${esc(c.purpose)}</textarea></div>
     <div class="form-group"><label class="form-label">${window.t('notes')}</label><textarea class="form-input mg-textarea" id="setCmtNotes" rows="2">${esc(c.notes || '')}</textarea></div>

@@ -34,12 +34,7 @@
               <option value="single">Single dated event</option>
               <option value="multi">Multi-session (series of dates)</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="pjFieldAccent">Card / Calendar Colour</label>
-            <select class="form-select" id="pjFieldAccent"></select>
-          </div>
-        </div>
+          </div>        </div>
 
         <div class="grid mg-2col-form">
           <div class="form-group">
@@ -287,10 +282,6 @@ function renderPoojaTypeOptions(selected) {
     POOJA.poojaTypes.map(t =>
       `<option value="${t.id}" ${t.id === selected ? 'selected' : ''}>${esc((t.icon || '') + ' ' + t.name)}</option>`).join('');
 }
-function renderAccentOptions(selected) {
-  return POOJA.accentPalette.map(a =>
-    `<option value="${a.hex}" ${a.hex === selected ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
-}
 
 /* ------------------------------------------------------------
    DYNAMIC ROWS — sessions / guests / custom fields
@@ -413,9 +404,7 @@ function openAddPooja() {
 
   document.getElementById('formPooja').reset();
   document.getElementById('pjFieldType').innerHTML = renderPoojaTypeOptions('');
-  document.getElementById('pjFieldType').disabled = false;
-  document.getElementById('pjFieldAccent').innerHTML = renderAccentOptions(POOJA.accentPalette[0].hex);
-  document.getElementById('pjFieldName').value = '';
+  document.getElementById('pjFieldType').disabled = false;  document.getElementById('pjFieldName').value = '';
   document.getElementById('pjFieldMode').value = 'single';
   document.getElementById('pjFieldDefaultVenue').value = '';
   document.getElementById('pjFieldSevaAmount').value = '';
@@ -435,9 +424,7 @@ function openEditPooja(id) {
   document.getElementById('poojaFormTitle').textContent = 'Edit Pooja';
   document.getElementById('poojaFormSubmitBtn').textContent = 'Save Changes';
 
-  document.getElementById('pjFieldType').innerHTML = renderPoojaTypeOptions(p.typeId);
-  document.getElementById('pjFieldAccent').innerHTML = renderAccentOptions(p.color);
-  document.getElementById('pjFieldType').disabled = !isPoojaAdmin();
+  document.getElementById('pjFieldType').innerHTML = renderPoojaTypeOptions(p.typeId);  document.getElementById('pjFieldType').disabled = !isPoojaAdmin();
   document.getElementById('pjFieldName').value = p.name;
   document.getElementById('pjFieldMode').value = p.scheduleMode || 'single';
   document.getElementById('pjFieldDefaultVenue').value = p.defaultVenue || '';
@@ -466,7 +453,7 @@ function handleSavePooja(e) {
   const typeId = document.getElementById('pjFieldType').value;
   const mode = document.getElementById('pjFieldMode').value;
   const defaultVenue = document.getElementById('pjFieldDefaultVenue').value.trim();
-  const accent = document.getElementById('pjFieldAccent').value;
+  const accent = (typeof nextCardColor === 'function' ? nextCardColor((POOJA.poojas || []).length) : '#6B1F2A');
   const notes = document.getElementById('pjFieldNotes').value.trim();
   const sevaAmount = parseInt(document.getElementById('pjFieldSevaAmount').value, 10);
 

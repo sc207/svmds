@@ -37,13 +37,7 @@
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="mgColorSelect">Team Colour Code *</label>
-            <select class="form-select" id="mgColorSelect" required onchange="previewMgColor(this.value)"></select>
-            <div class="mg-color-swatch" id="mgColorSwatch"></div>
-          </div>
-        </div>
+          </div>        </div>
 
         <div class="form-group">
           <label class="form-label" for="mgFieldDesc">Description *</label>
@@ -386,16 +380,12 @@ function openAddManagement() {
 
   const f = document.getElementById('formManagement');
   f.reset();
-  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML('');
-  document.getElementById('mgColorSelect').innerHTML = colorOptionsHTML(MG.palette[0].hex);
-  document.getElementById('mgFieldName').value = '';
+  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML('');  document.getElementById('mgFieldName').value = '';
   document.getElementById('mgFieldSize').value = 15;
   document.getElementById('mgFieldStatus').value = 'active';
   document.getElementById('mgFieldDesc').value = '';
   document.getElementById('mgFieldNotes').value = '';
-  document.getElementById('mgCurrentTeamNote').textContent = 'Current team members: 0 (volunteers are added after creation)';
-  previewMgColor(MG.palette[0].hex);
-  openModal('modalManagement');
+  document.getElementById('mgCurrentTeamNote').textContent = 'Current team members: 0 (volunteers are added after creation)';  openModal('modalManagement');
 }
 
 function openEditManagement(id) {
@@ -406,17 +396,13 @@ function openEditManagement(id) {
   document.getElementById('mgFormTitle').textContent = 'Edit Management';
   document.getElementById('mgFormSubmitBtn').textContent = 'Save Changes';
 
-  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(m.leadId);
-  document.getElementById('mgColorSelect').innerHTML = colorOptionsHTML(m.color);
-  document.getElementById('mgFieldName').value = m.name;
+  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(m.leadId);  document.getElementById('mgFieldName').value = m.name;
   document.getElementById('mgFieldSize').value = m.expectedTeamSize;
   document.getElementById('mgFieldStatus').value = m.status;
   document.getElementById('mgFieldDesc').value = m.description;
   document.getElementById('mgFieldNotes').value = m.notes || '';
   document.getElementById('mgCurrentTeamNote').textContent =
-    `Current team members: ${membersOf(m.id).length} (calculated from actual volunteers)`;
-  previewMgColor(m.color);
-  openModal('modalManagement');
+    `Current team members: ${membersOf(m.id).length} (calculated from actual volunteers)`;  openModal('modalManagement');
 }
 
 function leadOptionsHTML(selected) {
@@ -428,16 +414,6 @@ function leadOptionsHTML(selected) {
     }).join('');
 }
 
-function colorOptionsHTML(selected) {
-  return MG.palette.map(p =>
-    `<option value="${p.hex}" ${p.hex === selected ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
-}
-
-function previewMgColor(hex) {
-  const el = document.getElementById('mgColorSwatch');
-  if (el) el.style.background = hex;
-}
-
 function handleSaveManagement(e) {
   e.preventDefault();
 
@@ -446,7 +422,6 @@ function handleSaveManagement(e) {
   const size = parseInt(document.getElementById('mgFieldSize').value, 10);
   const desc = document.getElementById('mgFieldDesc').value.trim();
   const status = document.getElementById('mgFieldStatus').value;
-  const color = document.getElementById('mgColorSelect').value;
   const notes = document.getElementById('mgFieldNotes').value.trim();
 
   if (!name) { mgToast('Management Name is required.'); return; }
@@ -460,7 +435,7 @@ function handleSaveManagement(e) {
   if (MG.editingMgmtId) {
     const m = mgmtById(MG.editingMgmtId);
     const leadChanged = m.leadId !== leadId;
-    Object.assign(m, { name, leadId, expectedTeamSize: size, description: desc, status, color, notes });
+    Object.assign(m, { name, leadId, expectedTeamSize: size, description: desc, status, notes });
     logActivity(m.id, leadChanged
       ? `Management updated — Lead changed to ${leadName(m.id)}`
       : `Management details updated by ${MG.session.userName}`);
@@ -468,7 +443,8 @@ function handleSaveManagement(e) {
   } else {
     const id = nextId('MGMT', MG.managements, 3);
     MG.managements.push({
-      id, name, leadId, expectedTeamSize: size, description: desc, status, color, notes,
+      id, name, leadId, expectedTeamSize: size, description: desc, status, notes,
+      color: (typeof nextCardColor === 'function' ? nextCardColor(MG.managements.length) : '#6B1F2A'),
       createdAt: MG.today
     });
     MG.communication.push({ managementId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
