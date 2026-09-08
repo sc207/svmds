@@ -47,6 +47,78 @@
     return out;
   };
 
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* Real committee names from the live store (kept in sync with the DB when
+     hydration lands); a small fallback keeps the app usable offline. */
+  window.committeeNames = function () {
+    if (typeof CMT !== 'undefined' && Array.isArray(CMT.committees) && CMT.committees.length) {
+      return CMT.committees.map(function (c) {
+        return (typeof tData === 'function' ? tData(c.name) : c.name) || '';
+      }).filter(Boolean);
+    }
+    return ['General Temple Committee', 'Rabari Samaj Committee', 'Marvadi Samaj Committee'];
+  };
+  window.teamNames = function () {
+    if (typeof MG !== 'undefined' && Array.isArray(MG.managements) && MG.managements.length) {
+      return MG.managements.map(function (m) {
+        return (typeof tData === 'function' ? tData(m.name) : m.name) || '';
+      }).filter(Boolean);
+    }
+    return ['VIP Guest Management', 'Parking Management', 'Prasad Management'];
+  };
+
+  /* Repopulate every entity-backed <select> / <datalist> from live data so a
+     dropdown never carries a hard-coded name list. Safe to call any time. */
+  window.syncEntitySelects = function () {
+    var comm = window.committeeNames();
+    var teams = window.teamNames();
+
+    var fillSelect = function (id, items, opts) {
+      var el = document.getElementById(id);
+      if (!el || el.tagName !== 'SELECT') return;
+      var cur = el.value;
+      var head = (opts && opts.head) ? '<option value="' + esc(opts.head.v) + '">' + esc(opts.head.t) + '</option>' : '';
+      el.innerHTML = head + items.map(function (x) {
+        return '<option value="' + esc(x) + '">' + esc(x) + '</option>';
+      }).join('');
+      if (cur && items.indexOf(cur) !== -1) el.value = cur;
+      else if (opts && opts.head) el.value = opts.head.v;
+    };
+    var fillDatalist = function (id, items) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = items.map(function (x) { return '<option value="' + esc(x) + '"></option>'; }).join('');
+    };
+
+    fillSelect('inputDevoteeSamaj', comm);
+    fillSelect('devoteeSamajFilter', comm, { head: { v: 'all', t: (window.t ? window.t('all_committees', 'All Committees / Samaj') : 'All Committees / Samaj') } });
+    fillSelect('inputVolunteerTeam', teams);
+    fillDatalist('donCommitteeList', comm);
+    fillDatalist('sevCommitteeList', comm);
+    // guest role suggestions — Pandit removed on request
+    fillDatalist('gstRoleList', ['Chief Guest', 'Guest of Honour', 'Trust President', 'Trustee', 'Yagna Acharya', 'Path Acharya', 'Mahila Mandal Head']);
+  };
+
+  // run once the modules have loaded, on language change, and before any modal opens
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(window.syncEntitySelects, 0); });
+  } else {
+    setTimeout(window.syncEntitySelects, 0);
+  }
+  if (typeof window.onLanguageChange === 'function') window.onLanguageChange(window.syncEntitySelects);
+  if (typeof window.openModal === 'function') {
+    var _openModal = window.openModal;
+    window.openModal = function (id) {
+      try { window.syncEntitySelects(); } catch (e) {}
+      return _openModal.apply(this, arguments);
+    };
+  }
+
   /** Resolve an id (person or 'CMT:<id>') to { id, name, mobile, ... } or null. */
   window.personById = function (id) {
     if (!id) return null;

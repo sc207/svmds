@@ -183,7 +183,6 @@
             <label class="form-label" for="gstFieldRole">Role</label>
             <input type="text" class="form-input" id="gstFieldRole" list="gstRoleList" placeholder="e.g. Pandit, Chief Guest">
             <datalist id="gstRoleList">
-              <option value="Pandit"></option>
               <option value="Chief Guest"></option>
               <option value="Guest of Honour"></option>
               <option value="Trust President"></option>

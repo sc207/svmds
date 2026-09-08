@@ -139,7 +139,7 @@ function visitFormBody(v) {
     </div>
     <div class="form-group"><label class="form-label" for="visEscort">${window.t('vis_escort', 'Escort Team')}</label>
       <input class="form-input" id="visEscort" list="visTeamList" value="${esc(v.escortTeam || '')}" placeholder="${window.t('vis_escort_ph', 'Team that carries the palki & manages the visit')}">
-      <datalist id="visTeamList">${VISITS.teams.map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist>
+      <datalist id="visTeamList">${((typeof teamNames === 'function' ? teamNames() : null) || VISITS.teams).map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist>
     </div>
     <div class="form-group"><label class="form-label" for="visNotes">${window.t('notes')}</label><textarea class="form-input mg-textarea" id="visNotes" rows="2">${esc(v.notes || '')}</textarea></div>
   </form>`;
