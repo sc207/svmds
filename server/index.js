@@ -90,9 +90,12 @@ app.use('/api/poojas', require('./routes/poojas'));
 app.use('/api/sevarthis', require('./routes/sevarthis'));
 app.use('/api/committees', require('./routes/committees'));
 app.use('/api/teams', require('./routes/teams'));
+app.use('/api/events', require('./routes/events'));
+app.use('/api/visits', require('./routes/visits'));
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/inventory', require('./routes/inventory'));
 
-// Phase 7+: events, visits, expenses, inventory,
-//           calendar, dashboard, reports, activity — see BACKEND_PLAN.md §4.4.
+// Phase 8+: calendar, dashboard, reports, activity — see BACKEND_PLAN.md §4.4.
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));
 

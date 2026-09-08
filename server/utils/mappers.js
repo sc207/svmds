@@ -406,6 +406,94 @@ function mapSignup(row) {
   };
 }
 
+function mapEventType(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    name: row.name,
+    category: row.category || '',
+    icon: row.icon || '',
+    description: row.description || '',
+  };
+}
+
+function mapEvent(row, days = []) {
+  if (!row) return null;
+  return {
+    id: row.code || row.id,
+    uuid: row.id,
+    code: row.code || '',
+    typeId: row.type_code || (row.type_id != null ? String(row.type_id) : null),
+    name: row.name,
+    venue: row.venue || '',
+    inChargeId: row.in_charge_id || null,
+    expectedFootfall: Number(row.expected_footfall || 0),
+    budget: Number(row.budget || 0),
+    status: row.status || 'planning',
+    color: row.color || '#C96A20',
+    notes: row.notes || '',
+    days: days.map(d => ({ id: d.id, date: d.date, startTime: d.start_time || '', endTime: d.end_time || '' })),
+    createdDate: row.created_date || row.created_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapVisit(row) {
+  if (!row) return null;
+  return {
+    id: row.code || row.id,
+    uuid: row.id,
+    code: row.code || '',
+    devoteeName: row.devotee_name,
+    devoteeId: row.devotee_id || null,
+    mobile: row.mobile || '',
+    purpose: row.purpose || 'other',
+    address: row.address || '',
+    city: row.city || '',
+    state: row.state || 'Gujarat',
+    date: row.date,
+    time: row.time || '',
+    escortTeam: row.escort_team || '',
+    status: row.status || 'requested',
+    notes: row.notes || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapExpense(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    title: row.title,
+    category: row.category || '',
+    amount: Number(row.amount || 0),
+    date: row.date,
+    status: row.status || 'Pending',
+    createdAt: row.created_at,
+  };
+}
+
+function mapInventory(row) {
+  if (!row) return null;
+  return {
+    id: row.code || String(row.id),
+    rowId: row.id,
+    code: row.code || '',
+    item: row.item,
+    category: row.category || '',
+    stock: row.stock || '',
+    minStock: row.min_stock || '',
+    status: row.status || 'In Stock',
+    createdAt: row.created_at,
+  };
+}
+
 function mapSession(row, currentJti) {
   if (!row) return null;
   return {
@@ -445,4 +533,5 @@ module.exports = {
   mapPoojaType, mapPoojaSession, mapSevarthi, mapGuest, mapPooja,
   mapCommittee, mapCommitteeMember, mapMeeting, mapCommunication, mapDraft, mapAttendance,
   mapTeam, mapTeamMember, mapVolunteeringSession, mapPublicPage, mapSignup,
+  mapEventType, mapEvent, mapVisit, mapExpense, mapInventory,
 };
