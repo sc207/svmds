@@ -45,15 +45,15 @@ const CMT = {
   committees: [
     { id:'CMT-001', name:'General Temple Committee', leaderId: '', samaj:'General Committee',
       purpose:'Overall governance of the temple construction — approvals, budgets and coordination between samaj committees.',
-      color:'#6B1F2A', expectedSize:25, status:'active', createdDate:'2026-06-01',
+      color:'#6B1F2A', expectedSize:0, status:'active', createdDate:'2026-06-01',
       notes:'Meets on the first Sunday of every month.' },
     { id:'CMT-002', name:'Rabari Samaj Committee', leaderId: '', samaj:'Rabari Samaj',
       purpose:'Rabari samaj contribution drives, shram-daan rosters and stone/timber procurement for the shikhar.',
-      color:'#C96A20', expectedSize:45, status:'active', createdDate:'2026-06-05',
+      color:'#C96A20', expectedSize:0, status:'active', createdDate:'2026-06-05',
       notes:'Largest samaj group; handles village-wise collection.' },
     { id:'CMT-003', name:'Marvadi Samaj Committee', leaderId: '', samaj:'Marvadi Samaj',
       purpose:'Festival celebrations, prasad sponsorship and marble / gold work funding.',
-      color:'#7A3B62', expectedSize:32, status:'active', createdDate:'2026-06-08',
+      color:'#7A3B62', expectedSize:0, status:'active', createdDate:'2026-06-08',
       notes:'' }
   ],
 

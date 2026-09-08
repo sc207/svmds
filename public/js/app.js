@@ -9,56 +9,19 @@ const state = {
   currentLang: 'en',
 
   // Devotees Register (Central Person Model)
-  devotees: [
-    { id: '#DEV-1001', name: 'Rameshbhai Rabari', phone: '9876543210', city: 'Sanand', samaj: 'Rabari Samaj', status: 'Active', visits: 12 },
-    { id: '#DEV-1002', name: 'Priya Sharma', phone: '9812345678', city: 'Ahmedabad', samaj: 'General Committee', status: 'Active', visits: 8 },
-    { id: '#DEV-1003', name: 'Kiran Joshi', phone: '9723456789', city: 'Sanand', samaj: 'Marvadi Samaj', status: 'Active', visits: 15 },
-    { id: '#DEV-1004', name: 'Mehul Shah', phone: '9988776655', city: 'Viramgam', samaj: 'General Committee', status: 'Active', visits: 5 },
-    { id: '#DEV-1005', name: 'Bhavesh Desai', phone: '9654321098', city: 'Bavla', samaj: 'Rabari Samaj', status: 'Active', visits: 20 },
-    { id: '#DEV-1006', name: 'Nilesh Parmar', phone: '9898012345', city: 'Changodar', samaj: 'General Committee', status: 'Active', visits: 4 },
-    { id: '#DEV-1007', name: 'Hetal Shah', phone: '9712398765', city: 'Sanand', samaj: 'Marvadi Samaj', status: 'Active', visits: 11 },
-    { id: '#DEV-1008', name: 'Jignesh Patel', phone: '9823456780', city: 'Ahmedabad', samaj: 'General Committee', status: 'Active', visits: 7 }
-  ],
+  devotees: [],
   
   // Financial Donations Log — superseded by the Donations module (donations.js)
-  donations: [
-    { receipt: '#REC-101', name: 'Rameshbhai Rabari', category: 'Pooja / Seva Booking', mode: 'Cash', date: '05 Sept 2026', amount: 1100 },
-    { receipt: '#REC-102', name: 'Priya Sharma', category: 'General Donation', mode: 'UPI', date: '05 Sept 2026', amount: 501 },
-    { receipt: '#REC-103', name: 'Kiran Joshi', category: 'Temple Renovation', mode: 'Bank Transfer', date: '04 Sept 2026', amount: 21000 },
-    { receipt: '#REC-104', name: 'Mehul Shah', category: 'Annadan / Bhojan', mode: 'Cash', date: '04 Sept 2026', amount: 5100 },
-    { receipt: '#REC-105', name: 'Bhavesh Desai', category: 'General Donation', mode: 'UPI', date: '03 Sept 2026', amount: 11000 },
-    { receipt: '#REC-106', name: 'Hetal Shah', category: 'Pooja / Seva Booking', mode: 'UPI', date: '03 Sept 2026', amount: 251 }
-  ],
+  donations: [],
 
   // 36 Pooja Master Catalog — superseded by POOJA.poojaTypes (pooja.js); kept for reference only
-  poojas: [
-    { id: 1, name: 'Visat Meldi Mata Vishesh Havan', duration: '60 mins', fee: 1100, category: 'Special Havan' },
-    { id: 2, name: 'Maha Aarti & Deepotsav', duration: '30 mins', fee: 501, category: 'Daily Ritual' },
-    { id: 3, name: 'Rudrabhishek Seva', duration: '45 mins', fee: 1100, category: 'Abhishek' },
-    { id: 4, name: 'Navgraha Shanti Pooja', duration: '90 mins', fee: 1251, category: 'Shanti Pooja' },
-    { id: 5, name: 'Chandi Path & Archana', duration: '120 mins', fee: 2100, category: 'Path' },
-    { id: 6, name: 'Shat Chandi Mahayagna', duration: '180 mins', fee: 5100, category: 'Special Yagna' },
-    { id: 7, name: 'Gau Seva & Grass Donation', duration: '15 mins', fee: 251, category: 'Seva' },
-    { id: 8, name: 'Annadan Mahaprasad Seva', duration: '60 mins', fee: 1100, category: 'Prasad' }
-  ],
+  poojas: [],
 
   // Inventory Stock
-  inventory: [
-    { id: '#INV-01', item: 'Pooja Ghee & Pure Oil', category: 'Pooja Materials', stock: '45 Ltrs', minStock: '15 Ltrs', status: 'In Stock' },
-    { id: '#INV-02', item: 'Agarbatti & Dhoop', category: 'Incense', stock: '120 Packs', minStock: '30 Packs', status: 'In Stock' },
-    { id: '#INV-03', item: 'Fresh Rose & Marigold Flowers', category: 'Flowers', stock: '8 Kgs', minStock: '10 Kgs', status: 'Low Stock' },
-    { id: '#INV-04', item: 'Kesar & Chandan Paste', category: 'Pooja Materials', stock: '25 Boxes', minStock: '5 Boxes', status: 'In Stock' },
-    { id: '#INV-05', item: 'Bhojan Shala Rice Bags', category: 'Prasad', stock: '2 Bags', minStock: '10 Bags', status: 'Out of Stock' },
-    { id: '#INV-06', item: 'Brass Diyas & Wicks', category: 'Temple Supplies', stock: '150 Pcs', minStock: '20 Pcs', status: 'In Stock' }
-  ],
+  inventory: [],
 
   // Expense Records
-  expenses: [
-    { id: '#EXP-501', title: 'Temple Electricity & Power Utility', category: 'Electricity', amount: 14200, date: '01 Sept 2026', status: 'Paid' },
-    { id: '#EXP-502', title: 'Pooja Supplies Bulk Order', category: 'Pooja Materials', amount: 8500, date: '02 Sept 2026', status: 'Paid' },
-    { id: '#EXP-503', title: 'Sanitation & Cleaning Service', category: 'Cleaning', amount: 4800, date: '03 Sept 2026', status: 'Paid' },
-    { id: '#EXP-504', title: 'Prasad Grain Procurement', category: 'Prasad', amount: 12000, date: '04 Sept 2026', status: 'Pending' }
-  ]
+  expenses: []
 };
 
 // Initialize Application Engine
@@ -427,7 +390,7 @@ function terminateSession(btn) {
 }
 
 function toggleNotificationsDrawer() {
-  showToast('Notifications: 3 unread temple updates');
+  showToast('No new notifications');
 }
 
 function showToast(msg) {

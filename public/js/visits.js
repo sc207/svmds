@@ -23,7 +23,7 @@ const VISITS = {
   editingId: null,
 
   purposes: ['home_inauguration', 'shop_opening', 'wedding_blessing', 'health_blessing', 'business_puja', 'festival_padhramani', 'other'],
-  teams: ['Bhuvaji + 2 helpers', 'Palki Escort Team', 'VIP Escort Team', 'Mandir Handling Team', 'Youth Volunteer Team'],
+  teams: [],
 
   list: []
 };

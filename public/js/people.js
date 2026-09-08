@@ -35,24 +35,7 @@
   /* Seeded from the people already referenced across the modules
      (same DEV-### ids the modules use, so everything cross-links). */
   var ACCOUNTS = [
-    { id: 'DEV-001', name: 'Rajesh Patel',      mobile: '9876500001', city: 'Sanand',
-      roles: ['superadmin'] },
-    { id: 'DEV-002', name: 'Suresh Bapa',       mobile: '9876500006', city: 'Sanand',
-      roles: ['admin'] },
-    { id: 'DEV-010', name: 'Amit Shah',         mobile: '9876500002', city: 'Ahmedabad',
-      roles: ['management_lead', 'pooja_coordinator'] },
-    { id: 'DEV-011', name: 'Kiran Patel',       mobile: '9876500003', city: 'Sanand',
-      roles: ['management_lead', 'pooja_coordinator'] },
-    { id: 'DEV-012', name: 'Manjula Ben',       mobile: '9876500004', city: 'Viramgam',
-      roles: ['management_lead'] },
-    { id: 'DEV-013', name: 'Harish Rabari',     mobile: '9876500005', city: 'Bavla',
-      roles: ['management_lead'] },
-    { id: 'DEV-020', name: 'Harishbhai Rabari', mobile: '9876500021', city: 'Bavla',
-      roles: ['committee_leader'] },
-    { id: 'DEV-021', name: 'Manjula Ben',       mobile: '9876500022', city: 'Viramgam',
-      roles: ['committee_leader', 'event_incharge'] },
-    { id: 'DEV-030', name: 'Nitin Mehta',       mobile: '9876500030', city: 'Ahmedabad',
-      roles: ['accountant'] }
+    { id: 'DEV-001', name: 'Administrator', mobile: '', city: '', roles: ['superadmin'] }
   ];
 
   function accountById(id) { return ACCOUNTS.find(function (a) { return a.id === id; }); }
