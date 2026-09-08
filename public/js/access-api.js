@@ -69,14 +69,16 @@
         USERS.map(function (u) {
           var priv = (u.roles || []).some(function (r) { return PRIVILEGED[r]; });
           var lockRow = priv && !superOnly;
+          var editBtn = '<button class="btn btn-outline mg-btn-xs" onclick="accEditProfile(\'' + u.id + '\')">Edit</button> ';
           var actions;
           if (u.rootOwner) {
-            actions = '<span class="badge badge-maroon">🔒 ' + esc(T('acc_owner', 'Primary owner')) + '</span>' +
+            actions = editBtn +
+                      '<span class="badge badge-maroon">🔒 ' + esc(T('acc_owner', 'Primary owner')) + '</span>' +
                       ' <span class="mg-muted-xs">' + esc(T('acc_owner_note', 'protected — cannot be disabled or removed')) + '</span>';
           } else if (lockRow) {
             actions = '<span class="mg-muted-xs">superadmin only</span>';
           } else {
-            actions =
+            actions = editBtn +
               '<button class="btn btn-outline mg-btn-xs" onclick="accEditRoles(\'' + u.id + '\')">Roles</button> ' +
               '<button class="btn btn-outline mg-btn-xs" onclick="accToggleActive(\'' + u.id + '\')">' + (u.active ? 'Disable' : 'Enable') + '</button> ' +
               '<button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="accDeleteAccount(\'' + u.id + '\')">Delete</button>';
@@ -206,8 +208,37 @@
     catch (e) { toast(e.message); }
   };
 
+  window.accEditProfile = function (id) {
+    var u = USERS.filter(function (x) { return String(x.id) === String(id); })[0];
+    if (!u || typeof openSheet !== 'function') { toast('UI not ready'); return; }
+    openSheet({
+      title: 'Edit profile — ' + esc(u.name || u.email),
+      body: '<form id="accProfileForm">' +
+        '<div class="form-group"><label class="form-label">Google email</label>' +
+          '<input class="form-input" value="' + esc(u.email) + '" disabled>' +
+          '<span class="mg-muted-xs">The sign-in email cannot be changed. Remove this account and add the new email instead.</span></div>' +
+        '<div class="form-group"><label class="form-label">Name</label><input class="form-input" name="name" value="' + esc(u.name || '') + '"></div>' +
+        '<div class="form-group"><label class="form-label">Mobile</label><input class="form-input" name="mobile" maxlength="10" value="' + esc(u.mobile || '') + '"></div>' +
+        '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city" value="' + esc(u.city || '') + '"></div>' +
+      '</form>',
+      footer: '<button class="btn btn-outline" onclick="closeSheet()">Cancel</button>' +
+              '<button class="btn btn-primary" onclick="accSubmitProfile(\'' + id + '\')">Save</button>',
+    });
+  };
+  window.accSubmitProfile = async function (id) {
+    var f = document.getElementById('accProfileForm'); if (!f) return;
+    var mobile = f.mobile.value.trim();
+    if (mobile && !/^[0-9]{10}$/.test(mobile)) { toast('Mobile must be 10 digits'); return; }
+    var body = { name: f.name.value.trim(), mobile: mobile, city: f.city.value.trim() };
+    try {
+      await window.API.patch('/users/' + id, body);
+      if (typeof closeSheet === 'function') closeSheet();
+      toast('Profile updated'); await refresh();
+    } catch (e) { toast(e.message); }
+  };
+
   window.accEditRoles = function (id) {
-    var u = USERS.filter(function (x) { return x.id === id; })[0]; if (!u) return;
+    var u = USERS.filter(function (x) { return String(x.id) === String(id); })[0]; if (!u) return;
     openSheet({
       title: 'Roles — ' + esc(u.name || u.email),
       body: '<form id="accRolesForm">' + roleCheckboxes(u.roles) + '</form>',
@@ -216,7 +247,7 @@
     });
   };
   window.accSubmitRoles = async function (id) {
-    var u = USERS.filter(function (x) { return x.id === id; })[0];
+    var u = USERS.filter(function (x) { return String(x.id) === String(id); })[0];
     var f = document.getElementById('accRolesForm'); if (!u || !f) return;
     var want = pickedRoles(f), have = u.roles || [];
     try {
@@ -228,7 +259,7 @@
   };
 
   window.accToggleActive = async function (id) {
-    var u = USERS.filter(function (x) { return x.id === id; })[0]; if (!u) return;
+    var u = USERS.filter(function (x) { return String(x.id) === String(id); })[0]; if (!u) return;
     try {
       await window.API.patch('/users/' + id, { active: !u.active });
       toast(u.active ? 'Account disabled' : 'Account enabled');
@@ -237,7 +268,7 @@
   };
 
   window.accDeleteAccount = function (id) {
-    var u = USERS.filter(function (x) { return x.id === id; })[0]; if (!u) return;
+    var u = USERS.filter(function (x) { return String(x.id) === String(id); })[0]; if (!u) return;
     var go = async function () {
       try { await window.API.del('/users/' + id); toast('Account deleted'); }
       catch (e) { toast(e.message); }
