@@ -8,6 +8,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
+const { nextColorFor } = require('../services/palette');
 const { mapEventType, mapEvent } = require('../utils/mappers');
 
 const router = express.Router();
@@ -114,11 +115,12 @@ router.post('/', adminTier, async (req, res, next) => {
 
     const id = crypto.randomUUID();
     const code = await nextCode('event');
+    const color = b.color || await nextColorFor('events');   // auto-cycled, no picker
     await run(
       `INSERT INTO events (id, code, type_id, name, venue, expected_footfall, budget, status, color, notes, created_date)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, date('now'))`,
       [id, code, typeId, name, b.venue || '', parseInt(b.expectedFootfall, 10) || 0, Number(b.budget || 0),
-       STATUS.includes(b.status) ? b.status : 'planning', b.color || '#C96A20', b.notes || '']
+       STATUS.includes(b.status) ? b.status : 'planning', color, b.notes || '']
     );
     for (const d of days) {
       await run('INSERT INTO event_days (event_id, date, start_time, end_time) VALUES (?, ?, ?, ?)',

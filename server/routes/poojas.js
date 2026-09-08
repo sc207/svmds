@@ -10,6 +10,7 @@ const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
 const { ensureDevotee } = require('../services/people');
+const { nextColorFor } = require('../services/palette');
 const { mapPooja, mapPoojaSession, mapSevarthi, mapGuest } = require('../utils/mappers');
 
 const router = express.Router();
@@ -121,11 +122,12 @@ router.post('/', adminTier, async (req, res, next) => {
       annualEventId = ae ? ae.id : null;
     }
     const code = await nextCode('pooja');
+    const color = b.color || await nextColorFor('poojas');   // auto-cycled, no picker
     await run(
       `INSERT INTO poojas (id, code, type_id, name, schedule_mode, default_venue, status, color,
                            estimated_seva_amount, notes, custom_json, invitation_json, annual_event_id, created_date)
        VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, date('now'))`,
-      [id, code, typeId, name, scheduleMode, b.defaultVenue || '', b.color || '#6B1F2A',
+      [id, code, typeId, name, scheduleMode, b.defaultVenue || '', color,
        Number(b.estimatedSevaAmount || 0), b.notes || '',
        JSON.stringify(b.custom || []), JSON.stringify(b.invitation || {}), annualEventId]
     );

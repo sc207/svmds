@@ -11,6 +11,7 @@ const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
 const { ensureDevotee } = require('../services/people');
+const { nextColorFor } = require('../services/palette');
 const shared = require('../services/sharedTables');
 const {
   mapCommittee, mapCommitteeMember, mapMeeting,
@@ -81,10 +82,11 @@ router.post('/', adminTier, async (req, res, next) => {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'name is required' });
     const code = await nextCode('committee');
+    const color = req.body.color || await nextColorFor('committees');   // auto-cycled, no picker
     const r = await run(
       `INSERT INTO committees (code, name, samaj, purpose, color, expected_size, notes, created_date)
        VALUES (?, ?, ?, ?, ?, ?, ?, date('now'))`,
-      [code, name, req.body.samaj || '', req.body.purpose || '', req.body.color || '#6B1F2A',
+      [code, name, req.body.samaj || '', req.body.purpose || '', color,
        parseInt(req.body.expectedSize, 10) || 0, req.body.notes || '']
     );
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',

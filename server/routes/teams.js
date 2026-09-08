@@ -11,6 +11,7 @@ const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
 const { ensureDevotee } = require('../services/people');
+const { nextColorFor } = require('../services/palette');
 const shared = require('../services/sharedTables');
 const {
   mapTeam, mapTeamMember, mapVolunteeringSession, mapPublicPage,
@@ -84,10 +85,11 @@ router.post('/', adminTier, async (req, res, next) => {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'name is required' });
     const code = await nextCode('team');
+    const color = req.body.color || await nextColorFor('teams');   // auto-cycled, no picker
     const r = await run(
       `INSERT INTO teams (code, name, description, color, expected_team_size, notes, created_date)
        VALUES (?, ?, ?, ?, ?, ?, date('now'))`,
-      [code, name, req.body.description || '', req.body.color || '#6B1F2A',
+      [code, name, req.body.description || '', color,
        parseInt(req.body.expectedTeamSize, 10) || 0, req.body.notes || '']
     );
     await run('INSERT INTO public_pages (team_id, enabled) VALUES (?, 0)', [r.lastInsertRowid]);
