@@ -5,7 +5,7 @@
 const express = require('express');
 const { queryOne, run } = require('../db/connection');
 const { requireRole, ROLE_PAGES, pagesForUser } = require('../middleware/authz');
-const { assertCanGrant, assertCanTouchUser } = require('../services/authz');
+const { assertCanGrant, assertCanTouchUser, assertRootOwnerSafe, isRootOwner } = require('../services/authz');
 const { getUser, listUsers } = require('../services/userStore');
 const { logAudit } = require('../services/audit');
 const { mapUser } = require('../utils/mappers');
@@ -18,6 +18,7 @@ const adminTier = requireRole('superadmin', 'admin');
 function dto(row) {
   const u = mapUser(row);
   u.pages = pagesForUser(row);
+  u.rootOwner = isRootOwner(row);   // the immovable ADMIN_EMAIL account
   return u;
 }
 
@@ -82,6 +83,7 @@ router.patch('/:id', adminTier, async (req, res, next) => {
     const u = await getUser(parseInt(req.params.id, 10));
     if (!u) return res.status(404).json({ error: 'User not found' });
     assertCanTouchUser(req.user, u);
+    if (req.body.active === false) assertRootOwnerSafe(u, 'disable');
 
     const sets = [];
     const args = [];
@@ -134,6 +136,7 @@ router.delete('/:id/roles/:role', adminTier, async (req, res, next) => {
 
     const u = await getUser(parseInt(req.params.id, 10));
     if (!u) return res.status(404).json({ error: 'User not found' });
+    if (role === 'superadmin') assertRootOwnerSafe(u, 'revoke-superadmin');
 
     await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [u.id, role]);
     // losing a scoped role can change what they may see — revoke live sessions so they re-auth
@@ -151,6 +154,7 @@ router.delete('/:id', adminTier, async (req, res, next) => {
     const u = await getUser(parseInt(req.params.id, 10));
     if (!u) return res.status(404).json({ error: 'User not found' });
     assertCanTouchUser(req.user, u);
+    assertRootOwnerSafe(u, 'delete');
     if (u.id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
 
     await run(`UPDATE users SET is_deleted = 1, active = 0, updated_at = datetime('now') WHERE id = ?`, [u.id]);

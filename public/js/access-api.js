@@ -66,18 +66,25 @@
         USERS.map(function (u) {
           var priv = (u.roles || []).some(function (r) { return PRIVILEGED[r]; });
           var lockRow = priv && !superOnly;
+          var actions;
+          if (u.rootOwner) {
+            actions = '<span class="badge badge-maroon">🔒 ' + esc(T('acc_owner', 'Primary owner')) + '</span>' +
+                      ' <span class="mg-muted-xs">' + esc(T('acc_owner_note', 'protected — cannot be disabled or removed')) + '</span>';
+          } else if (lockRow) {
+            actions = '<span class="mg-muted-xs">superadmin only</span>';
+          } else {
+            actions =
+              '<button class="btn btn-outline mg-btn-xs" onclick="accEditRoles(\'' + u.id + '\')">Roles</button> ' +
+              '<button class="btn btn-outline mg-btn-xs" onclick="accToggleActive(\'' + u.id + '\')">' + (u.active ? 'Disable' : 'Enable') + '</button> ' +
+              '<button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="accDeleteAccount(\'' + u.id + '\')">Delete</button>';
+          }
           return '<tr>' +
             '<td><div class="mg-name-cell"><span class="mg-avatar">' + esc((u.name || u.email || '?')[0].toUpperCase()) + '</span>' +
               '<div><strong>' + esc(u.name || '—') + '</strong><div class="mg-muted-xs">' + esc(u.id) + (u.googleLinked ? ' · linked' : '') + '</div></div></div></td>' +
             '<td class="acc-wrap">' + esc(u.email) + '</td>' +
             '<td>' + (u.roles || []).map(function (r) { return '<span class="badge badge-maroon">' + esc(ROLE_LABEL[r] || r) + '</span>'; }).join(' ') + '</td>' +
             '<td>' + (u.active ? '<span class="badge badge-confirmed">Active</span>' : '<span class="badge badge-cancelled">Disabled</span>') + '</td>' +
-            '<td style="white-space:nowrap">' +
-              (lockRow ? '<span class="mg-muted-xs">superadmin only</span>' :
-                ('<button class="btn btn-outline mg-btn-xs" onclick="accEditRoles(\'' + u.id + '\')">Roles</button> ' +
-                 '<button class="btn btn-outline mg-btn-xs" onclick="accToggleActive(\'' + u.id + '\')">' + (u.active ? 'Disable' : 'Enable') + '</button> ' +
-                 '<button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="accDeleteAccount(\'' + u.id + '\')">Delete</button>')) +
-            '</td></tr>';
+            '<td style="white-space:nowrap">' + actions + '</td></tr>';
         }).join('') +
         '</tbody></table></div></div></div>' +
 
