@@ -1,8 +1,8 @@
-# Render Blueprint — Shri Vihat Meldi Mata Mandir (SVMMMS)
+# Render Blueprint — Shri Vihat Meldi Mata Mandir (SVMDS)
 # New → Blueprint → pick this repo. Fill the `sync: false` vars in the dashboard.
 services:
   - type: web
-    name: svmmms
+    name: svmds
     runtime: node
     plan: free
     region: singapore

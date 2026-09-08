@@ -1,5 +1,5 @@
 -- ============================================================
--- 001_init.sql  —  Shri Vihat Meldi Mata Mandir (SVMMMS)
+-- 001_init.sql  —  Shri Vihat Meldi Mata Mandir (SVMDS)
 -- Conventions: BACKEND_PLAN.md §2.1
 --   registries/catalogs -> INTEGER PK AUTOINCREMENT + code TEXT UNIQUE
 --   transactions/events  -> TEXT PK (uuid) + code TEXT UNIQUE

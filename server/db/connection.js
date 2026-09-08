@@ -42,7 +42,7 @@ async function getDb() {
   const Database = require('better-sqlite3');
   const dataDir = path.join(process.cwd(), 'data');
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-  const native = new Database(path.join(dataDir, 'svmmms.db'));
+  const native = new Database(path.join(dataDir, 'svmds.db'));
   native.pragma('journal_mode = WAL');
   native.pragma('foreign_keys = ON');
   db = wrapSqlite(native);

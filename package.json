@@ -1,8 +1,8 @@
 {
-  "name": "svmmms",
+  "name": "svmds",
   "version": "1.0.0",
   "private": true,
-  "description": "Shri Vihat Meldi Mata Mandir — temple management platform (SVMMMS)",
+  "description": "Shri Vihat Meldi Mata Mandir — temple management platform (SVMDS)",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
