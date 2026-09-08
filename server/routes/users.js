@@ -5,7 +5,7 @@
 const express = require('express');
 const { queryOne, run } = require('../db/connection');
 const { requireRole, ROLE_PAGES, pagesForUser } = require('../middleware/authz');
-const { assertCanGrant, assertCanTouchUser, assertRootOwnerSafe, isRootOwner } = require('../services/authz');
+const { assertCanGrant, assertCanTouchUser, assertSingleSuperadmin, assertRootOwnerSafe, isRootOwner } = require('../services/authz');
 const { getUser, listUsers } = require('../services/userStore');
 const { logAudit } = require('../services/audit');
 const { mapUser } = require('../utils/mappers');
@@ -50,6 +50,7 @@ router.post('/', adminTier, async (req, res, next) => {
     for (const r of roles) {
       if (!VALID_ROLES.includes(r)) return res.status(400).json({ error: `Unknown role: ${r}` });
       assertCanGrant(req.user, r);
+      await assertSingleSuperadmin(r, null);   // a brand-new account can never be superadmin
     }
 
     const existing = await queryOne('SELECT id, is_deleted FROM users WHERE lower(email) = ?', [email]);
@@ -117,6 +118,7 @@ router.post('/:id/roles', adminTier, async (req, res, next) => {
 
     const u = await getUser(parseInt(req.params.id, 10));
     if (!u) return res.status(404).json({ error: 'User not found' });
+    await assertSingleSuperadmin(role, u.id);
 
     if (!u.roles.includes(role)) {
       await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [u.id, role]);

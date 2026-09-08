@@ -43,6 +43,23 @@ function assertCanGrant(actor, role) {
   }
 }
 
+/** There is exactly ONE superadmin — the bootstrapped primary owner. Once it
+    exists, the `superadmin` role can never be granted to anyone else, by anyone
+    (not an admin, not even the existing superadmin). Grant `admin` instead. */
+async function assertSingleSuperadmin(role, targetUserId) {
+  if (role !== 'superadmin') return;
+  const { queryOne } = require('../db/connection');
+  const row = await queryOne(
+    `SELECT ur.user_id FROM user_roles ur
+       JOIN users u ON u.id = ur.user_id
+     WHERE ur.role = 'superadmin' AND u.is_deleted = 0
+     LIMIT 1`
+  );
+  if (row && row.user_id !== targetUserId) {
+    throw httpError(409, 'Only one superadmin is allowed (the primary owner account). Grant the "admin" role instead.');
+  }
+}
+
 /** Can `actor` edit / disable `targetUser` (row with roles[])? */
 function assertCanTouchUser(actor, targetUser) {
   if (!isAdminTier(actor)) throw httpError(403, 'Forbidden');
@@ -57,4 +74,7 @@ function assertCanTouchUser(actor, targetUser) {
   }
 }
 
-module.exports = { assertCanGrant, assertCanTouchUser, isRootOwner, assertRootOwnerSafe, httpError };
+module.exports = {
+  assertCanGrant, assertCanTouchUser, assertSingleSuperadmin,
+  isRootOwner, assertRootOwnerSafe, httpError,
+};

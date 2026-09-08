@@ -161,12 +161,22 @@
   /* ---------- actions ---------- */
   function roleCheckboxes(current) {
     var superOnly = iAmSuper();
+    var cur = current || [];
     return ROLES.map(function (r) {
-      var disabled = PRIVILEGED[r] && !superOnly ? ' disabled' : '';
-      var checked = (current || []).indexOf(r) !== -1 ? ' checked' : '';
+      var checked = cur.indexOf(r) !== -1 ? ' checked' : '';
+      var note = '', disabled = '';
+      if (r === 'superadmin') {
+        // exactly one superadmin (the primary owner) — never grantable via the UI
+        disabled = ' disabled';
+        note = checked ? ' <span class="mg-muted-xs">(the primary owner — fixed)</span>'
+                       : ' <span class="mg-muted-xs">(only one superadmin allowed)</span>';
+      } else if (r === 'admin' && !superOnly) {
+        disabled = ' disabled';
+        note = ' <span class="mg-muted-xs">(superadmin only)</span>';
+      }
       return '<label style="display:flex;gap:.5rem;align-items:center;margin:.3rem 0">' +
         '<input type="checkbox" value="' + r + '"' + checked + disabled + '> ' + esc(ROLE_LABEL[r] || r) +
-        (disabled ? ' <span class="mg-muted-xs">(superadmin only)</span>' : '') + '</label>';
+        note + '</label>';
     }).join('');
   }
   function pickedRoles(form) {
