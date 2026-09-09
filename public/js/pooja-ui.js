@@ -1481,11 +1481,17 @@ function assignCoordinator(e, poojaId) {
   const sel = document.getElementById('pjGrantSelect');
   if (!p || !sel || !sel.value) return;
   if (!p.coordinatorIds) p.coordinatorIds = [];
-  if (p.coordinatorIds.indexOf(sel.value) === -1) {
-    p.coordinatorIds.push(sel.value);
-    const c = coordinatorById(sel.value) || { name: sel.value };
+  const val = sel.value;
+  if (p.coordinatorIds.indexOf(val) === -1) {
+    p.coordinatorIds.push(val);
+    const c = coordinatorById(val) || { name: val };
     logPoojaActivity(poojaId, `Access granted to ${c.name}`);
     pjToast(`${c.name} can now open this pooja.`);
+    if (window.API && window.API.online && (/^DEV-/i.test(val) || /^\d+$/.test(String(val)))) {
+      window.API.post('/poojas/' + (p.code || p.id) + '/coordinators', { devoteeId: val })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { pjToast((err && err.message) || 'Grant failed to sync'); });
+    }
   }
   populateCoordRoleOptions();
   renderPooja();
@@ -1500,6 +1506,10 @@ function revokeCoordinator(poojaId, coordId) {
   pjToast(`${c.name}'s access removed.`);
   populateCoordRoleOptions();
   renderPooja();
+  if (window.API && window.API.online && (/^DEV-/i.test(coordId) || /^\d+$/.test(String(coordId)))) {
+    window.API.del('/poojas/' + (p.code || p.id) + '/coordinators/' + coordId)
+      .catch(function (err) { pjToast((err && err.message) || 'Revoke failed to sync'); });
+  }
 }
 
 /* "+ Add new devotee" beside the Grant-Access select — same shared sheet,

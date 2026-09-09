@@ -478,6 +478,32 @@ function pjSevarthiIdsToDevoteeIds(sevIds) {
   });
 }
 
+/* Reconcile a pooja's coordinator + sevarthi links to the backend.
+   prevCoord / nextCoord are DEVOTEE ids (codes). prevSev is a list of SEV-###
+   ids (mapped to devotee ids here); nextSev is DEVOTEE ids. */
+function pjDiffLinks(code, prevCoord, nextCoord, prevSev, nextSev, localPooja) {
+  const prevSevDev = (prevSev || []).map(function (id) { const s = sevarthiById(id); return s ? (s.devoteeId || s.id) : id; });
+  const uniq = function (a) { return a.filter(function (v, i) { return a.indexOf(v) === i && v; }); };
+  const addCoord = uniq(nextCoord).filter(function (d) { return prevCoord.indexOf(d) === -1; });
+  const delCoord = uniq(prevCoord).filter(function (d) { return nextCoord.indexOf(d) === -1; });
+  const addSev = uniq(nextSev).filter(function (d) { return prevSevDev.indexOf(d) === -1; });
+  const delSev = uniq(prevSevDev).filter(function (d) { return nextSev.indexOf(d) === -1; });
+
+  let chain = Promise.resolve();
+  addCoord.forEach(function (d) { chain = chain.then(function () { return window.API.post('/poojas/' + code + '/coordinators', { devoteeId: d }).catch(function(){}); }); });
+  delCoord.forEach(function (d) { chain = chain.then(function () { return window.API.del('/poojas/' + code + '/coordinators/' + d).catch(function(){}); }); });
+  addSev.forEach(function (d) { chain = chain.then(function () { return window.API.post('/poojas/' + code + '/sevarthis', { devoteeId: d }).catch(function(e){ if (!(e && e.status === 409)) throw e; }); }); });
+  delSev.forEach(function (d) {
+    chain = chain.then(function () {
+      // resolve the devotee id back to a SEV code for the delete route
+      const s = POOJA.sevarthis.find(function (x) { return x.devoteeId === d; });
+      const ref = s ? (s.code || s.id) : d;
+      return window.API.del('/poojas/' + code + '/sevarthis/' + ref).catch(function(){});
+    });
+  });
+  return chain;
+}
+
 function handleSavePooja(e) {
   e.preventDefault();
   const name = document.getElementById('pjFieldName').value.trim();
@@ -508,13 +534,30 @@ function handleSavePooja(e) {
 
   const mintSession = makeSessionIdMinter();
 
+  const online = !!(window.API && window.API.online);
+  // devotee ids for the picked sevarthis/coordinators — never a phantom
+  const sevDevIds = checkedIds('pjSevarthiPicker', 'pj-sev-check').filter(function (x) { return /^DEV-/i.test(x) || /^\d+$/.test(String(x)); });
+  const coordDevIds = coordinatorIds.filter(function (x) { return /^DEV-/i.test(x) || /^\d+$/.test(String(x)); });
+  const guestPayload = (function () {
+    return guestIds.map(function (gid) {
+      const g = pjGuestById(gid); if (!g) return null;
+      return { name: (g.firstName + ' ' + (g.lastName || '')).trim(), firstName: g.firstName, lastName: g.lastName || '',
+               role: g.role || '', mobile: (g.mobile || '').replace(/\D/g, ''), city: g.city || '', state: g.state || 'Gujarat',
+               devoteeId: (g.devoteeId && /^DEV-/i.test(g.devoteeId)) ? g.devoteeId : undefined };
+    }).filter(Boolean);
+  })();
+
   if (POOJA.editingPoojaId) {
     const p = poojaById(POOJA.editingPoojaId);
     const prev = p.sessions || [];
-    p.sessions = sessions.map((s, i) => ({
+    const code = p.code || p.id;
+    const newSessions = sessions.map((s, i) => ({
       id: (prev[i] && prev[i].id) || mintSession(),
       label: s.label || `Session ${i + 1}`, date: s.date, startTime: s.startTime, endTime: s.endTime, venue: s.venue
     }));
+    const prevSev = (p.sevarthiIds || []).slice();
+    const prevCoord = (p.coordinatorIds || []).slice();
+    p.sessions = newSessions;
     Object.assign(p, {
       name, defaultVenue, color: accent, notes, guestIds, sevarthiIds, coordinatorIds, custom,
       scheduleMode: mode,
@@ -523,9 +566,29 @@ function handleSavePooja(e) {
     });
     logPoojaActivity(p.id, `Pooja details updated by ${POOJA.session.userName}`);
     pjToast(`${name} updated.`);
+    if (online) {
+      window.API.patch('/poojas/' + code, {
+        name, scheduleMode: mode, defaultVenue, notes, custom,
+        estimatedSevaAmount: isNaN(sevaAmount) ? 0 : sevaAmount
+      })
+        .then(function () {
+          // sessions: PATCH existing by id, POST any new ones
+          return newSessions.reduce(function (chain, s) {
+            return chain.then(function () {
+              const had = prev.some(function (x) { return x.id === s.id; });
+              const body = { label: s.label, date: s.date, startTime: s.startTime, endTime: s.endTime, venue: s.venue };
+              return had ? window.API.patch('/poojas/' + code + '/sessions/' + s.id, body).catch(function(){})
+                         : window.API.post('/poojas/' + code + '/sessions', body).catch(function(){});
+            });
+          }, Promise.resolve());
+        })
+        .then(function () { return pjDiffLinks(code, prevCoord, coordDevIds, prevSev, sevDevIds, p); })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     const id = nextId('PJA', POOJA.poojas, 3);
-    POOJA.poojas.push({
+    const local = {
       id, typeId, name, scheduleMode: mode, defaultVenue,
       sessions: sessions.map((s, i) => ({
         id: mintSession(),
@@ -540,15 +603,26 @@ function handleSavePooja(e) {
         showSevarthi: true, showGuests: true, showSchedule: true
       },
       createdDate: pjToday()
-    });
+    };
+    POOJA.poojas.push(local);
     logPoojaActivity(id, `Pooja "${name}" created`);
-    // best-effort DB persist
-    if (window.API && window.API.online) {
-      window.API.post('/poojas', { name, scheduleMode: mode, defaultVenue,
-        sessions: sessions.map(x => ({ label: x.label, date: x.date, startTime: x.startTime, endTime: x.endTime, venue: x.venue })),
-        notes }).catch(function(){});
-    }
     pjToast(`${name} created.`);
+    if (online) {
+      window.API.post('/poojas', {
+        name, typeId, scheduleMode: mode, defaultVenue, notes, custom,
+        estimatedSevaAmount: isNaN(sevaAmount) ? 0 : sevaAmount,
+        sessions: sessions.map(x => ({ label: x.label, date: x.date, startTime: x.startTime, endTime: x.endTime, venue: x.venue })),
+        guests: guestPayload
+      })
+        .then(function (c) {
+          const code = c && (c.code || c.id);
+          if (!code) throw new Error('no pooja code returned');
+          local.code = code;
+          return pjDiffLinks(code, [], coordDevIds, [], sevDevIds, local);
+        })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   }
 
   const f = firstSession(poojaById(POOJA.editingPoojaId || POOJA.poojas[POOJA.poojas.length - 1].id));
@@ -591,12 +665,17 @@ function confirmDeletePooja(id) {
            <p class="mg-mt-sm"><strong>This action cannot be undone.</strong></p>`,
     confirmLabel: 'Delete Pooja',
     onConfirm: () => {
+      const code = p.code || p.id;
+      const wasSynced = /^PJA-/i.test(p.id) || (p.code && /^PJA-/i.test(p.code));
       POOJA.activity = POOJA.activity.filter(a => a.poojaId !== id);
       POOJA.poojas = POOJA.poojas.filter(x => x.id !== id);
       if (POOJA.activePoojaId === id) { POOJA.activePoojaId = null; POOJA.view = 'directory'; }
       populateCoordRoleOptions();
       pjToast(`${p.name} deleted.`);
       renderPooja();
+      if (window.API && window.API.online && wasSynced) {
+        window.API.del('/poojas/' + code).catch(function (err) { pjToast((err && err.message) || 'Delete failed to sync'); });
+      }
     }
   });
 }
@@ -857,11 +936,20 @@ function handleSaveSevarthi(e) {
   if (!firstName) { pjToast('The chosen devotee has no name on record.'); return; }
   if (mobile && !/^[0-9]{10}$/.test(mobile)) { pjToast('That devotee’s mobile is not 10 digits — fix it in the register.'); return; }
 
+  if (!pickedDevoteeId) { pjToast('Pick a devotee from the register first.'); return; }
+  const online = !!(window.API && window.API.online);
+  const code = p.code || p.id;
+
   if (POOJA.editingSevarthiId) {
     const s = sevarthiById(POOJA.editingSevarthiId);
     Object.assign(s, { devoteeId: pickedDevoteeId || s.devoteeId, firstName, lastName, mobile, city, state, committee, status, notes });
     logPoojaActivity(p.id, `Sevarthi ${firstName} ${lastName} details updated`);
     pjToast(`${firstName} ${lastName} updated.`);
+    if (online && (s.code || /^SEV-/i.test(s.id))) {
+      window.API.patch('/sevarthis/' + (s.code || s.id), { firstName, lastName, mobile, city, state, committee, status, notes })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     if ((p.sevarthiIds || []).some(id => {
       const sv = sevarthiById(id) || {};
@@ -871,21 +959,27 @@ function handleSaveSevarthi(e) {
     }
     const existing = POOJA.sevarthis.find(s => s.devoteeId === pickedDevoteeId || (mobile && s.mobile === mobile));
     let record = existing;
-    if (existing) {
-      logPoojaActivity(p.id, `${firstName} ${lastName} (${existing.devoteeId}) linked as sevarthi`);
-    } else {
-      const mgIds = (typeof MG !== 'undefined' && MG.members) ? MG.members.map(x => ({ id: x.devoteeId })) : [];
-      const devoteeId = pickedDevoteeId || nextId('DEV', POOJA.sevarthis.map(x => ({ id: x.devoteeId })).concat(mgIds), 3);
+    if (!existing) {
       record = {
-        id: nextId('SEV', POOJA.sevarthis, 3), devoteeId,
+        id: nextId('SEV', POOJA.sevarthis, 3), devoteeId: pickedDevoteeId,
         firstName, lastName, mobile, city, state, committee, status, notes, addedDate: pjToday()
       };
       POOJA.sevarthis.push(record);
       logPoojaActivity(p.id, `New sevarthi ${firstName} ${lastName} added`);
+    } else {
+      logPoojaActivity(p.id, `${firstName} ${lastName} (${existing.devoteeId}) linked as sevarthi`);
     }
     if (!p.sevarthiIds) p.sevarthiIds = [];
     if (p.sevarthiIds.indexOf(record.id) === -1) p.sevarthiIds.push(record.id);
     pjToast(`${firstName} ${lastName} added to ${p.name}.`);
+    if (online) {
+      window.API.post('/poojas/' + code + '/sevarthis', { devoteeId: pickedDevoteeId })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) {
+          if (err && err.status === 409) { pjToast('Already a sevarthi of this pooja.'); return window.__rehydrate && window.__rehydrate(); }
+          pjToast((err && err.message) || 'Saved locally — sync failed');
+        });
+    }
   }
 
   POOJA.editingSevarthiId = null;
@@ -904,11 +998,17 @@ function removeSevarthiFromPooja(poojaId, sevId) {
            <p class="mg-muted-xs mg-mt-sm">The devotee record (${esc(s.devoteeId)}) is kept and stays available for other poojas.</p>`,
     confirmLabel: 'Remove',
     onConfirm: () => {
+      const code = p.code || p.id;
+      const ref = s.code || s.id;
+      const wasSynced = /^SEV-/i.test(ref) && (/^PJA-/i.test(p.id) || (p.code && /^PJA-/i.test(p.code)));
       p.sevarthiIds = (p.sevarthiIds || []).filter(id => id !== sevId);
       if (POOJA.activeSevarthiId === sevId) POOJA.activeSevarthiId = null;
       logPoojaActivity(poojaId, `${s.firstName} ${s.lastName} removed as sevarthi`);
       pjToast('Sevarthi removed from this pooja.');
       renderPooja();
+      if (window.API && window.API.online && wasSynced) {
+        window.API.del('/poojas/' + code + '/sevarthis/' + ref).catch(function (err) { pjToast((err && err.message) || 'Remove failed to sync'); });
+      }
     }
   });
 }
@@ -976,13 +1076,22 @@ function handleSavePoojaType(e) {
     suggestedOfferings: document.getElementById('ptyFieldOfferings').value.trim()
   };
 
+  const online = !!(window.API && window.API.online);
   if (POOJA.editingTypeId) {
-    Object.assign(typeById(POOJA.editingTypeId), payload);
+    const t = typeById(POOJA.editingTypeId);
+    Object.assign(t, payload);
     pjToast(`${name} updated.`);
+    if (online && (t.code || /^(PTY|PJT)-/i.test(t.id))) {
+      window.API.patch('/pooja-types/' + (t.code || t.id), payload).catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     if (POOJA.poojaTypes.length >= 36) { pjToast('The master catalog already holds 36 pooja types.'); return; }
-    POOJA.poojaTypes.push(Object.assign({ id: nextId('PTY', POOJA.poojaTypes, 3) }, payload));
+    const t = Object.assign({ id: nextId('PTY', POOJA.poojaTypes, 3) }, payload);
+    POOJA.poojaTypes.push(t);
     pjToast(`${name} added to the catalog.`);
+    if (online) window.API.post('/pooja-types', payload)
+      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
   }
   POOJA.editingTypeId = null;
   closeModal('modalPoojaType');
@@ -999,9 +1108,11 @@ function confirmDeletePoojaType(id) {
     body: `<p>Delete <strong>${esc(t.name)}</strong> from the master catalog?</p>`,
     confirmLabel: 'Delete Type',
     onConfirm: () => {
+      const wasSynced = t.code || /^(PTY|PJT)-/i.test(t.id);
       POOJA.poojaTypes = POOJA.poojaTypes.filter(x => x.id !== id);
       pjToast('Pooja type deleted.');
       renderPooja();
+      if (window.API && window.API.online && wasSynced) window.API.del('/pooja-types/' + (t.code || t.id)).catch(function () {});
     }
   });
 }

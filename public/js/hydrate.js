@@ -226,6 +226,65 @@
     log('teams: ' + teams.length + ' (' + members.length + ' members)');
   }
 
+  /* ---- Pooja ---- */
+  async function hydratePoojas() {
+    if (typeof POOJA === 'undefined') return;
+    var types = [];
+    try { types = await window.API.get('/pooja-types'); } catch (e) {}
+    if (Array.isArray(types)) {
+      swap(POOJA.poojaTypes, types.map(function (t) {
+        return { id: t.id, code: t.code, name: t.name, category: t.category || '',
+                 description: t.description || '', defaultDurationMin: t.defaultDurationMin || 60,
+                 suggestedOfferings: t.suggestedOfferings || '', icon: t.icon || '🪔' };
+      }));
+    }
+
+    var sevRows = [];
+    try { sevRows = await window.API.get('/sevarthis'); } catch (e) {}
+    if (Array.isArray(sevRows)) {
+      swap(POOJA.sevarthis, sevRows.map(function (s) {
+        return { id: s.id, code: s.code, devoteeId: devCode(s.devoteeId),
+                 firstName: s.firstName || '', lastName: s.lastName || '',
+                 mobile: s.mobile || '', city: s.city || '', state: s.state || 'Gujarat',
+                 committee: s.committee || '', status: s.status || 'active',
+                 notes: s.notes || '', addedDate: s.addedDate || '' };
+      }));
+    }
+
+    var rows = await window.API.get('/poojas');
+    if (!Array.isArray(rows)) return;
+    var poojas = [], guests = {};
+    rows.forEach(function (p) {
+      (p.guests || []).forEach(function (g) {
+        if (!guests[g.id]) guests[g.id] = {
+          id: g.id, code: g.code, devoteeId: '', firstName: g.firstName || '', lastName: g.lastName || '',
+          role: g.role || g.title || '', mobile: g.mobile || '', city: g.city || '', state: g.state || 'Gujarat',
+          notes: g.notes || ''
+        };
+      });
+      poojas.push({
+        id: p.id, code: p.code, typeId: p.typeId, name: p.name,
+        scheduleMode: p.scheduleMode || 'single', defaultVenue: p.defaultVenue || '',
+        status: p.status || null, color: p.color || '#6B1F2A',
+        estimatedSevaAmount: p.estimatedSevaAmount || 0, notes: p.notes || '',
+        custom: p.custom || [], invitation: p.invitation || {},
+        extendedUntil: p.extendedUntil || undefined, completedOn: p.completedOn || undefined,
+        createdDate: p.createdDate || '',
+        sessions: (p.sessions || []).map(function (s) {
+          return { id: s.id, label: s.label || '', date: s.date, startTime: s.startTime || '',
+                   endTime: s.endTime || '', venue: s.venue || '' };
+        }),
+        sevarthiIds: (p.sevarthiIds || []).slice(),
+        coordinatorIds: (p.coordinatorIds || []).slice(),
+        guestIds: (p.guests || []).map(function (g) { return g.id; })
+      });
+    });
+    swap(POOJA.poojas, poojas);
+    swap(POOJA.people, Object.keys(guests).map(function (k) { return guests[k]; }));
+    if (typeof renderPooja === 'function') renderPooja();
+    log('poojas: ' + poojas.length + ' (' + POOJA.sevarthis.length + ' sevarthis, ' + POOJA.poojaTypes.length + ' types)');
+  }
+
   async function refreshViews() {
     try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) {}
     try { if (typeof renderUnifiedCalendar === 'function') renderUnifiedCalendar(); } catch (e) {}
@@ -239,6 +298,7 @@
     await hydrateCore();
     try { await hydrateCommittees(); } catch (e) { log('committees failed: ' + e.message); }
     try { await hydrateTeams(); } catch (e) { log('teams failed: ' + e.message); }
+    try { await hydratePoojas(); } catch (e) { log('poojas failed: ' + e.message); }
     await refreshViews();
     log('done');
   }
