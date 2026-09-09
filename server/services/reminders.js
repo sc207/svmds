@@ -167,6 +167,25 @@ async function remindersFor(user) {
     }
   }
 
+  /* ---------------- dhaja pooja sponsorships ---------------- */
+  {
+    let sql = `
+      SELECT dp.code AS dcode, dp.sponsor_name, dp.scheduled_date AS date, dp.devotee_id,
+             c.name AS campaign_name
+      FROM dhaja_poojas dp
+      LEFT JOIN dhaja_campaigns c ON c.id = dp.campaign_id
+      WHERE dp.is_deleted = 0 AND dp.status NOT IN ('cancelled','performed')
+        AND dp.scheduled_date IS NOT NULL
+        AND dp.scheduled_date >= ? AND dp.scheduled_date <= ?`;
+    const args = [today, windowEnd];
+    if (!isAdmin) { sql += ` AND dp.devotee_id = ?`; args.push(devId); }
+    for (const r of await queryAll(sql, args)) {
+      items.push(shape('dhaja', `dhaja:${r.dcode}`, r.sponsor_name || 'Dhaja Pooja',
+        r.campaign_name || 'Dhaja Pooja', r.date, '', '', '#B8860B',
+        isAdmin ? 'Dhaja Pooja' : 'Your Dhaja Pooja', 'dhaja', today));
+    }
+  }
+
   /* ---------------- padhramani visits (admin tier only) ---------------- */
   if (isAdmin) {
     const rows = await queryAll(`
@@ -194,7 +213,7 @@ async function remindersFor(user) {
   }
 
   // priority: soonest first, then by start time, then a stable type order
-  const typeRank = { event: 0, annual: 1, pooja: 2, meeting: 3, session: 4, visit: 5 };
+  const typeRank = { event: 0, annual: 1, pooja: 2, meeting: 3, session: 4, visit: 5, dhaja: 6 };
   list.sort((a, b) =>
     (a.daysUntil - b.daysUntil) ||
     String(a.time || '99:99').localeCompare(b.time || '99:99') ||

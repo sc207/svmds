@@ -296,6 +296,7 @@ function renderReports() {
     ${modCard(window.t('rep_pooja', 'Poojas'), poojaCount, window.t('pj_kpi_types', 'types') + ': ' + (typeof POOJA !== 'undefined' ? POOJA.poojaTypes.length : 0), 'mod-pooja')}
     ${modCard(window.t('rep_cmt', 'Committees'), (typeof CMT !== 'undefined' ? CMT.committees.length : 0), cmtRate + '% ' + window.t('cmt_kpi_attendance_meta', 'avg this month'), 'mod-committee')}
     ${modCard(window.t('rep_ev', 'Events'), evCount, '', 'mod-events')}
+    ${modCard(window.t('rep_dhaja', 'Dhaja Pooja'), (typeof DHAJA !== 'undefined' ? DHAJA.sponsorships.filter(s => s.status !== 'cancelled').length : 0), window.t('dhaja_sponsored', 'sponsored'), 'mod-dhaja')}
     ${modCard(window.t('nav_management_s', 'Management teams'), (typeof MG !== 'undefined' ? MG.managements.length : 0), '', 'mod-management')}
     ${modCard(window.t('acc_audit', 'Audit trail'), (typeof mergedActivity === 'function' ? mergedActivity(999).length : 0), window.t('acc_audit_meta', 'merged from every module'), 'acc-audit')}
   </div>`;

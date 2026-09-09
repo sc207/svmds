@@ -539,6 +539,59 @@ function mapAnnualEvent(row, year) {
   return ev;
 }
 
+function mapDhajaCampaign(row, extra = {}) {
+  if (!row) return null;
+  const target = Number(row.target_count || 0);
+  const sponsored = extra.sponsoredCount != null ? Number(extra.sponsoredCount) : 0;
+  return {
+    id: row.code || String(row.id),
+    uuid: row.id,
+    code: row.code || '',
+    name: row.name,
+    nameGu: row.name_gu || '',
+    targetCount: target,
+    startDate: row.start_date || '',
+    endDate: row.end_date || '',
+    annualEventId: row.annual_event_id || null,
+    annualEventCode: row.annual_event_code || null,
+    status: row.status || 'open',
+    notes: row.notes || '',
+    sponsoredCount: sponsored,
+    raisedAmount: extra.raisedAmount != null ? Number(extra.raisedAmount) : 0,
+    remaining: extra.remaining != null
+      ? Number(extra.remaining)
+      : (target > 0 ? Math.max(0, target - sponsored) : null),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function mapDhajaPooja(row) {
+  if (!row) return null;
+  return {
+    id: row.code || row.id,
+    uuid: row.id,
+    code: row.code || '',
+    campaignId: row.campaign_code || (row.campaign_id != null ? String(row.campaign_id) : null),
+    seqNo: row.seq_no != null ? Number(row.seq_no) : null,
+    devoteeId: row.devotee_id || null,        // numeric devotees.id — hydrate.devCode() converts
+    devoteeCode: row.devotee_code || null,    // 'DEV-###' from the join, for consumers outside hydrate
+    sponsorName: row.sponsor_name || '',
+    sponsorMobile: row.sponsor_mobile || '',
+    annualEventId: row.annual_event_id || null,
+    annualEventCode: row.annual_event_code || null,
+    scheduledDate: row.scheduled_date || '',
+    performedDate: row.performed_date || '',
+    pledgeAmount: Number(row.pledge_amount || 0),
+    donationId: row.donation_code || row.donation_id || null,
+    receiptNo: row.receipt_no || '',
+    status: row.status || 'sponsored',
+    notes: row.notes || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
 function mapSession(row, currentJti) {
   if (!row) return null;
   return {
@@ -580,4 +633,5 @@ module.exports = {
   mapTeam, mapTeamMember, mapVolunteeringSession, mapPublicPage, mapSignup,
   mapEventType, mapEvent, mapVisit, mapExpense, mapInventory,
   mapAnnualEvent,
+  mapDhajaCampaign, mapDhajaPooja,
 };

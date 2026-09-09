@@ -8,7 +8,8 @@ const UNION = `
   UNION ALL SELECT date, time, type, CAST(scope_id AS TEXT), title, color, label, venue FROM v_cal_meeting
   UNION ALL SELECT date, time, type, CAST(scope_id AS TEXT), title, color, label, venue FROM v_cal_event
   UNION ALL SELECT date, time, type, CAST(scope_id AS TEXT), title, color, label, venue FROM v_cal_visit
-  UNION ALL SELECT date, time, type, CAST(scope_id AS TEXT), title, color, label, venue FROM v_cal_pledge`;
+  UNION ALL SELECT date, time, type, CAST(scope_id AS TEXT), title, color, label, venue FROM v_cal_pledge
+  UNION ALL SELECT date, time, type, CAST(scope_id AS TEXT), title, color, label, venue FROM v_cal_dhaja`;
 
 /**
  * @param {string} [month]  'YYYY-MM' — restrict to that month

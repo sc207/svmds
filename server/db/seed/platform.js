@@ -32,6 +32,7 @@ const COUNTERS = [
   ['event', 'EVN', 3], ['event_type', 'EVT', 3],
   ['visit', 'VIS', 3], ['expense', 'EXP', 3], ['inventory', 'INV', 3],
   ['annual_event', 'ANE', 3],
+  ['dhaja_campaign', 'DHC', 3], ['dhaja_pooja', 'DHJ', 3],
 ];
 
 async function seedPlatform() {

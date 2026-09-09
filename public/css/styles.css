@@ -3693,3 +3693,16 @@ body.annc-open { overflow: hidden; }
   border-radius: 50%; animation: annc-spin .8s linear infinite;
 }
 @keyframes annc-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Dhaja Pooja module ---------- */
+.dhaja-boards { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.dhaja-camp .card-title { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.dhaja-bar {
+  margin-top: .7rem; height: 9px; border-radius: 999px;
+  background: var(--warm-border); overflow: hidden;
+}
+.dhaja-bar > span {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--antique-gold), var(--saffron));
+  transition: width .4s ease;
+}

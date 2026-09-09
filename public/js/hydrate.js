@@ -374,6 +374,36 @@
     log('donations: ' + DON.donations.length + ' (' + DON.donors.length + ' donors, ' + DON.categories.length + ' categories)');
   }
 
+  /* ---- Dhaja Pooja ---- */
+  async function hydrateDhaja() {
+    if (typeof DHAJA === 'undefined') return;
+    var camps = [];
+    try { camps = await window.API.get('/dhaja/campaigns'); } catch (e) {}
+    if (Array.isArray(camps)) {
+      swap(DHAJA.campaigns, camps.map(function (c) {
+        return { id: c.id, uuid: c.uuid, code: c.code, name: c.name, nameGu: c.nameGu || '',
+                 targetCount: c.targetCount || 0, startDate: c.startDate || '', endDate: c.endDate || '',
+                 annualEventId: c.annualEventId || null, annualEventCode: c.annualEventCode || null,
+                 status: c.status || 'open', notes: c.notes || '',
+                 sponsoredCount: c.sponsoredCount || 0, raisedAmount: c.raisedAmount || 0,
+                 remaining: c.remaining != null ? c.remaining : null };
+      }));
+    }
+    var rows = await window.API.get('/dhaja');
+    if (!Array.isArray(rows)) return;
+    swap(DHAJA.sponsorships, rows.map(function (x) {
+      return { id: x.id, code: x.code, campaignId: x.campaignId, seqNo: x.seqNo,
+               devoteeId: devCode(x.devoteeId),
+               sponsorName: x.sponsorName || '', sponsorMobile: x.sponsorMobile || '',
+               annualEventId: x.annualEventId || null,
+               scheduledDate: x.scheduledDate || '', performedDate: x.performedDate || '',
+               pledgeAmount: x.pledgeAmount || 0, donationId: x.donationId || '',
+               receiptNo: x.receiptNo || '', status: x.status || 'sponsored', notes: x.notes || '' };
+    }));
+    if (typeof renderDhaja === 'function') renderDhaja();
+    log('dhaja: ' + DHAJA.sponsorships.length + ' (' + DHAJA.campaigns.length + ' campaigns)');
+  }
+
   async function refreshViews() {
     try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) {}
     try { if (typeof renderUnifiedCalendar === 'function') renderUnifiedCalendar(); } catch (e) {}
@@ -391,6 +421,7 @@
     try { await hydrateEvents(); } catch (e) { log('events failed: ' + e.message); }
     try { await hydrateVisits(); } catch (e) { log('visits failed: ' + e.message); }
     try { await hydrateDonations(); } catch (e) { log('donations failed: ' + e.message); }
+    try { await hydrateDhaja(); } catch (e) { log('dhaja failed: ' + e.message); }
     await refreshViews();
     log('done');
   }

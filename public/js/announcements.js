@@ -21,7 +21,7 @@
   }
   function T(k, f) { return (typeof window.t === 'function') ? window.t(k, f) : (f != null ? f : k); }
 
-  var ICON = { pooja: '🪔', meeting: '👥', session: '🤝', event: '🎪', annual: '📿', visit: '🙏' };
+  var ICON = { pooja: '🪔', meeting: '👥', session: '🤝', event: '🎪', annual: '📿', visit: '🙏', dhaja: '🚩' };
 
   function countdown(d) {
     if (d <= 0) return T('annc_today', 'Today');

@@ -12,7 +12,7 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
 const CAL = {
   year: 2026,
   month: 8,           // 0-indexed (September)
-  filters: { pooja: true, committee: true, event: true, annual: true, donation: true, visit: true }
+  filters: { pooja: true, committee: true, event: true, annual: true, dhaja: true, donation: true, visit: true }
 };
 (function () {
   const iso = (typeof MG !== 'undefined' && MG.today) ? MG.today : '2026-09-06';
@@ -34,7 +34,7 @@ function calRestricted() {
 }
 function calAllowedTypes() {
   return calRestricted() ? CAL_PUBLIC_TYPES.slice()
-                         : ['pooja', 'committee', 'event', 'annual', 'donation', 'visit'];
+                         : ['pooja', 'committee', 'event', 'annual', 'dhaja', 'donation', 'visit'];
 }
 
 /* ---- localisation: delegate to the shared i18n.js helpers (locDate / locTime
@@ -105,6 +105,21 @@ function calEntries(monthKey) {
       });
     });
   }
+  // Dhaja Pooja sponsorships with a scheduled / performed date
+  if (CAL.filters.dhaja && typeof DHAJA !== 'undefined' && Array.isArray(DHAJA.sponsorships)) {
+    DHAJA.sponsorships.forEach(s => {
+      if (s.status === 'cancelled') return;
+      const d = s.performedDate || s.scheduledDate;
+      if (!inMonth(d)) return;
+      const c = (typeof dhajaCampaignById === 'function') ? dhajaCampaignById(s.campaignId) : null;
+      out.push({
+        date: d, time: '', type: 'dhaja', color: '#B8860B', scopeId: s.campaignId,
+        title: calD(s.sponsorName || window.t('dhaja_title', 'Dhaja Pooja')),
+        sub: (s.seqNo ? '#' + s.seqNo + ' · ' : '') + (c ? calD(c.name) : window.t('dhaja_title', 'Dhaja Pooja')),
+        go: () => { if (typeof switchPage === 'function') switchPage('dhaja'); }
+      });
+    });
+  }
   // Donation pledges awaiting realisation
   if (CAL.filters.donation && typeof DON !== 'undefined' && Array.isArray(DON.donations)) {
     DON.donations.forEach(x => {
@@ -140,6 +155,7 @@ const CAL_TYPE_META = {
   committee: { key: 'cal_meetings',   def: '🏛️ Meetings',  badge: 'badge-pending' },
   event:     { key: 'cal_events',     def: '📅 Events',     badge: 'badge-pending' },
   annual:    { key: 'cal_annual',     def: '🗓️ Annual',    badge: 'badge-maroon' },
+  dhaja:     { key: 'cal_dhaja',      def: '🚩 Dhaja',     badge: 'badge-maroon' },
   donation:  { key: 'cal_donations',  def: '💰 Pledges',   badge: 'badge-confirmed' },
   visit:     { key: 'cal_visits',     def: '🙏 Visits',    badge: 'badge-confirmed' }
 };

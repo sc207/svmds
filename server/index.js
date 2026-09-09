@@ -141,6 +141,7 @@ app.use('/api/pooja-types', require('./routes/poojaTypes'));
 app.use('/api/poojas', require('./routes/poojas'));
 app.use('/api/sevarthis', require('./routes/sevarthis'));
 app.use('/api/annual-events', require('./routes/annualEvents'));
+app.use('/api/dhaja', require('./routes/dhaja'));
 app.use('/api/committees', require('./routes/committees'));
 app.use('/api/teams', require('./routes/teams'));
 app.use('/api/events', require('./routes/events'));

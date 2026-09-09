@@ -43,6 +43,7 @@ const DONATION_CATEGORIES = [
   ['DCT-008', 'Ratna / Jewellery', 'kind', '💍', 'Diamond & precious-stone jewellery.'],
   ['DCT-009', 'Anna Daan (Grain)', 'kind', '🌾', 'Rice, wheat, ghee, pulses for the bhandar.'],
   ['DCT-010', 'Construction Material', 'kind', '🧱', 'Cement, marble, steel, timber.'],
+  ['DCT-011', 'Dhaja Pooja Seva', 'cash', '🚩', 'Sponsored dhaja pooja (February 108 campaign and special-day dhaja).'],
 ];
 
 const COMMITTEES = [
@@ -125,7 +126,7 @@ async function seedReferenceData() {
   }
 
   // push the counters past the codes we just inserted
-  await ensureCounter('donation_category', 'DCT', 3, 11);
+  await ensureCounter('donation_category', 'DCT', 3, 12);
   await ensureCounter('committee', 'CMT', 3, 4);
   await ensureCounter('team', 'MGMT', 3, 4);
   await ensureCounter('annual_event', 'ANE', 3, 8);
