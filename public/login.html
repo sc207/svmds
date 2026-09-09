@@ -7,9 +7,11 @@
 <link rel="icon" type="image/png" href="assets/icon.png">
 <link rel="stylesheet" href="css/styles.css">
 <style>
-  html, body { height: 100%; }
+  html { height: 100%; }
   body {
     margin: 0;
+    min-height: 100%;
+    box-sizing: border-box;
     display: flex; align-items: center; justify-content: center;
     padding: 24px;
     background:
@@ -19,7 +21,11 @@
   }
   .login-box { width: 100%; margin: 0; }
   .login-form-pane { gap: 0; }
-  #gbtn { display: flex; justify-content: center; min-height: 44px; margin: 6px 0 2px; }
+  #gbtn {
+    display: flex; justify-content: center; min-height: 44px; margin: 6px 0 2px;
+    width: 100%; max-width: 100%; overflow: hidden;
+  }
+  #gbtn > div { margin: 0 auto; }
   .login-msg {
     margin-top: 14px; padding: 10px 12px; border-radius: 9px;
     font-size: 12.5px; display: none; text-align: left;
@@ -27,6 +33,15 @@
   .login-msg.err { display: block; background: var(--danger-bg); color: var(--danger); border: 1px solid #E6C3BF; }
   .login-msg.ok  { display: block; background: var(--success-bg); color: var(--success); border: 1px solid #BFD9C4; }
   .login-hint { font-size: 12px; color: var(--muted-brown); margin: 16px 0 0; line-height: 1.55; }
+
+  /* --- mobile: stop the card being clipped / centred-off-screen --- */
+  @media (max-width: 720px) {
+    body { align-items: flex-start; padding: 16px 14px 28px; }
+    .login-box { max-height: none; }
+  }
+  @media (max-width: 380px) {
+    body { padding: 10px 10px 22px; }
+  }
 </style>
 </head>
 <body>
@@ -193,9 +208,13 @@
         initialized = true;
         window.__gisInitialized = true;
 
+        /* size the rendered button to the pane, not a fixed 300px — otherwise
+           it overflows / clips on a narrow phone. GIS caps width at 400. */
+        var btnW = Math.max(220, Math.min(360, Math.round(box.clientWidth) || 300));
+
         google.accounts.id.renderButton(box, {
           type: 'standard', theme: 'filled_blue', size: 'large',
-          text: 'signin_with', shape: 'pill', width: 300,
+          text: 'signin_with', shape: 'pill', width: btnW,
           click_listener: armWatchdog,     // start the "not stuck" timer on click
           // Prefer the legacy popup account-chooser over FedCM where Chrome still
           // allows the choice: the popup completes reliably with several accounts
