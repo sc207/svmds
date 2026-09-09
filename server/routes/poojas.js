@@ -284,21 +284,30 @@ router.post('/:id/sevarthis', async (req, res, next) => {
       }
 
       // reuse an existing sevarthi for this person (by devotee link, then mobile)
-      if (devoteeId) sev = await queryOne('SELECT * FROM sevarthis WHERE devotee_id = ? AND is_deleted = 0', [devoteeId]);
-      if (!sev && mobile) sev = await queryOne('SELECT * FROM sevarthis WHERE mobile = ? AND is_deleted = 0', [mobile]);
+      const findSev = async () => {
+        let s = devoteeId ? await queryOne('SELECT * FROM sevarthis WHERE devotee_id = ? AND is_deleted = 0', [devoteeId]) : null;
+        if (!s && mobile) s = await queryOne('SELECT * FROM sevarthis WHERE mobile = ? AND is_deleted = 0', [mobile]);
+        return s;
+      };
+      sev = await findSev();
       if (!sev) {
         const dev = await queryOne('SELECT * FROM devotees WHERE id = ?', [devoteeId]);
         const parts = String((dev && dev.name) || b.firstName || '').trim().split(/\s+/);
         const first = parts.shift() || (b.firstName || '');
-        const code = await nextCode('sevarthi');
-        const r = await run(
-          `INSERT INTO sevarthis (code, devotee_id, first_name, last_name, mobile, city, state, committee, status, notes, added_date)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
-          [code, devoteeId, first, parts.join(' ') || (b.lastName || ''),
-           (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
-           (dev && dev.state) || b.state || 'Gujarat', b.committee || '', b.notes || '']
-        );
-        sev = await queryOne('SELECT * FROM sevarthis WHERE id = ?', [r.lastInsertRowid]);
+        try {
+          const code = await nextCode('sevarthi');
+          const r = await run(
+            `INSERT INTO sevarthis (code, devotee_id, first_name, last_name, mobile, city, state, committee, status, notes, added_date)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
+            [code, devoteeId, first, parts.join(' ') || (b.lastName || ''),
+             (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
+             (dev && dev.state) || b.state || 'Gujarat', b.committee || '', b.notes || '']
+          );
+          sev = await queryOne('SELECT * FROM sevarthis WHERE id = ?', [r.lastInsertRowid]);
+        } catch (e) {
+          sev = await findSev();                       // lost a concurrent race → reuse the winner
+          if (!sev) throw e;
+        }
       } else if (devoteeId && !sev.devotee_id) {
         await run('UPDATE sevarthis SET devotee_id = ? WHERE id = ?', [devoteeId, sev.id]);
       }
@@ -306,7 +315,13 @@ router.post('/:id/sevarthis', async (req, res, next) => {
 
     const linked = await queryOne('SELECT 1 AS x FROM pooja_sevarthi_links WHERE pooja_id = ? AND sevarthi_id = ?', [row.id, sev.id]);
     if (linked) return res.status(409).json({ error: 'Already a sevarthi of this pooja' });
-    await run('INSERT INTO pooja_sevarthi_links (pooja_id, sevarthi_id) VALUES (?, ?)', [row.id, sev.id]);
+    try {
+      await run('INSERT INTO pooja_sevarthi_links (pooja_id, sevarthi_id) VALUES (?, ?)', [row.id, sev.id]);
+    } catch (e) {
+      // composite PK already holds this pair (concurrent double-add) — treat as done
+      const now = await queryOne('SELECT 1 AS x FROM pooja_sevarthi_links WHERE pooja_id = ? AND sevarthi_id = ?', [row.id, sev.id]);
+      if (!now) throw e;
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
       action: 'LINK', entityType: 'sevarthi', entityId: sev.code, scopeId: row.code });
     res.status(201).json(await hydrate(await poojaByIdOrCode(row.id)));
@@ -438,7 +453,23 @@ async function addGuest(poojaId, g) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [code, devoteeId, first, last, g.role || g.title || '', mobile, city, g.state || 'Gujarat', g.notes || '']
   );
-  await run('INSERT INTO pooja_guest_links (pooja_id, guest_id) VALUES (?, ?)', [poojaId, r.lastInsertRowid]);
+  try {
+    await run('INSERT INTO pooja_guest_links (pooja_id, guest_id) VALUES (?, ?)', [poojaId, r.lastInsertRowid]);
+  } catch (e) {
+    const linked = await queryOne('SELECT 1 AS x FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, r.lastInsertRowid]);
+    if (!linked) throw e;
+  }
+  // person identity is deduped by ensureDevotee above; if a concurrent call still
+  // produced a second guest row for the same (pooja, devotee), keep the earliest.
+  if (devoteeId) {
+    const rows = await queryAll(
+      `SELECT g.id FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
+       WHERE l.pooja_id = ? AND g.devotee_id = ? AND g.is_deleted = 0 ORDER BY g.id`, [poojaId, devoteeId]);
+    for (let i = 1; i < rows.length; i++) {
+      await run('DELETE FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, rows[i].id]);
+      await run('UPDATE guests SET is_deleted = 1 WHERE id = ?', [rows[i].id]);
+    }
+  }
 }
 
 router.post('/:id/guests', async (req, res, next) => {

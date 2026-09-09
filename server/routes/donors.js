@@ -88,17 +88,38 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    const code = await nextCode('donor');
-    const r = await run(
-      `INSERT INTO donors (code, type, first_name, last_name, org_name, contact_person, mobile, city, state, committee, pan, notes, devotee_id, added_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, date('now'))`,
-      [code, type, firstName, req.body.lastName || '', orgName, req.body.contactPerson || '',
-       mobile, req.body.city || '', req.body.state || 'Gujarat', req.body.committee || '',
-       req.body.pan || '', req.body.notes || '', devoteeId]
-    );
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Donations',
-      action: 'CREATE', entityType: 'donor', entityId: code });
-    res.status(201).json(mapDonor(await queryOne('SELECT * FROM donors WHERE id = ?', [r.lastInsertRowid])));
+    // re-run the same dedupe SELECT — used both to lose a concurrent race and
+    // to recover from a UNIQUE-index violation (ux_donors_mobile).
+    const reselect = async () => {
+      if (mobile) return queryOne('SELECT * FROM donors WHERE mobile = ? AND is_deleted = 0', [mobile]);
+      if (type === 'individual' && devoteeId) return queryOne('SELECT * FROM donors WHERE devotee_id = ? AND is_deleted = 0', [devoteeId]);
+      if (type !== 'individual' && orgName) {
+        return pan
+          ? queryOne(`SELECT * FROM donors WHERE lower(org_name) = lower(?) AND pan = ? AND is_deleted = 0`, [orgName, pan])
+          : queryOne(`SELECT * FROM donors WHERE lower(org_name) = lower(?) AND is_deleted = 0`, [orgName]);
+      }
+      return null;
+    };
+
+    let newId;
+    try {
+      const code = await nextCode('donor');
+      const r = await run(
+        `INSERT INTO donors (code, type, first_name, last_name, org_name, contact_person, mobile, city, state, committee, pan, notes, devotee_id, added_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, date('now'))`,
+        [code, type, firstName, req.body.lastName || '', orgName, req.body.contactPerson || '',
+         mobile, req.body.city || '', req.body.state || 'Gujarat', req.body.committee || '',
+         req.body.pan || '', req.body.notes || '', devoteeId]
+      );
+      newId = r.lastInsertRowid;
+      await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Donations',
+        action: 'CREATE', entityType: 'donor', entityId: code });
+    } catch (e) {
+      const won = await reselect();
+      if (won) return res.status(200).json({ ...mapDonor(won), _deduped: true });
+      throw e;
+    }
+    res.status(201).json(mapDonor(await queryOne('SELECT * FROM donors WHERE id = ?', [newId])));
   } catch (e) { next(e); }
 });
 

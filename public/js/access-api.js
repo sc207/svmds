@@ -43,8 +43,12 @@
 
   function digits(v) { return String(v || '').replace(/\D/g, ''); }
   function devWithAccount() {
+    // key by the DEV-### code — that's what DEVOTEES / the dropdown use
     var m = {};
-    USERS.forEach(function (u) { if (u.devoteeId) m[String(u.devoteeId)] = u.email; });
+    USERS.forEach(function (u) {
+      var key = u.devoteeCode || (u.devoteeId != null ? String(u.devoteeId) : '');
+      if (key) m[key] = u.email;
+    });
     return m;
   }
 
@@ -309,13 +313,14 @@
     if (!u || typeof openSheet !== 'function') { toast('UI not ready'); return; }
     var priv = (u.roles || []).some(function (r) { return PRIVILEGED[r]; });
     if (priv && !iAmSuper()) { toast('Only a superadmin can edit an admin / superadmin account'); return; }
-    var linked = u.devoteeId ? DEVOTEES.filter(function (x) { return String(x.id) === String(u.devoteeId); })[0] : null;
-    var personBlock = u.devoteeId
+    var devKey = u.devoteeCode || (u.devoteeId != null ? String(u.devoteeId) : '');
+    var linked = devKey ? DEVOTEES.filter(function (x) { return String(x.id) === devKey || String(x.rowId) === devKey; })[0] : null;
+    var personBlock = devKey
       ? '<div class="form-group"><label class="form-label">Person (devotee)</label>' +
           '<input class="form-input" value="' + esc((linked && linked.name) || u.name || '—') +
             (linked && linked.mobile ? ' · ' + esc(linked.mobile) : '') +
             (linked && linked.city ? ' · ' + esc(linked.city) : '') + '" disabled>' +
-          '<span class="mg-muted-xs">Linked to devotee ' + esc(u.devoteeId) +
+          '<span class="mg-muted-xs">Linked to devotee ' + esc((linked && linked.id) || devKey) +
             ' — edit the person\'s name / mobile / city in the People register; it updates everywhere.</span></div>'
       : '<div class="form-group"><label class="form-label">Full name</label><input class="form-input" name="fullName" value="' + esc(u.name || '') + '" placeholder="e.g. Rameshbhai Rabari"></div>' +
         '<div class="form-group"><label class="form-label">Mobile</label><input class="form-input" name="mobile" maxlength="10" value="' + esc(u.mobile || '') + '"></div>' +
@@ -329,7 +334,7 @@
         personBlock +
       '</form>',
       footer: '<button class="btn btn-outline" onclick="closeSheet()">Cancel</button>' +
-              (u.devoteeId ? '' : '<button class="btn btn-primary" onclick="accSubmitProfile(\'' + id + '\')">Save</button>'),
+              (devKey ? '' : '<button class="btn btn-primary" onclick="accSubmitProfile(\'' + id + '\')">Save</button>'),
     });
   };
   window.accSubmitProfile = async function (id) {

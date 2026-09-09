@@ -224,16 +224,22 @@ router.post('/:id/members', async (req, res, next) => {
     const dev = await queryOne('SELECT * FROM devotees WHERE id = ?', [devoteeId]);
     const parts = String((dev && dev.name) || b.firstName || '').trim().split(/\s+/);
     const first = parts.shift() || (b.firstName || '');
-    const code = await nextCode('team_member');
-    await run(
-      `INSERT INTO team_members (code, team_id, devotee_id, first_name, last_name, mobile, city, state, role, status, notes, joined_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
-      [code, row.id, devoteeId, first, parts.join(' ') || (b.lastName || ''),
-       (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
-       (dev && dev.state) || b.state || 'Gujarat', b.role || 'Volunteer', b.notes || '']
-    );
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
-      action: 'CREATE', entityType: 'team_member', entityId: code, scopeId: row.code });
+    try {
+      const code = await nextCode('team_member');
+      await run(
+        `INSERT INTO team_members (code, team_id, devotee_id, first_name, last_name, mobile, city, state, role, status, notes, joined_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
+        [code, row.id, devoteeId, first, parts.join(' ') || (b.lastName || ''),
+         (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
+         (dev && dev.state) || b.state || 'Gujarat', b.role || 'Volunteer', b.notes || '']
+      );
+      await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
+        action: 'CREATE', entityType: 'team_member', entityId: code, scopeId: row.code });
+    } catch (e) {
+      // lost a concurrent race against ux_team_members_td — the pair now exists
+      const now = await queryOne('SELECT id FROM team_members WHERE team_id = ? AND devotee_id = ? AND is_deleted = 0', [row.id, devoteeId]);
+      if (!now) throw e;
+    }
     res.status(201).json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });
@@ -478,13 +484,22 @@ router.post('/:id/signups/:sid/approve', async (req, res, next) => {
       member = await queryOne('SELECT * FROM team_members WHERE id = ?', [member.id]);
     }
     if (!member) {
-      const code = await nextCode('team_member');
-      const r = await run(
-        `INSERT INTO team_members (code, team_id, devotee_id, first_name, last_name, mobile, city, state, role, status, joined_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'Gujarat', 'Volunteer', 'active', date('now'))`,
-        [code, row.id, devoteeId, first || su.name, rest.join(' '), su.mobile, su.city || '']
-      );
-      member = await queryOne('SELECT * FROM team_members WHERE id = ?', [r.lastInsertRowid]);
+      try {
+        const code = await nextCode('team_member');
+        const r = await run(
+          `INSERT INTO team_members (code, team_id, devotee_id, first_name, last_name, mobile, city, state, role, status, joined_date)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'Gujarat', 'Volunteer', 'active', date('now'))`,
+          [code, row.id, devoteeId, first || su.name, rest.join(' '), su.mobile, su.city || '']
+        );
+        member = await queryOne('SELECT * FROM team_members WHERE id = ?', [r.lastInsertRowid]);
+      } catch (e) {
+        member = await queryOne('SELECT * FROM team_members WHERE team_id = ? AND devotee_id = ? ORDER BY is_deleted ASC LIMIT 1', [row.id, devoteeId]);
+        if (!member) throw e;
+        if (member.is_deleted) {
+          await run(`UPDATE team_members SET is_deleted = 0, status = 'active', updated_at = datetime('now') WHERE id = ?`, [member.id]);
+          member = await queryOne('SELECT * FROM team_members WHERE id = ?', [member.id]);
+        }
+      }
     }
     const sess = await queryOne('SELECT * FROM volunteering_sessions WHERE id = ? AND is_deleted = 0', [su.session_id]);
     if (sess) {

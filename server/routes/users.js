@@ -89,12 +89,24 @@ router.post('/', adminTier, async (req, res, next) => {
       userId = existing.id;
       await run('DELETE FROM user_roles WHERE user_id = ?', [userId]);
     } else {
-      const r = await run('INSERT INTO users (email, name, mobile, city, active) VALUES (?, ?, ?, ?, 1)',
-        [email, name, mobile, city]);
-      userId = r.lastInsertRowid;
+      try {
+        const r = await run('INSERT INTO users (email, name, mobile, city, active) VALUES (?, ?, ?, ?, 1)',
+          [email, name, mobile, city]);
+        userId = r.lastInsertRowid;
+      } catch (e) {
+        // lost a race against users.email UNIQUE / ux_users_email_lower
+        const won = await queryOne('SELECT id, is_deleted FROM users WHERE lower(email) = ?', [email]);
+        if (!won) throw e;
+        if (!won.is_deleted) return res.status(409).json({ error: 'That email already has an account' });
+        await run(`UPDATE users SET is_deleted = 0, active = 1, name = ?, mobile = ?, city = ?, updated_at = datetime('now') WHERE id = ?`,
+          [name, mobile, city, won.id]);
+        userId = won.id;
+        await run('DELETE FROM user_roles WHERE user_id = ?', [userId]);
+      }
     }
     for (const role of roles) {
-      await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [userId, role]);
+      await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
+                 (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [userId, role, userId, role]);
     }
 
     // link the person: the picked devotee, else create-or-reuse one (ensureDevotee
@@ -103,7 +115,14 @@ router.post('/', adminTier, async (req, res, next) => {
       name, firstName: req.body.firstName, lastName: req.body.lastName,
       mobile, city, state: req.body.state, samaj: req.body.samaj,
     });
-    await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devoteeId, userId]);
+    try {
+      await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devoteeId, userId]);
+    } catch (e) {
+      // ux_users_devotee — another live account already owns this person
+      const owner = await queryOne('SELECT email FROM users WHERE devotee_id = ? AND is_deleted = 0 AND id != ?', [devoteeId, userId]);
+      if (owner) return res.status(409).json({ error: `That devotee already has a login account (${owner.email})` });
+      throw e;
+    }
 
     // adopt any committee / team / event / pooja this person was assigned to
     // BY DEVOTEE ID before they had an account — fill the account pointer and

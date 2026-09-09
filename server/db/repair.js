@@ -387,6 +387,8 @@ async function repairDatabase({ dryRun = false } = {}) {
      `SELECT mobile k FROM donors WHERE mobile <> '' AND is_deleted = 0 GROUP BY mobile HAVING COUNT(*) > 1`],
     ['ux_sevarthis_mobile', `CREATE UNIQUE INDEX IF NOT EXISTS ux_sevarthis_mobile ON sevarthis(mobile) WHERE mobile <> '' AND is_deleted = 0`,
      `SELECT mobile k FROM sevarthis WHERE mobile <> '' AND is_deleted = 0 GROUP BY mobile HAVING COUNT(*) > 1`],
+    ['ux_sevarthis_devotee', `CREATE UNIQUE INDEX IF NOT EXISTS ux_sevarthis_devotee ON sevarthis(devotee_id) WHERE devotee_id IS NOT NULL AND is_deleted = 0`,
+     `SELECT devotee_id k FROM sevarthis WHERE devotee_id IS NOT NULL AND is_deleted = 0 GROUP BY devotee_id HAVING COUNT(*) > 1`],
     ['ux_donations_receipt', `CREATE UNIQUE INDEX IF NOT EXISTS ux_donations_receipt ON donations(receipt_no) WHERE receipt_no IS NOT NULL AND receipt_no <> '' AND is_deleted = 0`,
      `SELECT receipt_no k FROM donations WHERE receipt_no IS NOT NULL AND receipt_no <> '' AND is_deleted = 0 GROUP BY receipt_no HAVING COUNT(*) > 1`],
     ['ux_pcoord_pd', `CREATE UNIQUE INDEX IF NOT EXISTS ux_pcoord_pd ON pooja_coordinator_links(pooja_id, devotee_id) WHERE devotee_id IS NOT NULL`,

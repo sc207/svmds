@@ -7,9 +7,12 @@ async function rolesOf(userId) {
   return rows.map(r => r.role);
 }
 
-/** Full user row + roles[] by id, or null. */
+const USER_SELECT =
+  'SELECT u.*, d.code AS devotee_code FROM users u LEFT JOIN devotees d ON d.id = u.devotee_id';
+
+/** Full user row (+ devotee_code) + roles[] by id, or null. */
 async function getUser(id) {
-  const row = await queryOne('SELECT * FROM users WHERE id = ? AND is_deleted = 0', [id]);
+  const row = await queryOne(`${USER_SELECT} WHERE u.id = ? AND u.is_deleted = 0`, [id]);
   if (!row) return null;
   row.roles = await rolesOf(row.id);
   return row;
@@ -18,7 +21,7 @@ async function getUser(id) {
 /** Active, non-deleted user by email (case-insensitive) + roles[], or null. */
 async function getActiveUserByEmail(email) {
   const row = await queryOne(
-    'SELECT * FROM users WHERE lower(email) = ? AND active = 1 AND is_deleted = 0',
+    `${USER_SELECT} WHERE lower(u.email) = ? AND u.active = 1 AND u.is_deleted = 0`,
     [String(email).toLowerCase().trim()]
   );
   if (!row) return null;
@@ -27,9 +30,7 @@ async function getActiveUserByEmail(email) {
 }
 
 async function listUsers() {
-  const rows = await queryAll(
-    'SELECT * FROM users WHERE is_deleted = 0 ORDER BY id'
-  );
+  const rows = await queryAll(`${USER_SELECT} WHERE u.is_deleted = 0 ORDER BY u.id`);
   for (const r of rows) r.roles = await rolesOf(r.id);
   return rows;
 }

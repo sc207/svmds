@@ -9,7 +9,8 @@
 */
 const fs = require('fs');
 const path = require('path');
-const { run, runBatch, queryAll } = require('./connection');
+const conn = require('./connection');
+const { run, runBatch, queryAll } = conn;
 
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
 
@@ -28,19 +29,31 @@ async function runMigrations() {
   )`);
 
   const done = new Set((await queryAll('SELECT version FROM schema_migrations')).map(r => r.version));
+  // .sql (atomic DDL) and .js (imperative — self-manages atomicity) run in one
+  // sequence, ordered by the numeric NNN prefix.
   const files = fs.existsSync(MIGRATIONS_DIR)
-    ? fs.readdirSync(MIGRATIONS_DIR).filter(f => /^\d+_.*\.sql$/.test(f)).sort()
+    ? fs.readdirSync(MIGRATIONS_DIR).filter(f => /^\d+_.*\.(sql|js)$/.test(f))
+        .sort((a, b) => (parseInt(a, 10) - parseInt(b, 10)) || a.localeCompare(b))
     : [];
 
   let applied = 0;
   for (const file of files) {
     if (done.has(file)) continue;
-    const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-    const stmts = splitStatements(sql).map(s => ({ sql: s, args: [] }));
-    stmts.push({ sql: 'INSERT INTO schema_migrations (version) VALUES (?)', args: [file] });
     try {
-      // atomic all-or-nothing — libsql .batch() over HTTP, or a real txn on better-sqlite3
-      await runBatch(stmts);
+      if (file.endsWith('.js')) {
+        // an imperative migration: exports async up({ queryAll, queryOne, run, runBatch }).
+        // It records nothing itself — the runner marks it done on success.
+        const mod = require(path.join(MIGRATIONS_DIR, file));
+        if (typeof mod.up !== 'function') throw new Error('migration exports no up()');
+        await mod.up(conn);
+        await run('INSERT INTO schema_migrations (version) VALUES (?)', [file]);
+      } else {
+        const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+        const stmts = splitStatements(sql).map(s => ({ sql: s, args: [] }));
+        stmts.push({ sql: 'INSERT INTO schema_migrations (version) VALUES (?)', args: [file] });
+        // atomic all-or-nothing — libsql .batch() over HTTP, or a real txn on better-sqlite3
+        await runBatch(stmts);
+      }
       console.log('  ✓ migrated', file);
       applied++;
     } catch (e) {

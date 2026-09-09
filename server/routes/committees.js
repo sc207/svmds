@@ -225,16 +225,22 @@ router.post('/:id/members', async (req, res, next) => {
     const dev = await queryOne('SELECT * FROM devotees WHERE id = ?', [devoteeId]);
     const parts = String((dev && dev.name) || b.firstName || '').trim().split(/\s+/);
     const first = parts.shift() || (b.firstName || '');
-    const code = await nextCode('committee_member');
-    await run(
-      `INSERT INTO committee_members (code, committee_id, devotee_id, first_name, last_name, mobile, city, state, role, status, notes, joined_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
-      [code, row.id, devoteeId, first, parts.join(' ') || (b.lastName || ''),
-       (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
-       (dev && dev.state) || b.state || 'Gujarat', b.role || 'Member', b.notes || '']
-    );
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',
-      action: 'CREATE', entityType: 'committee_member', entityId: code, scopeId: row.code });
+    try {
+      const code = await nextCode('committee_member');
+      await run(
+        `INSERT INTO committee_members (code, committee_id, devotee_id, first_name, last_name, mobile, city, state, role, status, notes, joined_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
+        [code, row.id, devoteeId, first, parts.join(' ') || (b.lastName || ''),
+         (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
+         (dev && dev.state) || b.state || 'Gujarat', b.role || 'Member', b.notes || '']
+      );
+      await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',
+        action: 'CREATE', entityType: 'committee_member', entityId: code, scopeId: row.code });
+    } catch (e) {
+      // lost a concurrent race against ux_committee_members_cd — the pair now exists
+      const now = await queryOne('SELECT id FROM committee_members WHERE committee_id = ? AND devotee_id = ? AND is_deleted = 0', [row.id, devoteeId]);
+      if (!now) throw e;
+    }
     res.status(201).json(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });

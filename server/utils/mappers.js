@@ -5,7 +5,8 @@ function mapUser(row) {
   if (!row) return null;
   return {
     id: row.id,
-    devoteeId: row.devotee_id || null,
+    devoteeId: row.devotee_id || null,        // numeric devotees.id
+    devoteeCode: row.devotee_code || null,    // 'DEV-###' — the id every other module keys on
     email: row.email,
     name: row.name || '',
     mobile: row.mobile || '',
