@@ -112,7 +112,7 @@
       (c.members || []).forEach(function (m) {
         if (m.rowId != null) memCodeByRow[m.rowId] = m.id;
         members.push({
-          id: m.id, committeeId: c.id, devoteeId: devCode(m.devoteeId),
+          id: m.id, code: m.code || m.id, rowId: m.rowId, committeeId: c.id, devoteeId: devCode(m.devoteeId),
           firstName: m.firstName || '', lastName: m.lastName || '',
           mobile: m.mobile || '', city: m.city || '', state: m.state || 'Gujarat',
           role: m.role || 'Member', status: m.status || 'active',
@@ -121,7 +121,7 @@
       });
       (c.meetings || []).forEach(function (mt) {
         meetings.push({
-          id: mt.id, committeeId: c.id, title: mt.title, date: mt.date,
+          id: mt.id, code: mt.code || mt.id, committeeId: c.id, title: mt.title, date: mt.date,
           startTime: mt.startTime || '', endTime: mt.endTime || '', venue: mt.venue || '',
           agenda: mt.agenda || '', notes: mt.notes || '', completed: !!mt.completed,
           memberIds: (mt.memberIds || []).map(function (rid) { return memCodeByRow[rid] || String(rid); })
@@ -142,7 +142,7 @@
         });
       }
       (c.drafts || []).forEach(function (d) {
-        drafts.push({ id: d.id, committeeId: c.id, title: d.title || '', message: d.message || '', updatedAt: d.updatedAt || '' });
+        drafts.push({ id: d.id, code: d.code || d.id, committeeId: c.id, title: d.title || '', message: d.message || '', updatedAt: d.updatedAt || '' });
       });
     });
 
@@ -162,7 +162,7 @@
     var rows = await window.API.get('/teams');
     if (!Array.isArray(rows)) return;
 
-    var teams = [], members = [], volunteering = [], attendance = [], communication = [], drafts = [];
+    var teams = [], members = [], volunteering = [], attendance = [], communication = [], drafts = [], signups = [];
     var publicPages = {};
     var memCodeByRow = {};
 
@@ -177,7 +177,7 @@
       (t.members || []).forEach(function (m) {
         if (m.rowId != null) memCodeByRow[m.rowId] = m.id;
         members.push({
-          id: m.id, managementId: t.id, devoteeId: devCode(m.devoteeId),
+          id: m.id, code: m.code || m.id, rowId: m.rowId, managementId: t.id, devoteeId: devCode(m.devoteeId),
           firstName: m.firstName || '', lastName: m.lastName || '',
           mobile: m.mobile || '', city: m.city || '', state: m.state || 'Gujarat',
           role: m.role || 'Volunteer', status: m.status || 'active',
@@ -186,14 +186,14 @@
       });
       (t.sessions || []).forEach(function (s) {
         volunteering.push({
-          id: s.id, managementId: t.id, title: s.title, date: s.date,
+          id: s.id, code: s.code || s.id, managementId: t.id, title: s.title, date: s.date,
           startTime: s.startTime || '', endTime: s.endTime || '', location: s.location || '',
           notes: s.notes || '', completed: !!s.completed, publicOpen: !!s.publicOpen,
           memberIds: (s.memberIds || []).map(function (rid) { return memCodeByRow[rid] || String(rid); })
         });
         (s.attendance || []).forEach(function (a) {
           attendance.push({
-            sessionId: s.id,
+            volunteeringId: s.id,
             memberId: memCodeByRow[a.memberId] || String(a.memberId),
             status: a.status, markedAt: a.markedAt || ''
           });
@@ -207,10 +207,24 @@
         });
       }
       (t.drafts || []).forEach(function (d) {
-        drafts.push({ id: d.id, managementId: t.id, title: d.title || '', message: d.message || '', updatedAt: d.updatedAt || '' });
+        drafts.push({ id: d.id, code: d.code || d.id, managementId: t.id, title: d.title || '', message: d.message || '', updatedAt: d.updatedAt || '' });
       });
       if (t.publicPage) publicPages[t.id] = { enabled: !!t.publicPage.enabled, intro: t.publicPage.intro || '', contact: t.publicPage.contact || '' };
     });
+
+    // pending public sign-ups (one call per team that has any)
+    for (var ti = 0; ti < rows.length; ti++) {
+      var tt = rows[ti];
+      if (!tt.pendingSignups) continue;
+      try {
+        var su = await window.API.get('/teams/' + tt.id + '/signups?status=pending');
+        (Array.isArray(su) ? su : []).forEach(function (s) {
+          signups.push({ id: s.id, code: s.code, managementId: tt.id, volunteeringId: s.sessionId,
+                         name: s.name, mobile: s.mobile || '', city: s.city || '', note: s.note || '',
+                         status: s.status || 'pending', submittedAt: s.submittedAt || '' });
+        });
+      } catch (e) {}
+    }
 
     swap(MG.managements, teams);
     swap(MG.members, members);
@@ -218,6 +232,7 @@
     swap(MG.attendance, attendance);
     swap(MG.communication, communication);
     swap(MG.drafts, drafts);
+    if (Array.isArray(MG.publicSignups)) swap(MG.publicSignups, signups);
     if (MG.publicPages && typeof MG.publicPages === 'object') {
       Object.keys(MG.publicPages).forEach(function (k) { delete MG.publicPages[k]; });
       Object.keys(publicPages).forEach(function (k) { MG.publicPages[k] = publicPages[k]; });

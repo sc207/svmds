@@ -545,6 +545,12 @@ function mgDevoteeIdFor(pickId, localId) {
   if (m && m.devoteeId && /^DEV-/i.test(m.devoteeId)) return m.devoteeId;
   return null;
 }
+/* picker id (MEM-###) -> numeric team_members.id the backend keys on */
+function mgMemberRowId(pickId) {
+  const m = MG.members.find(function (x) { return x.id === pickId; });
+  if (m && m.rowId != null) return m.rowId;
+  return /^\d+$/.test(String(pickId)) ? parseInt(pickId, 10) : null;
+}
 
 function confirmDeleteManagement(id) {
   const m = mgmtById(id);
@@ -672,7 +678,7 @@ function handleSaveMember(e) {
     Object.assign(x, { devoteeId: pickedDevoteeId || x.devoteeId, firstName, lastName, mobile, city, state, role, status, notes });
     logActivity(mgmtId, `Volunteer ${memberName(x)} details updated`);
     mgToast(`${memberName(x)} updated.`);
-    if (!online || !/^MEM-/i.test(x.id)) return finish();
+    if (!online || !x.code) return finish();
     window.API.patch('/teams/' + code + '/members/' + x.id, { firstName, lastName, mobile, city, state, role, status, notes })
       .then(function () { return window.__rehydrate && window.__rehydrate(); })
       .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
@@ -740,7 +746,7 @@ function confirmRemoveMember(id) {
            <p class="mg-mt-sm">Prefer <strong>Deactivate</strong> if you want to keep the history.</p>`,
     confirmLabel: 'Remove from Team',
     onConfirm: () => {
-      const wasSynced = /^MEM-/i.test(x.id);
+      const wasSynced = !!x.code;
       MG.volunteering.forEach(v => { v.memberIds = v.memberIds.filter(i => i !== id); });
       MG.attendance = MG.attendance.filter(a => a.memberId !== id);
       MG.members = MG.members.filter(mm => mm.id !== id);
@@ -861,6 +867,9 @@ function handleSaveSession(e) {
   if (end <= start) { mgToast('End Time must be after Start Time.'); return; }
   if (!memberIds.length && !publicOpen) { mgToast('Select at least one volunteer, or open the slot for public sign-up.'); return; }
 
+  const online = !!(window.API && window.API.online);
+  const tcode = m.code || m.id;
+  const rowIds = memberIds.map(mgMemberRowId).filter(function (x) { return x != null; });
   if (MG.editingSessionId) {
     const v = sessionById(MG.editingSessionId);
     const dropped = v.memberIds.filter(i => !memberIds.includes(i));
@@ -868,12 +877,22 @@ function handleSaveSession(e) {
     Object.assign(v, { title, date, startTime:start, endTime:end, location, notes, memberIds, publicOpen });
     logActivity(mgmtId, `Volunteering "${title}" updated — ${memberIds.length} volunteers assigned${publicOpen ? ', open to public' : ''}`);
     mgToast('Volunteering updated.');
+    if (online && (v.code || v.id) && !v.code) {
+      window.API.patch('/teams/' + tcode + '/sessions/' + (v.code || v.id), { title, date, startTime: start, endTime: end, location, notes, memberIds: rowIds, publicOpen })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     const id = nextId('VOL', MG.volunteering, 3);
     MG.volunteering.push({ id, managementId: mgmtId, title, date, startTime:start, endTime:end,
       location, memberIds, notes, completed:false, publicOpen });
     logActivity(mgmtId, `Volunteering "${title}" scheduled for ${fmtDate(date)} with ${memberIds.length} volunteers${publicOpen ? ', open to public' : ''}`);
     mgToast(`Volunteering scheduled for ${fmtDate(date)}.`);
+    if (online) {
+      window.API.post('/teams/' + tcode + '/sessions', { title, date, startTime: start, endTime: end, location, notes, memberIds: rowIds, publicOpen })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   }
 
   MG.editingSessionId = null;
@@ -895,12 +914,18 @@ function confirmDeleteSession(volId) {
            <p class="mg-muted-xs mg-mt-sm">${t.present + t.absent} attendance record(s) will also be deleted.</p>`,
     confirmLabel: 'Delete Session',
     onConfirm: () => {
+      const mm = mgmtById(v.managementId);
+      const tcode = mm && (mm.code || mm.id);
+      const wasSynced = !v.code;
       MG.attendance = MG.attendance.filter(a => a.volunteeringId !== volId);
       MG.volunteering = MG.volunteering.filter(x => x.id !== volId);
       if (MG.activeSessionId === volId) MG.activeSessionId = null;
       logActivity(v.managementId, `Volunteering "${v.title}" deleted`);
       mgToast('Volunteering deleted.');
       renderManagement();
+      if (window.API && window.API.online && wasSynced && tcode) {
+        window.API.del('/teams/' + tcode + '/sessions/' + (v.code || v.id)).catch(function (err) { mgToast((err && err.message) || 'Delete failed to sync'); });
+      }
     }
   });
 }
@@ -942,7 +967,7 @@ function handleSaveDraft(e) {
     d.title = title; d.message = message; d.updatedAt = MG.today;
     logActivity(d.managementId, `Message draft "${title}" updated`);
     mgToast('Draft saved.');
-    if (online && !/^DRF-/i.test(d.id)) window.API.patch('/teams/' + teamCode(d.managementId) + '/drafts/' + d.id, { title, message }).catch(function () {});
+    if (online && !d.code) window.API.patch('/teams/' + teamCode(d.managementId) + '/drafts/' + d.id, { title, message }).catch(function () {});
   } else {
     const id = nextId('DRF', MG.drafts, 3);
     MG.drafts.push({ id, managementId: MG.activeMgmtId, title, message, updatedAt: MG.today });
@@ -975,7 +1000,7 @@ function confirmDeleteDraft(id) {
     body: `<p>Delete the draft <strong>${esc(d.title)}</strong>?</p>`,
     confirmLabel: 'Delete Draft',
     onConfirm: () => {
-      const wasSynced = !/^DRF-/i.test(d.id);
+      const wasSynced = !d.code;
       const m = mgmtById(d.managementId);
       MG.drafts = MG.drafts.filter(x => x.id !== id);
       logActivity(d.managementId, `Message draft "${d.title}" deleted`);

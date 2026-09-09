@@ -666,7 +666,7 @@ function confirmDeletePooja(id) {
     confirmLabel: 'Delete Pooja',
     onConfirm: () => {
       const code = p.code || p.id;
-      const wasSynced = /^PJA-/i.test(p.id) || (p.code && /^PJA-/i.test(p.code));
+      const wasSynced = !!p.code;
       POOJA.activity = POOJA.activity.filter(a => a.poojaId !== id);
       POOJA.poojas = POOJA.poojas.filter(x => x.id !== id);
       if (POOJA.activePoojaId === id) { POOJA.activePoojaId = null; POOJA.view = 'directory'; }
@@ -842,8 +842,20 @@ function handleSaveGuest(e) {
   closeModal('modalGuest');
 
   if (returnTo === 'poojaForm') {
-    refreshGuestPicker(wasEditing ? null : savedId);   // keep the pooja form intact
+    refreshGuestPicker(wasEditing ? null : savedId);   // guest rides along in the POST /poojas body
   } else {
+    // standalone add on an open pooja workspace → attach it now
+    const ap = poojaById(POOJA.activePoojaId);
+    if (!wasEditing && ap && window.API && window.API.online && !!ap.code) {
+      if (!ap.guestIds) ap.guestIds = [];
+      if (ap.guestIds.indexOf(savedId) === -1) ap.guestIds.push(savedId);
+      window.API.post('/poojas/' + (ap.code || ap.id) + '/guests', {
+        firstName: first, lastName: last, name: (first + ' ' + last).trim(), role, mobile, city, state,
+        devoteeId: (pickedDevoteeId && /^DEV-/i.test(pickedDevoteeId)) ? pickedDevoteeId : undefined
+      })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
     renderPooja();
   }
 }
@@ -858,10 +870,18 @@ function confirmDeleteGuest(id) {
            ${used.length ? `<p class="mg-muted-xs mg-mt-sm">They are attached to ${used.length} pooja(s); they will be removed from those too.</p>` : ''}`,
     confirmLabel: 'Delete',
     onConfirm: () => {
+      const wasSynced = !x.code;
+      const linkedPoojas = POOJA.poojas.filter(p => (p.guestIds || []).indexOf(id) !== -1);
       POOJA.poojas.forEach(p => { if (p.guestIds) p.guestIds = p.guestIds.filter(g => g !== id); });
       POOJA.people = POOJA.people.filter(x => x.id !== id);
       pjToast('Guest deleted.');
       renderPooja();
+      if (window.API && window.API.online && wasSynced) {
+        linkedPoojas.forEach(function (p) {
+          if (p.code)
+            window.API.del('/poojas/' + (p.code || p.id) + '/guests/' + (x.code || x.id)).catch(function () {});
+        });
+      }
     }
   });
 }
@@ -945,7 +965,7 @@ function handleSaveSevarthi(e) {
     Object.assign(s, { devoteeId: pickedDevoteeId || s.devoteeId, firstName, lastName, mobile, city, state, committee, status, notes });
     logPoojaActivity(p.id, `Sevarthi ${firstName} ${lastName} details updated`);
     pjToast(`${firstName} ${lastName} updated.`);
-    if (online && (s.code || /^SEV-/i.test(s.id))) {
+    if (online && !!s.code) {
       window.API.patch('/sevarthis/' + (s.code || s.id), { firstName, lastName, mobile, city, state, committee, status, notes })
         .then(function () { return window.__rehydrate && window.__rehydrate(); })
         .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
@@ -1000,7 +1020,7 @@ function removeSevarthiFromPooja(poojaId, sevId) {
     onConfirm: () => {
       const code = p.code || p.id;
       const ref = s.code || s.id;
-      const wasSynced = /^SEV-/i.test(ref) && (/^PJA-/i.test(p.id) || (p.code && /^PJA-/i.test(p.code)));
+      const wasSynced = !!s.code && !!p.code;
       p.sevarthiIds = (p.sevarthiIds || []).filter(id => id !== sevId);
       if (POOJA.activeSevarthiId === sevId) POOJA.activeSevarthiId = null;
       logPoojaActivity(poojaId, `${s.firstName} ${s.lastName} removed as sevarthi`);
@@ -1130,6 +1150,9 @@ function handleSaveCustomFields(e, poojaId) {
   logPoojaActivity(poojaId, 'Custom fields updated');
   pjToast('Custom fields saved.');
   renderPooja();
+  if (window.API && window.API.online && !!p.code) {
+    window.API.patch('/poojas/' + (p.code || p.id), { custom: p.custom }).catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
+  }
 }
 
 /* ============================================================

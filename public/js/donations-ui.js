@@ -394,7 +394,7 @@ function openDonationCertificate(id) {
   if (!x) return;
   if (!x.certNo) {
     x.certNo = nextCertNo();
-    if (window.API && window.API.online && /^DON-/i.test(x.code || x.id)) {
+    if (window.API && window.API.online && !!x.code) {
       window.API.post('/donations/' + (x.code || x.id) + '/certificate')
         .then(function (dto) { if (dto && dto.certNo) x.certNo = dto.certNo; renderDonations(); })
         .catch(function () {});

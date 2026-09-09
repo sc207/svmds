@@ -169,7 +169,7 @@ function handleSaveEvent(ev) {
     Object.assign(e, payload);
     evLog(EV.editingEventId, window.t('ev_updated', 'Event updated'));
     evToast(name + ' — ' + window.t('save') + ' ✓');
-    if (online && /^EVN-/i.test(code)) {
+    if (online && e.code) {
       window.API.patch('/events/' + code, {
         name, venue: payload.venue, expectedFootfall: payload.expectedFootfall,
         budget: payload.budget, color: payload.color, notes: payload.notes, days
@@ -210,7 +210,7 @@ function confirmDeleteEvent(id) {
     confirmLabel: window.t('delete'),
     onConfirm: () => {
       const code = e.code || e.id;
-      const wasSynced = /^EVN-/i.test(code);
+      const wasSynced = !!e.code;
       EV.events = EV.events.filter(x => x.id !== id);
       EV.activity = EV.activity.filter(a => a.eventId !== id);
       if (EV.activeEventId === id) { EV.activeEventId = null; EV.view = 'directory'; }
@@ -276,7 +276,7 @@ function confirmDeleteEventType(id) {
     confirmLabel: window.t('delete'),
     onConfirm: () => {
       const t = evTypeById(id) || {};
-      const wasSynced = t.code || /^EVT-/i.test(id);
+      const wasSynced = !!t.code;
       EV.eventTypes = EV.eventTypes.filter(t => t.id !== id);
       evToast(window.t('ev_type_deleted', 'Type deleted.'));
       renderEvents();

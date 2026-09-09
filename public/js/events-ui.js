@@ -218,7 +218,7 @@ function saveEventSettings(ev, id) {
   evLog(id, window.t('ev_updated', 'Event updated'));
   evToast(window.t('save') + ' ✓');
   renderEvents();
-  if (window.API && window.API.online && /^EVN-/i.test(e.code || e.id)) {
+  if (window.API && window.API.online && !!e.code) {
     window.API.patch('/events/' + (e.code || e.id), { status: e.status, expectedFootfall: e.expectedFootfall, budget: e.budget, notes: e.notes })
       .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
   }

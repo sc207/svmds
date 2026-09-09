@@ -367,7 +367,7 @@ function handleSaveDonation(e) {
     saved = donationById(DON.editingDonationId);
     Object.assign(saved, payload);
     donToast(window.t('don_updated'));
-    if (online && /^DON-/i.test(saved.code || saved.id)) {
+    if (online && !!saved.code) {
       window.API.patch('/donations/' + (saved.code || saved.id), {
         mode: payload.mode, amount: payload.amount, item: payload.item, qty: payload.qty,
         valuation: payload.valuation, date: payload.date, status: payload.status,
@@ -409,7 +409,7 @@ function confirmDeleteDonation(id) {
     body: `<p>${window.t('don_delete_body')} <strong>${esc(x.receiptNo)}</strong> — ${esc(donationGiven(x))}?</p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
-      const wasSynced = /^DON-/i.test(x.code || x.id);
+      const wasSynced = !!x.code;
       DON.donations = DON.donations.filter(d => d.id !== id);
       donToast(window.t('don_deleted'));
       renderDonations();
@@ -504,7 +504,7 @@ function handleSaveDonor(e) {
     saved = donorById(DON.editingDonorId);
     Object.assign(saved, { type, firstName: first, lastName: last, orgName: org, contactPerson: contact, mobile, pan, city, state, committee, notes });
     donToast(window.t('don_donor_updated'));
-    if (online && /^DNR-/i.test(saved.code || saved.id)) {
+    if (online && !!saved.code) {
       window.API.patch('/donors/' + (saved.code || saved.id), body)
         .then(function () { return window.__rehydrate && window.__rehydrate(); })
         .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
@@ -558,7 +558,7 @@ function confirmDeleteDonor(id) {
     body: `<p>${window.t('don_delete_donor_body')} <strong>${esc(donorName(d))}</strong>?</p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
-      const wasSynced = /^DNR-/i.test(d.code || d.id);
+      const wasSynced = !!d.code;
       DON.donors = DON.donors.filter(x => x.id !== id);
       if (DON.activeDonorId === id) { DON.activeDonorId = null; DON.view = 'directory'; }
       donToast(window.t('don_donor_deleted'));
@@ -607,7 +607,7 @@ function handleSaveDonCategory(e) {
     const c = donCatById(DON.editingCatId);
     Object.assign(c, payload);
     donToast(window.t('don_cat_updated'));
-    if (online && /^DCT-/i.test(c.code || c.id)) window.API.patch('/donation-categories/' + (c.code || c.id), payload).catch(function () {});
+    if (online && !!c.code) window.API.patch('/donation-categories/' + (c.code || c.id), payload).catch(function () {});
   } else {
     const c = Object.assign({ id: nextId('DCT', DON.categories, 3) }, payload);
     DON.categories.push(c);
@@ -630,7 +630,7 @@ function confirmDeleteDonCategory(id) {
     body: `<p>${window.t('don_delete_cat_body')} <strong>${esc(tData(c.name))}</strong>?</p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
-      const wasSynced = /^DCT-/i.test(c.code || c.id);
+      const wasSynced = !!c.code;
       DON.categories = DON.categories.filter(x => x.id !== id);
       donToast(window.t('don_cat_deleted'));
       renderDonations();

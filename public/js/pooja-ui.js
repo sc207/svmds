@@ -880,6 +880,9 @@ function saveInvitation(e, id) {
   logPoojaActivity(id, 'Invitation card updated');
   pjToast('Invitation card saved.');
   renderPooja();
+  if (window.API && window.API.online && !!p.code) {
+    window.API.patch('/poojas/' + (p.code || p.id), { invitation: p.invitation }).catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
+  }
 }
 
 function previewInvitation(id) {

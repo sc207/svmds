@@ -265,7 +265,7 @@ function handleSaveVisit(e) {
     const v = visitById(VISITS.editingId);
     Object.assign(v, fields);
     visToast(name + ' — ' + window.t('save') + ' ✓');
-    if (online && /^VIS-/i.test(v.code || v.id)) {
+    if (online && !!v.code) {
       window.API.patch('/visits/' + (v.code || v.id), body)
         .then(function () { return window.__rehydrate && window.__rehydrate(); })
         .catch(function (err) { visToast((err && err.message) || 'Saved locally — sync failed'); });
@@ -294,7 +294,7 @@ function confirmDeleteVisit(id) {
     body: `<p><strong>${esc(v.devoteeName)}</strong> — ${esc(visitPurposeLabel(v.purpose))}</p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
-      const wasSynced = /^VIS-/i.test(v.code || v.id);
+      const wasSynced = !!v.code;
       VISITS.list = VISITS.list.filter(x => x.id !== id);
       visToast(window.t('vis_deleted', 'Visit deleted.'));
       renderVisits();

@@ -404,6 +404,9 @@ function saveTempleSettings(e) {
   });
   try { localStorage.setItem('svmmm_temple', JSON.stringify(cfg)); } catch (err) {}
   if (typeof showToast === 'function') showToast(window.t('set_saved', 'Temple information saved.'));
+  if (window.API && window.API.online) {
+    window.API.put('/settings/identity', cfg).catch(function () {});
+  }
 }
 
 /* ------------------------------------------------------------

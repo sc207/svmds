@@ -880,6 +880,21 @@ function paneSessionAttendance(m) {
   </div>`;
 }
 
+function mgSessionApi(volId) {
+  const v = sessionById(volId); if (!v) return null;
+  const m = mgmtById(v.managementId);
+  const tcode = m && (m.code || m.id);
+  if (!window.API || !window.API.online || !tcode || !v.code) return null;
+  return { tcode: tcode, scode: v.code || v.id };
+}
+function mgSyncSessionAttendance(volId) {
+  const ep = mgSessionApi(volId); if (!ep) return;
+  const entries = MG.attendance
+    .filter(function (a) { return a.volunteeringId === volId || a.sessionId === volId; })
+    .map(function (a) { return { memberId: (typeof mgMemberRowId === 'function' ? mgMemberRowId(a.memberId) : a.memberId), status: a.status }; })
+    .filter(function (e) { return e.memberId != null; });
+  window.API.put('/teams/' + ep.tcode + '/sessions/' + ep.scode + '/attendance', { entries: entries }).catch(function () {});
+}
 function markAttendance(volId, memberId, status) {
   const v = sessionById(volId);
   if (!v || v.completed) { mgToast('Session is completed — attendance is locked.'); return; }
@@ -887,6 +902,7 @@ function markAttendance(volId, memberId, status) {
   const x = memberById(memberId);
   logActivity(v.managementId, `${memberName(x)} marked ${status === 'present' ? 'Present' : 'Absent'} for ${v.title}`);
   renderManagement();
+  mgSyncSessionAttendance(volId);
 }
 
 function markAllAttendance(volId, status) {
@@ -896,6 +912,7 @@ function markAllAttendance(volId, status) {
   logActivity(v.managementId, `All ${v.memberIds.length} members marked ${status} for ${v.title}`);
   mgToast(`All members marked ${status}.`);
   renderManagement();
+  mgSyncSessionAttendance(volId);
 }
 
 function confirmCompleteSession(volId) {
@@ -917,6 +934,9 @@ function confirmCompleteSession(volId) {
       logActivity(v.managementId, `${v.title} completed — ${t.present} present, ${t.absent} absent`);
       mgToast('Volunteering completed. Attendance recorded.');
       renderManagement();
+      mgSyncSessionAttendance(volId);
+      const ep = mgSessionApi(volId);
+      if (ep) window.API.patch('/teams/' + ep.tcode + '/sessions/' + ep.scode, { completed: true }).catch(function () {});
     }
   });
 }
@@ -928,6 +948,8 @@ function reopenSession(volId) {
   logActivity(v.managementId, `${v.title} reopened for attendance correction`);
   mgToast('Session reopened.');
   renderManagement();
+  const ep = mgSessionApi(volId);
+  if (ep) window.API.patch('/teams/' + ep.tcode + '/sessions/' + ep.scode, { completed: false }).catch(function () {});
 }
 
 /* ------------------------------------------------------------
@@ -1159,12 +1181,21 @@ function panePublic(m) {
   </div>`;
 }
 
+function mgPubSync(mgmtId) {
+  const m = mgmtById(mgmtId);
+  const cfg = publicPageOf(mgmtId);
+  if (!m || !window.API || !window.API.online) return;
+  window.API.put('/teams/' + (m.code || m.id) + '/public-page', {
+    enabled: !!cfg.enabled, intro: cfg.intro || '', contact: cfg.contact || ''
+  }).catch(function () {});
+}
 function togglePublicPage(mgmtId, on) {
   const cfg = publicPageOf(mgmtId);
   cfg.enabled = !!on;
   logActivity(mgmtId, `Public volunteering page ${on ? 'activated' : 'turned off'}`);
   mgToast(on ? 'Public page is now live.' : 'Public page turned off.');
   renderManagement();
+  mgPubSync(mgmtId);
 }
 
 function savePublicPage(e, mgmtId) {
@@ -1175,6 +1206,7 @@ function savePublicPage(e, mgmtId) {
   logActivity(mgmtId, 'Public page details updated');
   mgToast('Public page details saved.');
   renderManagement();
+  mgPubSync(mgmtId);
 }
 
 function toggleSessionPublic(volId, on) {
@@ -1183,6 +1215,10 @@ function toggleSessionPublic(volId, on) {
   v.publicOpen = !!on;
   logActivity(v.managementId, `"${v.title}" ${on ? 'opened for' : 'closed to'} public sign-up`);
   renderManagement();
+  const m = mgmtById(v.managementId);
+  if (window.API && window.API.online && m && !v.code) {
+    window.API.patch('/teams/' + (m.code || m.id) + '/sessions/' + (v.code || v.id), { publicOpen: !!on }).catch(function () {});
+  }
 }
 
 function approvePublicSignup(id) {
@@ -1198,27 +1234,16 @@ function approvePublicSignup(id) {
            <p class="mg-muted-xs mg-mt-sm">Creates a team member, or reuses the existing devotee record if this mobile is already known.</p>`,
     confirmLabel: 'Approve & Add',
     onConfirm: () => {
-      const parts = String(s.name).trim().split(/\s+/);
-      const firstName = parts.shift() || s.name;
-      const lastName = parts.join(' ') || '—';
-
-      let member = MG.members.find(x => x.mobile === s.mobile && x.managementId === m.id);
-      if (!member) {
-        const existing = MG.members.find(x => x.mobile === s.mobile);
-        const devoteeId = existing ? existing.devoteeId : nextId('DEV', MG.members.map(x => ({ id: x.devoteeId })), 3);
-        member = {
-          id: nextId('MEM', MG.members, 3), managementId: m.id, devoteeId,
-          firstName, lastName, mobile: s.mobile, city: s.city || '', state: 'Gujarat',
-          role: 'Volunteer', status: 'active', notes: 'Joined via public volunteering page.', joinedDate: MG.today
-        };
-        MG.members.push(member);
-      }
-      if (v && !v.memberIds.includes(member.id)) v.memberIds.push(member.id);
-
       s.status = 'approved';
       logActivity(m.id, `${s.name} approved from public sign-up${v ? ` for ${v.title}` : ''}`);
       mgToast(`${s.name} added to ${m.name}.`);
       renderManagement();
+      // the server creates/reuses the devotee + team member and links the session
+      if (window.API && window.API.online && !!s.code) {
+        window.API.post('/teams/' + (m.code || m.id) + '/signups/' + (s.code || s.id) + '/approve')
+          .then(function () { return window.__rehydrate && window.__rehydrate(); })
+          .catch(function (err) { mgToast((err && err.message) || 'Approve failed to sync'); });
+      }
     }
   });
 }
@@ -1230,6 +1255,10 @@ function declinePublicSignup(id) {
   logActivity(s.managementId, `Public sign-up from ${s.name} declined`);
   mgToast('Sign-up declined.');
   renderManagement();
+  const m = mgmtById(s.managementId);
+  if (window.API && window.API.online && m && !!s.code) {
+    window.API.post('/teams/' + (m.code || m.id) + '/signups/' + (s.code || s.id) + '/decline').catch(function () {});
+  }
 }
 
 /* ------------------------------------------------------------

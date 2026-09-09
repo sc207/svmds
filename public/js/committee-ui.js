@@ -529,17 +529,34 @@ function paneCmtActivity(c) {
 }
 
 /* ---- attendance actions ---- */
+function cmtMeetingApi(mtgId) {
+  const x = meetingById(mtgId); if (!x) return null;
+  const c = cmtById(x.committeeId);
+  const ccode = c && (c.code || c.id);
+  if (!window.API || !window.API.online || !ccode || !x.code) return null;
+  return { ccode: ccode, mcode: x.code || x.id };
+}
+function cmtSyncAttendance(mtgId) {
+  const ep = cmtMeetingApi(mtgId); if (!ep) return;
+  const entries = CMT.attendance
+    .filter(function (a) { return a.meetingId === mtgId; })
+    .map(function (a) { return { memberId: (typeof cmtMemberRowId === 'function' ? cmtMemberRowId(a.memberId) : a.memberId), status: a.status }; })
+    .filter(function (e) { return e.memberId != null; });
+  window.API.put('/committees/' + ep.ccode + '/meetings/' + ep.mcode + '/attendance', { entries: entries }).catch(function () {});
+}
 function markCmtAtt(mtgId, memberId, status) {
   const x = meetingById(mtgId); if (!x || x.completed) { cmtToast(window.t('cmt_locked_short', 'Locked')); return; }
   setCmtAttendance(mtgId, memberId, status);
   const m = cmtMemberById(memberId);
   cmtLogActivity(x.committeeId, cmtMemberName(m) + ' — ' + (status === 'present' ? window.t('cmt_present', 'Present') : window.t('cmt_absent', 'Absent')) + ' · ' + x.title);
   renderCommittee();
+  cmtSyncAttendance(mtgId);
 }
 function markAllCmtAtt(mtgId, status) {
   const x = meetingById(mtgId); if (!x || x.completed) return;
   (x.memberIds || []).forEach(id => setCmtAttendance(mtgId, id, status));
   renderCommittee();
+  cmtSyncAttendance(mtgId);
 }
 function completeMeeting(mtgId) {
   const x = meetingById(mtgId); if (!x) return;
@@ -548,10 +565,23 @@ function completeMeeting(mtgId) {
     title: window.t('cmt_complete', 'Complete Meeting'),
     body: `<p><strong>${esc(x.title)}</strong> — ${fmtDate(x.date)}</p><p class="mg-mt-sm">${window.t('cmt_present', 'Present')}: ${t.present} · ${window.t('cmt_absent', 'Absent')}: ${t.absent} · ${window.t('cmt_not_marked', 'Not marked')}: ${t.unmarked}</p><p class="mg-mt-sm">${window.t('cmt_complete_note', 'Once completed, attendance becomes read-only.')}</p>`,
     confirmLabel: window.t('cmt_complete', 'Complete Meeting'),
-    onConfirm: () => { x.completed = true; cmtLogActivity(x.committeeId, x.title + ' ' + window.t('cmt_done', 'completed').toLowerCase() + ' — ' + t.present + ' present'); cmtToast(window.t('cmt_meeting_done', 'Meeting completed.')); renderCommittee(); }
+    onConfirm: () => {
+      x.completed = true;
+      cmtLogActivity(x.committeeId, x.title + ' ' + window.t('cmt_done', 'completed').toLowerCase() + ' — ' + t.present + ' present');
+      cmtToast(window.t('cmt_meeting_done', 'Meeting completed.'));
+      renderCommittee();
+      cmtSyncAttendance(mtgId);
+      const ep = cmtMeetingApi(mtgId);
+      if (ep) window.API.patch('/committees/' + ep.ccode + '/meetings/' + ep.mcode, { completed: true }).catch(function () {});
+    }
   });
 }
-function reopenMeeting(mtgId) { const x = meetingById(mtgId); if (!x) return; x.completed = false; renderCommittee(); }
+function reopenMeeting(mtgId) {
+  const x = meetingById(mtgId); if (!x) return;
+  x.completed = false; renderCommittee();
+  const ep = cmtMeetingApi(mtgId);
+  if (ep) window.API.patch('/committees/' + ep.ccode + '/meetings/' + ep.mcode, { completed: false }).catch(function () {});
+}
 
 /* ---- whatsapp helpers ---- */
 function saveCmtComm(e, cid, which) {

@@ -413,7 +413,7 @@ function handleSaveCmtMember(e) {
     const row = cmtMemberById(CMT.editingMemberId);
     Object.assign(row, fields, { devoteeId: pickedDevoteeId || row.devoteeId });
     cmtToast((first + ' ' + last).trim() + ' — ' + window.t('save') + ' ✓');
-    if (!online || !/^CMM-/i.test(row.id)) { return done(); }
+    if (!online || !row.code) { return done(); }
     window.API.patch('/committees/' + code + '/members/' + row.id, {
       firstName: first, lastName: last, mobile, city: fields.city, state: fields.state,
       role: fields.role, status: fields.status, notes: fields.notes
@@ -457,7 +457,7 @@ function confirmRemoveCmtMember(id) {
     onConfirm: () => {
       const c = cmtById(x.committeeId);
       const code = c && (c.code || c.id);
-      const wasSynced = /^CMM-/i.test(x.id);
+      const wasSynced = !!x.code;
       CMT.meetings.forEach(m => { m.memberIds = (m.memberIds || []).filter(i => i !== id); });
       CMT.attendance = CMT.attendance.filter(a => a.memberId !== id);
       CMT.members = CMT.members.filter(m => m.id !== id);
@@ -527,23 +527,47 @@ function handleSaveMeeting(e) {
   const fields = { title, date, startTime: start, endTime: end,
     venue: document.getElementById('mtgFieldVenue').value.trim(),
     agenda: document.getElementById('mtgFieldAgenda').value.trim(), memberIds };
+  const online = !!(window.API && window.API.online);
+  const c = cmtById(cid);
+  const ccode = c && (c.code || c.id);
+  const rowIds = memberIds.map(cmtMemberRowId).filter(function (v) { return v != null; });
   if (CMT.editingMeetingId) {
     const x = meetingById(CMT.editingMeetingId);
     const dropped = (x.memberIds || []).filter(i => memberIds.indexOf(i) === -1);
     CMT.attendance = CMT.attendance.filter(a => !(a.meetingId === x.id && dropped.indexOf(a.memberId) !== -1));
     Object.assign(x, fields);
     cmtToast(window.t('cmt_meeting_updated', 'Meeting updated.'));
+    if (online && ccode && (x.code || x.id)) {
+      window.API.patch('/committees/' + ccode + '/meetings/' + (x.code || x.id), {
+        title, date, startTime: start, endTime: end, venue: fields.venue, agenda: fields.agenda, memberIds: rowIds
+      })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     const id = cmtNextId('MTG', CMT.meetings, 3);
     CMT.meetings.push(Object.assign({ id, committeeId: cid, notes:'', completed:false }, fields));
     cmtLogActivity(cid, window.t('cmt_meeting_scheduled', 'Meeting scheduled') + ': ' + title + ' — ' + fmtDate(date));
     cmtToast(window.t('cmt_meeting_scheduled', 'Meeting scheduled') + '.');
+    if (online && ccode) {
+      window.API.post('/committees/' + ccode + '/meetings', {
+        title, date, startTime: start, endTime: end, venue: fields.venue, agenda: fields.agenda, memberIds: rowIds
+      })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   }
   CMT.editingMeetingId = null;
   const [y, m] = date.split('-').map(Number);
   CMT.calendarYear = y; CMT.calendarMonth = m - 1;
   closeModal('modalMeeting');
   renderCommittee();
+}
+/* picker id (CMM-###) -> numeric committee_members.id the backend keys on */
+function cmtMemberRowId(pickId) {
+  const m = CMT.members.find(function (x) { return x.id === pickId; });
+  if (m && m.rowId != null) return m.rowId;
+  return /^\d+$/.test(String(pickId)) ? parseInt(pickId, 10) : null;
 }
 function confirmDeleteMeeting(id) {
   const x = meetingById(id); if (!x) return;
@@ -552,11 +576,17 @@ function confirmDeleteMeeting(id) {
     body: `<p><strong>${esc(x.title)}</strong> — ${fmtDate(x.date)}</p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
+      const c = cmtById(x.committeeId);
+      const ccode = c && (c.code || c.id);
+      const wasSynced = !x.code;
       CMT.attendance = CMT.attendance.filter(a => a.meetingId !== id);
       CMT.meetings = CMT.meetings.filter(m => m.id !== id);
       if (CMT.activeMeetingId === id) CMT.activeMeetingId = null;
       cmtToast(window.t('cmt_meeting_deleted', 'Meeting deleted.'));
       renderCommittee();
+      if (window.API && window.API.online && wasSynced && ccode) {
+        window.API.del('/committees/' + ccode + '/meetings/' + (x.code || x.id)).catch(function (err) { cmtToast((err && err.message) || 'Delete failed to sync'); });
+      }
     }
   });
 }
@@ -603,7 +633,7 @@ function confirmDeleteCmtDraft(id) {
     onConfirm: () => {
       const c = cmtById(d.committeeId);
       const code = c && (c.code || c.id);
-      const wasSynced = !/^CDR-/i.test(d.id);
+      const wasSynced = !d.code;
       CMT.drafts = CMT.drafts.filter(x => x.id !== id);
       cmtToast(window.t('cmt_draft_deleted', 'Draft deleted.'));
       renderCommittee();
