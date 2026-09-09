@@ -174,13 +174,16 @@ function visitFormBody(v) {
   const sOpts = ['requested', 'scheduled', 'confirmed', 'completed', 'cancelled'].map(s => `<option value="${s}" ${v.status === s ? 'selected' : ''}>${esc(visitStatusLabel(s))}</option>`).join('');
   return `
   <form id="formVisit" onsubmit="handleSaveVisit(event)">
-    <div class="grid mg-2col-form">
-      <div class="form-group">
-        <div class="flex justify-between items-center"><label class="form-label" for="visDevoteeSelect" style="margin:0">${window.t('vis_devotee', 'Devotee')} *</label>
-          <button class="btn btn-outline mg-btn-xs" type="button" onclick="visAddDevotee()">+ ${window.t('vis_add_devotee', 'Add new devotee')}</button></div>
-        <select class="form-select" id="visDevoteeSelect" onchange="visOnDevoteePick()" required>${visDevoteeOptions(v)}</select>
+    <div class="link-section">
+      <div class="link-section-head">
+        <p class="ls-title">${window.t('vis_devotee', 'Devotee')} <span class="ls-req">*</span></p>
+        <button class="btn-add-devotee" type="button" onclick="visAddDevotee()">${window.t('vis_add_devotee', 'Add new devotee')}</button>
       </div>
-      <div class="form-group"><label class="form-label" for="visMobile">${window.t('mobile')}</label><input class="form-input" id="visMobile" maxlength="10" value="${esc(v.mobile || '')}"></div>
+      <div class="link-section-hint">${window.t('vis_devotee_hint', 'Pick from the register, or add a new devotee. Mobile fills in automatically.')}</div>
+      <div class="grid mg-2col-form">
+        <div class="form-group"><div class="link-field"><select class="form-select" id="visDevoteeSelect" onchange="visOnDevoteePick()" required>${visDevoteeOptions(v)}</select></div></div>
+        <div class="form-group"><label class="form-label" for="visMobile">${window.t('mobile')}</label><input class="form-input" id="visMobile" maxlength="10" value="${esc(v.mobile || '')}"></div>
+      </div>
     </div>
     <div class="grid mg-2col-form">
       <div class="form-group"><label class="form-label" for="visPurpose">${window.t('vis_purpose', 'Purpose')}</label><select class="form-select" id="visPurpose">${pOpts}</select></div>

@@ -236,14 +236,16 @@
       title: 'Add account',
       body: '<form id="accAddForm">' +
         /* PERSON — always a devotee: pick an existing one or add a new devotee record */
-        '<div class="form-group"><div class="flex justify-between items-center">' +
-          '<label class="form-label" style="margin:0">Person (devotee) *</label>' +
-          '<button type="button" class="btn btn-outline mg-btn-xs" onclick="accAddDevotee()">+ Add new devotee</button></div>' +
-          '<select class="form-select" name="devoteeId" id="accDevoteeSel" onchange="accDevoteePicked()">' +
-            '<option value="">— pick a devotee —</option>' + accDevoteeOptions() + '</select>' +
-          '<div id="accPersonHint" class="mg-muted-xs" style="margin-top:.35rem">' +
+        '<div class="link-section">' +
+          '<div class="link-section-head">' +
+            '<p class="ls-title">Person (devotee) <span class="ls-req">*</span></p>' +
+            '<button type="button" class="btn-add-devotee" onclick="accAddDevotee()">Add new devotee</button>' +
+          '</div>' +
+          '<div class="link-field"><select class="form-select" name="devoteeId" id="accDevoteeSel" onchange="accDevoteePicked()">' +
+            '<option value="">— pick a devotee —</option>' + accDevoteeOptions() + '</select></div>' +
+          '<div id="accPersonHint" class="link-section-hint" style="margin:.4rem 0 0">' +
             (DEVOTEES.length ? DEVOTEES.length + ' devotees in the register — pick one, or add a new devotee'
-                             : 'The register is empty — use “+ Add new devotee” to create the first person') +
+                             : 'The register is empty — use “Add new devotee” to create the first person') +
           '</div></div>' +
         /* EXTRA — what belongs to the account, not the person */
         '<div class="form-group"><label class="form-label">Google email *</label>' +

@@ -12,26 +12,31 @@
       <form id="formCommittee" onsubmit="handleSaveCommittee(event)">
         <div class="form-group"><label class="form-label" for="cmtFieldName">Committee Name *</label>
           <input type="text" class="form-input" id="cmtFieldName" placeholder="e.g. Rabari Samaj Committee" required></div>
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <div class="flex justify-between items-center"><label class="form-label" for="cmtLeadSelect" style="margin:0">Leader *</label>
-              <button class="btn btn-outline mg-btn-xs" type="button" onclick="cmtAddLeader()">+ New devotee</button></div>
-            <select class="form-select" id="cmtLeadSelect" required></select>
-            <div class="mg-muted-xs">Pick a devotee, or add a new one — no login account needed.</div>
+
+        <div class="link-section">
+          <div class="link-section-head">
+            <p class="ls-title">Leader <span class="ls-req">*</span></p>
+            <button class="btn-add-devotee" type="button" onclick="cmtAddLeader()">Add new devotee</button>
           </div>
-          <div class="form-group"><label class="form-label" for="cmtFieldSamaj">Samaj</label>
-            <input type="text" class="form-input" id="cmtFieldSamaj" list="donCommitteeList" placeholder="e.g. Rabari Samaj"></div>
+          <div class="link-section-hint">Pick a devotee from the register, or add a new one — no login account needed.</div>
+          <div class="link-field"><select class="form-select" id="cmtLeadSelect" required></select></div>
         </div>
-        <div class="form-group">
-          <div class="flex justify-between items-center"><label class="form-label" style="margin:0">Members</label>
-            <button class="btn btn-outline mg-btn-xs" type="button" onclick="cmtAddMemberPerson()">+ Add new Devotee</button></div>
-          <div class="mg-muted-xs" style="margin-bottom:.4rem">Tick people from the register (or add new ones) and set each one's role here. The leader is added automatically. A member's status &amp; later edits are on the committee's Members tab.</div>
+
+        <div class="link-section">
+          <div class="link-section-head">
+            <p class="ls-title">Members</p>
+            <button class="btn-add-devotee" type="button" onclick="cmtAddMemberPerson()">Add new devotee</button>
+          </div>
+          <div class="link-section-hint">Tick people from the register (or add new ones) and set each one's role here. The leader is added automatically. A member's status &amp; later edits are on the committee's Members tab.</div>
           <div id="cmtMemberPicker"></div>
         </div>
+
         <div class="grid mg-2col-form">
+          <div class="form-group"><label class="form-label" for="cmtFieldSamaj">Samaj</label>
+            <input type="text" class="form-input" id="cmtFieldSamaj" list="donCommitteeList" placeholder="e.g. Rabari Samaj"></div>
           <div class="form-group"><label class="form-label" for="cmtFieldSize">Expected Size *</label><input type="number" class="form-input" id="cmtFieldSize" min="1" value="20" required></div>
-          <div class="form-group"><label class="form-label" for="cmtFieldStatus">Status *</label><select class="form-select" id="cmtFieldStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
         </div>
+        <div class="form-group"><label class="form-label" for="cmtFieldStatus">Status *</label><select class="form-select" id="cmtFieldStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
         <div class="form-group"><label class="form-label" for="cmtFieldPurpose">Purpose *</label>
           <textarea class="form-input mg-textarea" id="cmtFieldPurpose" rows="3" placeholder="What this committee is responsible for" required></textarea></div>
         <div class="form-group"><label class="form-label" for="cmtFieldNotes">Notes</label>

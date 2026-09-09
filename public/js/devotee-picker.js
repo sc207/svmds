@@ -79,22 +79,27 @@
     sel.forEach(function (x) { if (x && x.id != null && x.role) roleOf[x.id] = x.role; });
     var cls = checkClass || 'dp-check';
     if (!people.length) {
-      return '<div class="mg-pad-note">No one in the register yet — use “+ Add new”.</div>';
+      return '<div class="people-check-list"><div class="people-check-empty">' +
+        '<span class="pce-emoji">👥</span>No one in the register yet — use “Add new devotee”.</div></div>';
     }
     var roleSel = function (id) {
       if (!roleOptions || !roleOptions.length) return '';
       var cur = roleOf[id] || roleOptions[0];
-      return '<select class="form-select mg-inline-select ' + cls + '-role" data-for="' + esc(id) + '" onclick="event.preventDefault()">' +
+      return '<select class="form-select pcr-role ' + cls + '-role" data-for="' + esc(id) + '" onclick="event.preventDefault()">' +
         roleOptions.map(function (r) {
           return '<option value="' + esc(r) + '"' + (r === cur ? ' selected' : '') + '>' + esc(r) + '</option>';
         }).join('') + '</select>';
     };
-    return '<div class="pj-people-list">' + people.map(function (p) {
-      return '<label class="pj-people-row">' +
+    var initials = function (nm) {
+      return String(nm || '?').trim().split(/\s+/).map(function (w) { return w.charAt(0); }).slice(0, 2).join('') || '?';
+    };
+    return '<div class="people-check-list">' + people.map(function (p) {
+      return '<label class="people-check-row">' +
         '<input type="checkbox" class="' + cls + '" value="' + esc(p.id) + '"' +
           (selIds.indexOf(p.id) !== -1 ? ' checked' : '') + '>' +
-        '<span class="pj-people-body"><strong>' + esc(p.name) + '</strong>' +
-        '<small>' + (p.mobile ? esc(p.mobile) : '') + (p.city ? ' · ' + esc(p.city) : '') + '</small></span>' +
+        '<span class="pcr-avatar">' + esc(initials(p.name)) + '</span>' +
+        '<span class="pcr-body"><strong>' + esc(p.name) + '</strong>' +
+        '<small>' + [p.mobile, p.city].filter(Boolean).map(esc).join(' · ') + '</small></span>' +
         roleSel(p.id) +
       '</label>';
     }).join('') + '</div>';
@@ -142,11 +147,13 @@
       options += '<option value="' + esc(sel) + '" selected>' + esc(opts.selectedLabel) + '</option>';
     }
     var onCh = opts.onChange ? (' onchange="' + esc(opts.onChange) + '"') : '';
-    return '<div class="form-group"><div class="flex justify-between items-center">' +
-        '<label class="form-label" for="' + selId + '" style="margin:0">' + esc(label) + (opts.required ? ' *' : '') + '</label>' +
-        '<button type="button" class="btn btn-outline mg-btn-xs" onclick="devLinkAdd(\'' + selId + '\')">+ Add new devotee</button></div>' +
-      '<select class="form-select" id="' + selId + '"' + onCh + '>' + options + '</select>' +
-      (opts.hint ? '<div class="mg-muted-xs" style="margin-top:.3rem">' + esc(opts.hint) + '</div>' : '') +
+    return '<div class="link-section">' +
+      '<div class="link-section-head">' +
+        '<p class="ls-title">' + esc(label) + (opts.required ? ' <span class="ls-req">*</span>' : '') + '</p>' +
+        '<button type="button" class="btn-add-devotee" onclick="devLinkAdd(\'' + selId + '\')">Add new devotee</button>' +
+      '</div>' +
+      (opts.hint ? '<div class="link-section-hint">' + esc(opts.hint) + '</div>' : '') +
+      '<div class="link-field"><select class="form-select" id="' + selId + '"' + onCh + '>' + options + '</select></div>' +
     '</div>';
   };
   window.devLinkAdd = function (selId) {
@@ -220,12 +227,17 @@
     var commOpts = (typeof committeeNames === 'function' ? committeeNames() : [])
       .map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join('');
     window.__dpExtra = Array.isArray(opts.extraFields) ? opts.extraFields : [];
-    var extraHTML = window.__dpExtra.map(extraFieldHTML).join('');
+    var extraHTML = window.__dpExtra.length
+      ? '<hr class="dp-extra-divider"><div class="dp-form-caption">' +
+          esc(opts.extraCaption || 'Details for this role') + '</div>' +
+          window.__dpExtra.map(extraFieldHTML).join('')
+      : '';
 
     dpOpenSheet({
       title: opts.title || 'Add a new person (devotee)',
       body:
-        '<form id="dpForm" class="mg-2col-form">' +
+        '<form id="dpForm" class="grid mg-2col-form">' +
+          '<div class="dp-form-caption">Person details — shared devotee record</div>' +
           '<div class="form-group"><label class="form-label">First name *</label>' +
             '<input class="form-input" name="firstName" value="' + esc(pf) + '" required></div>' +
           '<div class="form-group"><label class="form-label">Last name</label>' +

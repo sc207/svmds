@@ -56,30 +56,30 @@
           <div id="pjSessionRows"></div>
         </div>
 
-        <div class="form-group">
-          <div class="flex justify-between items-center">
-            <label class="form-label" style="margin:0;">Sevarthi(s) — who sponsors &amp; runs this seva</label>
-            <button class="btn btn-outline mg-btn-xs" type="button" onclick="pjAddPerson('sevarthi')">+ Add new Devotee</button>
+        <div class="link-section">
+          <div class="link-section-head">
+            <p class="ls-title">Sevarthi(s) <span class="ls-req">*</span></p>
+            <button class="btn-add-devotee" type="button" onclick="pjAddPerson('sevarthi')">Add new devotee</button>
           </div>
-          <div class="mg-muted-xs" style="margin-bottom:0.4rem;">Pick from the register, or add a new devotee.</div>
+          <div class="link-section-hint">Who sponsors &amp; runs this seva. Pick from the register, or add a new devotee.</div>
           <div id="pjSevarthiPicker"></div>
         </div>
 
-        <div class="form-group">
-          <div class="flex justify-between items-center">
-            <label class="form-label" style="margin:0;">Coordinator(s) — who runs this pooja day-to-day</label>
-            <button class="btn btn-outline mg-btn-xs" type="button" onclick="pjAddPerson('coord')">+ Add new Devotee</button>
+        <div class="link-section">
+          <div class="link-section-head">
+            <p class="ls-title">Coordinator(s)</p>
+            <button class="btn-add-devotee" type="button" onclick="pjAddPerson('coord')">Add new devotee</button>
           </div>
-          <div class="mg-muted-xs" style="margin-bottom:0.4rem;">Pick from the register, or add a new devotee.</div>
+          <div class="link-section-hint">Who runs this pooja day-to-day. Pick from the register, or add a new devotee.</div>
           <div id="pjCoordPicker"></div>
         </div>
 
-        <div class="form-group">
-          <div class="flex justify-between items-center">
-            <label class="form-label" style="margin:0;">Guests</label>
-            <button class="btn btn-outline mg-btn-xs" type="button" onclick="openAddGuest('poojaForm')">+ Add new Guest</button>
+        <div class="link-section">
+          <div class="link-section-head">
+            <p class="ls-title">Guests</p>
+            <button class="btn-add-devotee" type="button" onclick="openAddGuest('poojaForm')">Add new devotee</button>
           </div>
-          <div class="mg-muted-xs" style="margin-bottom:0.4rem;">Tick everyone attending. Your form stays saved while you add or edit a person.</div>
+          <div class="link-section-hint">Tick everyone attending. Your form stays saved while you add or edit a person.</div>
           <div id="pjGuestPicker"></div>
         </div>
 
@@ -325,16 +325,18 @@ function syncDefaultVenue() {
 function guestPickerHTML(selectedIds) {
   const sel = selectedIds || [];
   if (!POOJA.people.length) {
-    return `<div class="mg-pad-note">No guests on record yet. Use “+ Add new Guest”.</div>`;
+    return `<div class="people-check-list"><div class="people-check-empty"><span class="pce-emoji">🎗️</span>No guests on record yet — use “Add new devotee”.</div></div>`;
   }
-  return `<div class="pj-people-list">` + POOJA.people.map(x => `
-    <label class="pj-people-row">
+  const initials = nm => String(nm || '?').trim().split(/\s+/).map(w => w.charAt(0)).slice(0, 2).join('') || '?';
+  return `<div class="people-check-list">` + POOJA.people.map(x => `
+    <label class="people-check-row">
       <input type="checkbox" class="pj-guest-check" value="${x.id}" ${sel.indexOf(x.id) !== -1 ? 'checked' : ''}>
-      <span class="pj-people-body">
+      <span class="pcr-avatar">${esc(initials(personName(x)))}</span>
+      <span class="pcr-body">
         <strong>${esc(personName(x))}</strong>
         <small>${esc(x.role || 'Guest')}${x.mobile ? ' · ' + esc(x.mobile) : ''}${x.city ? ' · ' + esc(x.city) : ''}</small>
       </span>
-      <button class="btn btn-outline mg-btn-xs" type="button" onclick="openEditGuest('${x.id}','poojaForm')">Edit</button>
+      <button class="btn btn-outline mg-btn-xs" type="button" onclick="event.preventDefault();openEditGuest('${x.id}','poojaForm')">Edit</button>
     </label>`).join('') + `</div>`;
 }
 /** Render the picker with an explicit list of ticked ids. */

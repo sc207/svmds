@@ -2334,6 +2334,114 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 .pj-people-body strong { font-size: 0.82rem; color: var(--dark-brown); }
 .pj-people-body small { font-size: 0.68rem; color: var(--muted-brown); }
 
+/* ============================================================
+   LINKED-ENTITY FORM SECTIONS
+   One consistent look for every "attach a person" block —
+   Account person, Committee leader/members, Management
+   lead/volunteers, Pooja sevarthi/coordinator/guest.
+   ============================================================ */
+.link-section {
+  border: 1px solid var(--warm-border);
+  border-left: 3px solid var(--antique-gold);
+  border-radius: var(--radius-md);
+  background: var(--warm-ivory);
+  padding: 0.75rem 0.85rem 0.85rem;
+  margin: 0.9rem 0;
+}
+.link-section + .link-section { margin-top: 0.65rem; }
+.link-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.6rem; flex-wrap: wrap;
+  margin: 0 0 0.5rem; padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--warm-border);
+}
+.link-section-head .ls-title {
+  margin: 0; display: flex; align-items: center; gap: 0.45rem;
+  font-family: var(--font-heading); font-size: 0.88rem; font-weight: 700;
+  letter-spacing: 0.01em; color: var(--primary-maroon);
+}
+.ls-title .ls-req { color: var(--primary-maroon); }
+.ls-title .ls-count {
+  font-family: var(--font-body); font-size: 0.7rem; font-weight: 600;
+  color: var(--muted-brown); background: var(--warm-ivory);
+  border: 1px solid var(--warm-border); border-radius: 999px; padding: 0.03rem 0.5rem;
+}
+.link-section-hint {
+  font-size: 0.72rem; color: var(--muted-brown);
+  margin: 0 0 0.55rem; line-height: 1.5;
+}
+.btn-add-devotee {
+  --lsb: var(--antique-gold);
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.74rem; font-weight: 600; line-height: 1; white-space: nowrap;
+  padding: 0.42rem 0.72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--lsb); color: var(--primary-maroon); background: #fff;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn-add-devotee:hover { background: var(--warm-ivory); border-color: var(--primary-maroon); }
+.btn-add-devotee::before { content: "+"; font-size: 0.95rem; font-weight: 700; color: var(--lsb); }
+
+/* a bare <select> + optional trailing button */
+.link-field { display: flex; gap: 0.5rem; align-items: stretch; flex-wrap: wrap; }
+.link-field > select { flex: 1 1 200px; min-width: 0; }
+.link-field > .btn-add-devotee { flex: 0 0 auto; }
+
+/* checkbox roster */
+.people-check-list {
+  max-height: 264px; overflow-y: auto;
+  border: 1px solid var(--warm-border); border-radius: var(--radius-md); background: #fff;
+}
+.people-check-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--warm-border);
+  cursor: pointer; transition: background 0.12s ease;
+}
+.people-check-row:last-child { border-bottom: none; }
+.people-check-row:hover { background: var(--off-white); }
+.people-check-row:has(input:checked) {
+  background: var(--success-bg); box-shadow: inset 3px 0 0 var(--success);
+}
+.people-check-row input[type="checkbox"] {
+  flex-shrink: 0; width: 16px; height: 16px; accent-color: var(--primary-maroon);
+}
+.pcr-avatar {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.72rem; font-weight: 700; color: #fff; background: var(--primary-maroon);
+  font-family: var(--font-heading); text-transform: uppercase;
+}
+.pcr-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pcr-body strong {
+  font-size: 0.82rem; color: var(--dark-brown);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pcr-body small { font-size: 0.7rem; color: var(--muted-brown); }
+.pcr-role {
+  flex: 0 0 auto; max-width: 148px;
+  font-size: 0.76rem !important; padding: 0.36rem 0.5rem !important;
+}
+.people-check-empty {
+  padding: 1.4rem 1rem; text-align: center;
+  color: var(--muted-brown); font-size: 0.82rem;
+}
+.people-check-empty .pce-emoji { display: block; font-size: 1.5rem; margin-bottom: 0.3rem; opacity: 0.7; }
+
+/* the shared "Add a new devotee" sheet */
+.dp-form-caption {
+  grid-column: 1 / -1;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--muted-brown); margin: 0.1rem 0 0.35rem;
+}
+.dp-extra-divider {
+  grid-column: 1 / -1; border: none; border-top: 1px dashed var(--warm-border);
+  margin: 0.85rem 0 0.15rem;
+}
+
+@media (max-width: 560px) {
+  .pcr-role { max-width: 120px; }
+  .btn-add-devotee { padding: 0.4rem 0.6rem; }
+}
+
 /* --- Status card (Overview) --- */
 .pj-status-card {
   display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;

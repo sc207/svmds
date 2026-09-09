@@ -17,35 +17,38 @@
           <span class="mg-muted-xs">Any operational team — the platform is not limited to a fixed set of management types.</span>
         </div>
 
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <div class="flex justify-between items-center"><label class="form-label" for="mgLeadSelect" style="margin:0">Management Lead *</label>
-              <button class="btn btn-outline mg-btn-xs" type="button" onclick="mgAddLead()">+ New devotee</button></div>
-            <select class="form-select" id="mgLeadSelect" required></select>
-            <span class="mg-muted-xs">Pick a devotee, or add a new one — no login account needed.</span>
+        <div class="link-section">
+          <div class="link-section-head">
+            <p class="ls-title">Management Lead <span class="ls-req">*</span></p>
+            <button class="btn-add-devotee" type="button" onclick="mgAddLead()">Add new devotee</button>
           </div>
+          <div class="link-section-hint">Pick a devotee from the register, or add a new one — no login account needed.</div>
+          <div class="link-field"><select class="form-select" id="mgLeadSelect" required></select></div>
+        </div>
+
+        <div class="link-section">
+          <div class="link-section-head">
+            <p class="ls-title">Team members</p>
+            <button class="btn-add-devotee" type="button" onclick="mgAddMemberPerson()">Add new devotee</button>
+          </div>
+          <div class="link-section-hint">Tick people from the register (or add new ones) and set each one's role here. The Lead is added automatically. Status &amp; later edits are on the team's Volunteers tab.</div>
+          <div id="mgMemberPicker"></div>
+        </div>
+
+        <div class="grid mg-2col-form">
           <div class="form-group">
             <label class="form-label" for="mgFieldSize">Expected Team Size *</label>
             <input type="number" class="form-input" id="mgFieldSize" min="1" value="15" required>
             <span class="mg-muted-xs" id="mgCurrentTeamNote">Current team members: 0</span>
           </div>
-        </div>
-
-        <div class="form-group">
-          <div class="flex justify-between items-center"><label class="form-label" style="margin:0">Team members</label>
-            <button class="btn btn-outline mg-btn-xs" type="button" onclick="mgAddMemberPerson()">+ Add new Devotee</button></div>
-          <div class="mg-muted-xs" style="margin-bottom:.4rem">Tick people from the register (or add new ones) and set each one's role here. The Lead is added automatically. Status &amp; later edits are on the team's Volunteers tab.</div>
-          <div id="mgMemberPicker"></div>
-        </div>
-
-        <div class="grid mg-2col-form">
           <div class="form-group">
             <label class="form-label" for="mgFieldStatus">Status *</label>
             <select class="form-select" id="mgFieldStatus" required>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
-          </div>        </div>
+          </div>
+        </div>
 
         <div class="form-group">
           <label class="form-label" for="mgFieldDesc">Description *</label>

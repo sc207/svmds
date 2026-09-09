@@ -1372,7 +1372,7 @@ function panePoojaSettings(p) {
           <option value="">— Select a devotee to grant access —</option>
           ${pool.map(c => `<option value="${c.id}">${esc(c.name)}${c.mobile ? ' · ' + esc(c.mobile) : ''}</option>`).join('')}
         </select>
-        <button class="btn btn-outline" type="button" onclick="pjAddCoordinatorDevotee()">+ Add new devotee</button>
+        <button class="btn-add-devotee" type="button" onclick="pjAddCoordinatorDevotee()">Add new devotee</button>
         <button class="btn btn-primary" type="submit">Grant Access</button>
       </form>
     </div>
