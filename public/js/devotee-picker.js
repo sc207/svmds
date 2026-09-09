@@ -7,6 +7,53 @@
 (function () {
   if (typeof window === 'undefined') return;
 
+  /* ---- Dedicated overlay so the devotee form ALWAYS stacks visibly on top
+     of whatever opened it — a module modal (#modalPooja / #modalCommittee /
+     #modalManagement, z-index 1000) OR the generic sheet #mgSheet (1100),
+     which is what the Bappa-Visits form uses. Own DOM + z-index 1300. ---- */
+  function ensureOverlay() {
+    if (typeof document === 'undefined' || document.getElementById('dpOverlay')) return;
+    document.body.insertAdjacentHTML('beforeend',
+      '<div class="modal-overlay" id="dpOverlay">' +
+        '<div class="modal-box" style="max-width:560px">' +
+          '<div class="modal-header">' +
+            '<div class="modal-title" id="dpSheetTitle"></div>' +
+            '<button class="modal-close-btn" onclick="dpCloseSheet()">&times;</button>' +
+          '</div>' +
+          '<div class="modal-body" id="dpSheetBody"></div>' +
+          '<div class="modal-footer" id="dpSheetFooter"></div>' +
+        '</div>' +
+      '</div>');
+    document.getElementById('dpOverlay').addEventListener('click', function (e) {
+      if (e.target.id === 'dpOverlay') dpCloseSheet();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        var o = document.getElementById('dpOverlay');
+        if (o && o.classList.contains('active')) dpCloseSheet();
+      }
+    });
+  }
+  if (typeof document !== 'undefined') {
+    if (document.body) ensureOverlay();
+    else document.addEventListener('DOMContentLoaded', ensureOverlay);
+  }
+  function dpOpenSheet(o) {
+    ensureOverlay();
+    var t = document.getElementById('dpSheetTitle');
+    var b = document.getElementById('dpSheetBody');
+    var f = document.getElementById('dpSheetFooter');
+    if (!b) { if (typeof openSheet === 'function') return openSheet(o); return; }
+    t.textContent = o.title || '';
+    b.innerHTML = o.body || '';
+    f.innerHTML = o.footer || '<button class="btn btn-primary" onclick="dpCloseSheet()">Close</button>';
+    document.getElementById('dpOverlay').classList.add('active');
+  }
+  window.dpCloseSheet = function () {
+    var o = document.getElementById('dpOverlay');
+    if (o) o.classList.remove('active');
+  };
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -98,7 +145,6 @@
      Dedupes by mobile; persists to /api/devotees when online. */
   window.openDevoteeSheet = function (opts) {
     opts = opts || {};
-    if (typeof openSheet !== 'function') { if (typeof showToast === 'function') showToast('UI not ready'); return; }
     var nameParts = String(opts.prefillName || '').trim().split(/\s+/);
     var pf = nameParts.shift() || '';
     var pl = nameParts.join(' ');
@@ -107,7 +153,7 @@
     window.__dpExtra = Array.isArray(opts.extraFields) ? opts.extraFields : [];
     var extraHTML = window.__dpExtra.map(extraFieldHTML).join('');
 
-    openSheet({
+    dpOpenSheet({
       title: opts.title || 'Add a new person (devotee)',
       body:
         '<form id="dpForm" class="mg-2col-form">' +
@@ -126,7 +172,7 @@
           extraHTML +
         '</form>',
       footer:
-        '<button class="btn btn-outline" onclick="closeSheet()">Cancel</button>' +
+        '<button class="btn btn-outline" onclick="dpCloseSheet()">Cancel</button>' +
         '<button class="btn btn-primary" id="dpSaveBtn" onclick="dpSubmit()">Save person</button>',
     });
     window.__dpOnSaved = (typeof opts.onSaved === 'function') ? opts.onSaved : function () {};
@@ -194,7 +240,7 @@
     }
     function finish(dev) {
       try { if (typeof syncEntitySelects === 'function') syncEntitySelects(); } catch (e) {}
-      if (typeof closeSheet === 'function') closeSheet();
+      dpCloseSheet();
       toast(dev.name + ' saved.');
       try { (window.__dpOnSaved || function () {})(dev, extras); } catch (e) {}
     }

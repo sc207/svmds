@@ -1361,6 +1361,9 @@ input, select, textarea { font-family: inherit; outline: none; }
    (e.g. "+ New devotee" from the Add Committee form) — keep it above. */
 #mgSheet.modal-overlay { z-index: 1100; }
 #mgConfirm.modal-overlay { z-index: 1200; }
+/* The shared "+ Add new devotee" sheet — must sit above ANY parent form,
+   including the Bappa-Visits form which itself uses #mgSheet. */
+#dpOverlay.modal-overlay { z-index: 1300; }
 
 .modal-box {
   background: #FFFFFF;

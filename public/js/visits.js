@@ -114,6 +114,60 @@ function renderVisits() {
   </div>`;
 }
 
+/* People from the shared register, for the devotee dropdown. */
+function visPeople() {
+  if (typeof allPeople === 'function') return allPeople();
+  if (typeof templePeople === 'function') return templePeople();
+  return [];
+}
+function visDevoteeOptions(v) {
+  v = v || {};
+  const people = visPeople();
+  let matched = false;
+  let opts = `<option value="">— ${window.t('vis_pick_devotee', 'pick a devotee')} —</option>`;
+  opts += people.map(p => {
+    const sel = (v.devoteeId && String(p.id) === String(v.devoteeId)) ||
+                (!v.devoteeId && v.devoteeName && p.name === v.devoteeName);
+    if (sel) matched = true;
+    return `<option value="${esc(p.id)}" ${sel ? 'selected' : ''}>${esc(p.name)}${p.mobile ? ' · ' + esc(p.mobile) : ''}${p.city ? ' · ' + esc(p.city) : ''}</option>`;
+  }).join('');
+  if (v.devoteeName && !matched) {
+    opts += `<option value="name:${esc(v.devoteeName)}" selected>${esc(v.devoteeName)} (${window.t('vis_not_in_register', 'not in register')})</option>`;
+  }
+  return opts;
+}
+/* Auto-fill mobile / city from the chosen devotee when those fields are blank. */
+function visOnDevoteePick() {
+  const sel = document.getElementById('visDevoteeSelect');
+  if (!sel || !sel.value || sel.value.indexOf('name:') === 0) return;
+  const p = visPeople().find(x => String(x.id) === String(sel.value));
+  if (!p) return;
+  const m = document.getElementById('visMobile');
+  if (m && !m.value.trim() && p.mobile) m.value = String(p.mobile).replace(/\D/g, '').slice(0, 10);
+  const c = document.getElementById('visCity');
+  if (c && !c.value.trim() && p.city) c.value = p.city;
+}
+/* "+ Add new devotee" — the shared devotee sheet, opened ON TOP of this form. */
+function visAddDevotee() {
+  if (typeof openDevoteeSheet !== 'function') { visToast('Devotee form unavailable'); return; }
+  openDevoteeSheet({
+    title: window.t('vis_add_devotee', 'Add a new devotee'),
+    onSaved: function (dev) {
+      const sel = document.getElementById('visDevoteeSelect');
+      if (!sel) return;
+      let o = Array.prototype.slice.call(sel.options).find(x => String(x.value) === String(dev.id));
+      if (!o) {
+        o = document.createElement('option');
+        o.value = dev.id;
+        o.textContent = dev.name + (dev.mobile ? ' · ' + dev.mobile : '') + (dev.city ? ' · ' + dev.city : '');
+        sel.appendChild(o);
+      }
+      sel.value = dev.id;
+      visOnDevoteePick();
+    }
+  });
+}
+
 function visitFormBody(v) {
   v = v || {};
   const pOpts = VISITS.purposes.map(p => `<option value="${p}" ${v.purpose === p ? 'selected' : ''}>${esc(visitPurposeLabel(p))}</option>`).join('');
@@ -121,7 +175,11 @@ function visitFormBody(v) {
   return `
   <form id="formVisit" onsubmit="handleSaveVisit(event)">
     <div class="grid mg-2col-form">
-      <div class="form-group"><label class="form-label" for="visDevotee">${window.t('vis_devotee', 'Devotee Name')} *</label><input class="form-input" id="visDevotee" value="${esc(v.devoteeName || '')}" required></div>
+      <div class="form-group">
+        <div class="flex justify-between items-center"><label class="form-label" for="visDevoteeSelect" style="margin:0">${window.t('vis_devotee', 'Devotee')} *</label>
+          <button class="btn btn-outline mg-btn-xs" type="button" onclick="visAddDevotee()">+ ${window.t('vis_add_devotee', 'Add new devotee')}</button></div>
+        <select class="form-select" id="visDevoteeSelect" onchange="visOnDevoteePick()" required>${visDevoteeOptions(v)}</select>
+      </div>
       <div class="form-group"><label class="form-label" for="visMobile">${window.t('mobile')}</label><input class="form-input" id="visMobile" maxlength="10" value="${esc(v.mobile || '')}"></div>
     </div>
     <div class="grid mg-2col-form">
@@ -167,12 +225,26 @@ function openEditVisit(id) {
 function handleSaveVisit(e) {
   e.preventDefault();
   const g = id => document.getElementById(id);
-  const name = g('visDevotee').value.trim();
+  const sel = g('visDevoteeSelect');
+  const selVal = sel ? sel.value : '';
+  let devoteeId = '';
+  let name = '';
+  if (selVal.indexOf('name:') === 0) {
+    name = selVal.slice(5);
+  } else if (selVal) {
+    devoteeId = selVal;
+    const p = visPeople().find(x => String(x.id) === String(selVal));
+    name = p ? p.name : (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '');
+  }
+  if (!devoteeId && VISITS.editingId) {
+    const prev = visitById(VISITS.editingId);
+    if (prev && prev.devoteeId && name === prev.devoteeName) devoteeId = prev.devoteeId;
+  }
   const date = g('visDate').value;
-  if (!name) { visToast(window.t('vis_need_name', 'Devotee name is required.')); return; }
+  if (!name) { visToast(window.t('vis_need_name', 'Pick a devotee, or add a new one.')); return; }
   if (!date) { visToast(window.t('vis_need_date', 'Date is required.')); return; }
   const fields = {
-    devoteeName: name, mobile: g('visMobile').value.replace(/\D/g, '').slice(0, 10),
+    devoteeId: devoteeId, devoteeName: name, mobile: g('visMobile').value.replace(/\D/g, '').slice(0, 10),
     purpose: g('visPurpose').value, status: g('visStatus').value,
     address: g('visAddress').value.trim(), city: g('visCity').value.trim(), state: g('visState').value.trim(),
     date, time: g('visTime').value, escortTeam: g('visEscort').value.trim(),
