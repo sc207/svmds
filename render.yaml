@@ -6,6 +6,17 @@
 # A deploy must ONLY install deps and start the server. The server's own boot
 # (server/index.js) runs forward-only migrations + idempotent seeds that never
 # delete rows. `wipe.js` is hard-blocked when NODE_ENV=production anyway.
+#
+# DATA-HYGIENE (no Shell needed on the Free plan):
+#   Set DB_REPAIR_ON_BOOT in the Render dashboard → Environment, then redeploy:
+#     • "dry" → the boot logs how many rows a repair WOULD change (zero writes).
+#                Leave this on permanently to catch drift on every deploy.
+#     • "1"   → the boot APPLIES the repair once (merge duplicate devotees,
+#                backfill missing devotee links, add the UNIQUE indexes). It is
+#                idempotent — a second boot is a no-op. A failure is logged and
+#                the server still starts. Set it back to "dry" (or remove it)
+#                after the one apply. NEVER hard-deletes a row.
+#   Read the result in the service's Logs tab: "DB_REPAIR_ON_BOOT=… : …".
 services:
   - type: web
     name: svmds
@@ -32,4 +43,8 @@ services:
       - key: TURSO_AUTH_TOKEN
         sync: false
       - key: ALLOWED_ORIGINS
+        sync: false
+      # Data-hygiene switch — see the DATA-HYGIENE note above.
+      # unset = off · "dry" = log drift only · "1" = apply the repair once.
+      - key: DB_REPAIR_ON_BOOT
         sync: false

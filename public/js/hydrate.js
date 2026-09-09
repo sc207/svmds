@@ -285,6 +285,80 @@
     log('poojas: ' + poojas.length + ' (' + POOJA.sevarthis.length + ' sevarthis, ' + POOJA.poojaTypes.length + ' types)');
   }
 
+  /* ---- Events ---- */
+  async function hydrateEvents() {
+    if (typeof EV === 'undefined') return;
+    var types = [];
+    try { types = await window.API.get('/events/types'); } catch (e) {}
+    if (Array.isArray(types)) {
+      swap(EV.eventTypes, types.map(function (t) {
+        return { id: t.id, code: t.code, name: t.name, category: t.category || '',
+                 icon: t.icon || '📅', description: t.description || '' };
+      }));
+    }
+    var rows = await window.API.get('/events');
+    if (!Array.isArray(rows)) return;
+    swap(EV.events, rows.map(function (e) {
+      return { id: e.id, code: e.code, typeId: e.typeId, name: e.name, venue: e.venue || '',
+               inChargeId: devCode(e.inChargeDevoteeId), inChargeUserId: e.inChargeId || null,
+               expectedFootfall: e.expectedFootfall || 0, budget: e.budget || 0,
+               status: e.status || 'planning', color: e.color || '#C96A20', notes: e.notes || '',
+               days: (e.days || []).map(function (d) { return { id: d.id, date: d.date, startTime: d.startTime || '', endTime: d.endTime || '' }; }),
+               createdDate: e.createdDate || '' };
+    }));
+    if (typeof renderEvents === 'function') renderEvents();
+    log('events: ' + EV.events.length + ' (' + EV.eventTypes.length + ' types)');
+  }
+
+  /* ---- Visits ---- */
+  async function hydrateVisits() {
+    if (typeof VISITS === 'undefined') return;
+    var rows = await window.API.get('/visits');
+    if (!Array.isArray(rows)) return;
+    swap(VISITS.list, rows.map(function (v) {
+      return { id: v.id, code: v.code, devoteeName: v.devoteeName || '', devoteeId: devCode(v.devoteeId),
+               mobile: v.mobile || '', purpose: v.purpose || 'other', address: v.address || '',
+               city: v.city || '', state: v.state || 'Gujarat', date: v.date, time: v.time || '',
+               escortTeam: v.escortTeam || '', status: v.status || 'requested', notes: v.notes || '' };
+    }));
+    if (typeof renderVisits === 'function') renderVisits();
+    log('visits: ' + VISITS.list.length);
+  }
+
+  /* ---- Donations ---- */
+  async function hydrateDonations() {
+    if (typeof DON === 'undefined') return;
+    var cats = [];
+    try { cats = await window.API.get('/donation-categories'); } catch (e) {}
+    if (Array.isArray(cats)) {
+      swap(DON.categories, cats.map(function (c) {
+        return { id: c.id, code: c.code, name: c.name, kind: c.kind, icon: c.icon || '🪙', description: c.description || '' };
+      }));
+    }
+    var donors = [];
+    try { donors = await window.API.get('/donors'); } catch (e) {}
+    if (Array.isArray(donors)) {
+      swap(DON.donors, donors.map(function (d) {
+        return { id: d.id, code: d.code, type: d.type, firstName: d.firstName || '', lastName: d.lastName || '',
+                 orgName: d.orgName || '', contactPerson: d.contactPerson || '', devoteeId: devCode(d.devoteeId),
+                 mobile: d.mobile || '', pan: d.pan || '', city: d.city || '', state: d.state || 'Gujarat',
+                 committee: d.committee || '', notes: d.notes || '', addedDate: d.addedDate || '' };
+      }));
+    }
+    var rows = await window.API.get('/donations');
+    if (!Array.isArray(rows)) return;
+    swap(DON.donations, rows.map(function (x) {
+      return { id: x.id, code: x.code, receiptNo: x.receiptNo || '', certNo: x.certNo || '',
+               donorId: x.donorId, categoryId: x.categoryId, mode: x.mode || 'Cash',
+               amount: x.amount || 0, item: x.item || '', qty: x.qty || '', valuation: x.valuation || 0,
+               date: x.date, purpose: x.purpose || '', committee: x.committee || '',
+               status: x.status || 'received', certificateIssued: !!x.certificateIssued,
+               notes: x.notes || '', recordedBy: x.recordedBy || '' };
+    }));
+    if (typeof renderDonations === 'function') renderDonations();
+    log('donations: ' + DON.donations.length + ' (' + DON.donors.length + ' donors, ' + DON.categories.length + ' categories)');
+  }
+
   async function refreshViews() {
     try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) {}
     try { if (typeof renderUnifiedCalendar === 'function') renderUnifiedCalendar(); } catch (e) {}
@@ -299,6 +373,9 @@
     try { await hydrateCommittees(); } catch (e) { log('committees failed: ' + e.message); }
     try { await hydrateTeams(); } catch (e) { log('teams failed: ' + e.message); }
     try { await hydratePoojas(); } catch (e) { log('poojas failed: ' + e.message); }
+    try { await hydrateEvents(); } catch (e) { log('events failed: ' + e.message); }
+    try { await hydrateVisits(); } catch (e) { log('visits failed: ' + e.message); }
+    try { await hydrateDonations(); } catch (e) { log('donations failed: ' + e.message); }
     await refreshViews();
     log('done');
   }

@@ -268,9 +268,10 @@ function handleSaveExpense(e) {
   const amount = parseInt(document.getElementById('inputExpenseAmount').value);
   const category = document.getElementById('inputExpenseCategory').value;
 
+  const date = new Date().toISOString().slice(0, 10);
   const newExpense = {
-    id: `#EXP-${500 + state.expenses.length + 1}`,
-    title, category, amount, date: '05 Sept 2026', status: 'Paid'
+    id: `EXP-${500 + state.expenses.length + 1}`,
+    title, category, amount, date, status: 'Paid'
   };
 
   state.expenses.unshift(newExpense);
@@ -278,6 +279,11 @@ function handleSaveExpense(e) {
   closeModal('modalAddExpense');
   e.target.reset();
   showToast(`Expense voucher created for ₹${amount.toLocaleString('en-IN')}!`);
+  if (window.API && window.API.online) {
+    window.API.post('/expenses', { title, category, amount, date, status: 'Paid' })
+      .then(function (dto) { if (dto && (dto.code || dto.id)) { newExpense.id = dto.code || dto.id; renderExpensesTable(); } })
+      .catch(function () { showToast('Saved locally — expense sync failed'); });
+  }
 }
 
 function handleSaveInventory(e) {
@@ -288,7 +294,7 @@ function handleSaveInventory(e) {
   const minStock = document.getElementById('inputInventoryMinStock').value;
 
   const newInventory = {
-    id: `#INV-0${state.inventory.length + 1}`,
+    id: `INV-${state.inventory.length + 1}`,
     item, category, stock, minStock, status: 'In Stock'
   };
 
@@ -297,6 +303,11 @@ function handleSaveInventory(e) {
   closeModal('modalAddInventory');
   e.target.reset();
   showToast(`Item '${item}' added to temple inventory!`);
+  if (window.API && window.API.online) {
+    window.API.post('/inventory', { item, category, stock, minStock, status: 'In Stock' })
+      .then(function (dto) { if (dto && (dto.code || dto.id)) { newInventory.id = dto.code || dto.id; renderInventoryTable(); } })
+      .catch(function () { showToast('Saved locally — inventory sync failed'); });
+  }
 }
 
 function handleJoinTeam(e) {

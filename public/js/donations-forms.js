@@ -361,11 +361,21 @@ function handleSaveDonation(e) {
     notes: document.getElementById('donFieldNotes').value.trim()
   };
 
+  const online = !!(window.API && window.API.online);
   let saved;
   if (DON.editingDonationId) {
     saved = donationById(DON.editingDonationId);
     Object.assign(saved, payload);
     donToast(window.t('don_updated'));
+    if (online && /^DON-/i.test(saved.code || saved.id)) {
+      window.API.patch('/donations/' + (saved.code || saved.id), {
+        mode: payload.mode, amount: payload.amount, item: payload.item, qty: payload.qty,
+        valuation: payload.valuation, date: payload.date, status: payload.status,
+        committee: payload.committee, purpose: payload.purpose, notes: payload.notes
+      })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     saved = Object.assign({
       id: nextId('DON', DON.donations, 3),
@@ -374,6 +384,14 @@ function handleSaveDonation(e) {
     }, payload);
     DON.donations.unshift(saved);
     donToast(window.t('don_saved') + ' — ' + saved.receiptNo);
+    if (online) {
+      window.API.post('/donations', payload)
+        .then(function (dto) {
+          if (dto) { saved.id = dto.code || dto.id || saved.id; if (dto.receiptNo) saved.receiptNo = dto.receiptNo; }
+          return window.__rehydrate && window.__rehydrate();
+        })
+        .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   }
 
   DON.editingDonationId = null;
@@ -391,9 +409,11 @@ function confirmDeleteDonation(id) {
     body: `<p>${window.t('don_delete_body')} <strong>${esc(x.receiptNo)}</strong> — ${esc(donationGiven(x))}?</p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
+      const wasSynced = /^DON-/i.test(x.code || x.id);
       DON.donations = DON.donations.filter(d => d.id !== id);
       donToast(window.t('don_deleted'));
       renderDonations();
+      if (window.API && window.API.online && wasSynced) window.API.del('/donations/' + (x.code || x.id)).catch(function (err) { donToast((err && err.message) || 'Delete failed to sync'); });
     }
   });
 }
@@ -476,12 +496,19 @@ function handleSaveDonor(e) {
   if (!/^[0-9]{10}$/.test(mobile)) { donToast(window.t('don_need_mobile')); return; }
   if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) { donToast(window.t('don_bad_pan')); return; }
 
+  const online = !!(window.API && window.API.online);
+  const body = { type, firstName: first, lastName: last, orgName: org, contactPerson: contact, mobile, pan, city, state, committee, notes };
   const wasEditing = !!DON.editingDonorId;
   let saved;
   if (wasEditing) {
     saved = donorById(DON.editingDonorId);
     Object.assign(saved, { type, firstName: first, lastName: last, orgName: org, contactPerson: contact, mobile, pan, city, state, committee, notes });
     donToast(window.t('don_donor_updated'));
+    if (online && /^DNR-/i.test(saved.code || saved.id)) {
+      window.API.patch('/donors/' + (saved.code || saved.id), body)
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     const dupe = DON.donors.find(d => d.mobile === mobile);
     if (dupe) { donToast(window.t('don_donor_exists') + ' — ' + donorName(dupe)); return; }
@@ -492,6 +519,16 @@ function handleSaveDonor(e) {
     };
     DON.donors.push(saved);
     donToast(window.t('don_donor_added') + ' — ' + donorName(saved));
+    if (online) {
+      window.API.post('/donors', body)
+        .then(function (dto) {
+          if (dto && (dto.code || dto.id)) saved.id = dto.code || dto.id;
+          if (dto && dto._deduped) donToast('Matched an existing donor — ' + (dto.name || ''));
+          return window.__rehydrate && window.__rehydrate();
+        })
+        .then(function () { if (back === 'donationForm') refreshDonorSelect(saved.id); })
+        .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   }
 
   DON.editingDonorId = null;
@@ -500,13 +537,14 @@ function handleSaveDonor(e) {
   closeModal('modalDonor');
 
   if (back === 'donationForm') {
-    const sel = document.getElementById('donFieldDonor');
-    if (sel) { sel.innerHTML = renderDonorOptions(saved.id); onDonorSelectChange(); }
-  } else if (back === 'profile' && DON.view === 'donor') {
-    renderDonations();
+    refreshDonorSelect(saved.id);
   } else {
     renderDonations();
   }
+}
+function refreshDonorSelect(donorId) {
+  const sel = document.getElementById('donFieldDonor');
+  if (sel && typeof renderDonorOptions === 'function') { sel.innerHTML = renderDonorOptions(donorId); if (typeof onDonorSelectChange === 'function') onDonorSelectChange(); }
 }
 
 function confirmDeleteDonor(id) {
@@ -520,10 +558,12 @@ function confirmDeleteDonor(id) {
     body: `<p>${window.t('don_delete_donor_body')} <strong>${esc(donorName(d))}</strong>?</p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
+      const wasSynced = /^DNR-/i.test(d.code || d.id);
       DON.donors = DON.donors.filter(x => x.id !== id);
       if (DON.activeDonorId === id) { DON.activeDonorId = null; DON.view = 'directory'; }
       donToast(window.t('don_donor_deleted'));
       renderDonations();
+      if (window.API && window.API.online && wasSynced) window.API.del('/donors/' + (d.code || d.id)).catch(function (err) { donToast((err && err.message) || 'Delete failed to sync'); });
     }
   });
 }
@@ -562,8 +602,19 @@ function handleSaveDonCategory(e) {
     kind: document.getElementById('donCatFieldKind').value,
     description: document.getElementById('donCatFieldDesc').value.trim()
   };
-  if (DON.editingCatId) { Object.assign(donCatById(DON.editingCatId), payload); donToast(window.t('don_cat_updated')); }
-  else { DON.categories.push(Object.assign({ id: nextId('DCT', DON.categories, 3) }, payload)); donToast(window.t('don_cat_added')); }
+  const online = !!(window.API && window.API.online);
+  if (DON.editingCatId) {
+    const c = donCatById(DON.editingCatId);
+    Object.assign(c, payload);
+    donToast(window.t('don_cat_updated'));
+    if (online && /^DCT-/i.test(c.code || c.id)) window.API.patch('/donation-categories/' + (c.code || c.id), payload).catch(function () {});
+  } else {
+    const c = Object.assign({ id: nextId('DCT', DON.categories, 3) }, payload);
+    DON.categories.push(c);
+    donToast(window.t('don_cat_added'));
+    if (online) window.API.post('/donation-categories', payload)
+      .then(function () { return window.__rehydrate && window.__rehydrate(); }).catch(function () {});
+  }
   DON.editingCatId = null;
   closeModal('modalDonCategory');
   renderDonations();
@@ -579,9 +630,11 @@ function confirmDeleteDonCategory(id) {
     body: `<p>${window.t('don_delete_cat_body')} <strong>${esc(tData(c.name))}</strong>?</p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
+      const wasSynced = /^DCT-/i.test(c.code || c.id);
       DON.categories = DON.categories.filter(x => x.id !== id);
       donToast(window.t('don_cat_deleted'));
       renderDonations();
+      if (window.API && window.API.online && wasSynced) window.API.del('/donation-categories/' + (c.code || c.id)).catch(function () {});
     }
   });
 }

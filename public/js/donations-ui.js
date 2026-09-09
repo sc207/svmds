@@ -392,7 +392,14 @@ function openDonationReceipt(id) {
 function openDonationCertificate(id) {
   const x = donationById(id);
   if (!x) return;
-  if (!x.certNo) { x.certNo = nextCertNo(); }
+  if (!x.certNo) {
+    x.certNo = nextCertNo();
+    if (window.API && window.API.online && /^DON-/i.test(x.code || x.id)) {
+      window.API.post('/donations/' + (x.code || x.id) + '/certificate')
+        .then(function (dto) { if (dto && dto.certNo) x.certNo = dto.certNo; renderDonations(); })
+        .catch(function () {});
+    }
+  }
   x.certificateIssued = true;
   const box = document.getElementById('receiptContent');
   document.getElementById('receiptViewerTitle').textContent = window.t('don_cert_title');

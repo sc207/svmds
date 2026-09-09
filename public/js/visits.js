@@ -254,14 +254,33 @@ function handleSaveVisit(e) {
     date, time: g('visTime').value, escortTeam: g('visEscort').value.trim(),
     notes: g('visNotes').value.trim()
   };
+  const online = !!(window.API && window.API.online);
+  const body = {
+    devoteeId: fields.devoteeId && /^DEV-/i.test(fields.devoteeId) ? fields.devoteeId : undefined,
+    devoteeName: fields.devoteeName, mobile: fields.mobile, city: fields.city, state: fields.state,
+    address: fields.address, purpose: fields.purpose, status: fields.status,
+    date: fields.date, time: fields.time, escortTeam: fields.escortTeam, notes: fields.notes
+  };
   if (VISITS.editingId) {
-    Object.assign(visitById(VISITS.editingId), fields);
+    const v = visitById(VISITS.editingId);
+    Object.assign(v, fields);
     visToast(name + ' — ' + window.t('save') + ' ✓');
+    if (online && /^VIS-/i.test(v.code || v.id)) {
+      window.API.patch('/visits/' + (v.code || v.id), body)
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { visToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     let max = 0;
     VISITS.list.forEach(x => { const n = parseInt(String(x.id).replace(/\D/g, ''), 10); if (n > max) max = n; });
-    VISITS.list.push(Object.assign({ id: 'VIS-' + String(max + 1).padStart(3, '0') }, fields));
+    const local = Object.assign({ id: 'VIS-' + String(max + 1).padStart(3, '0') }, fields);
+    VISITS.list.push(local);
     visToast(window.t('vis_added', 'Visit added.'));
+    if (online) {
+      window.API.post('/visits', body)
+        .then(function (dto) { if (dto && (dto.code || dto.id)) local.id = dto.code || dto.id; return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { visToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   }
   VISITS.editingId = null;
   if (typeof closeSheet === 'function') closeSheet();
@@ -274,7 +293,13 @@ function confirmDeleteVisit(id) {
     title: window.t('vis_delete', 'Delete Visit'), danger: true,
     body: `<p><strong>${esc(v.devoteeName)}</strong> — ${esc(visitPurposeLabel(v.purpose))}</p>`,
     confirmLabel: window.t('delete'),
-    onConfirm: () => { VISITS.list = VISITS.list.filter(x => x.id !== id); visToast(window.t('vis_deleted', 'Visit deleted.')); renderVisits(); }
+    onConfirm: () => {
+      const wasSynced = /^VIS-/i.test(v.code || v.id);
+      VISITS.list = VISITS.list.filter(x => x.id !== id);
+      visToast(window.t('vis_deleted', 'Visit deleted.'));
+      renderVisits();
+      if (window.API && window.API.online && wasSynced) window.API.del('/visits/' + (v.code || v.id)).catch(function (err) { visToast((err && err.message) || 'Delete failed to sync'); });
+    }
   });
 }
 

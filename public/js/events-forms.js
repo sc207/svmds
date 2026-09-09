@@ -159,15 +159,42 @@ function handleSaveEvent(ev) {
     color: document.getElementById('evFieldAccent').value,
     notes: document.getElementById('evFieldNotes').value.trim()
   };
+  const online = !!(window.API && window.API.online);
+  const inChargeDev = /^DEV-/i.test(payload.inChargeId) || /^\d+$/.test(String(payload.inChargeId)) ? payload.inChargeId : null;
+
   if (EV.editingEventId) {
-    Object.assign(eventById(EV.editingEventId), payload);
+    const e = eventById(EV.editingEventId);
+    const prevInCharge = e.inChargeId;
+    const code = e.code || e.id;
+    Object.assign(e, payload);
     evLog(EV.editingEventId, window.t('ev_updated', 'Event updated'));
     evToast(name + ' — ' + window.t('save') + ' ✓');
+    if (online && /^EVN-/i.test(code)) {
+      window.API.patch('/events/' + code, {
+        name, venue: payload.venue, expectedFootfall: payload.expectedFootfall,
+        budget: payload.budget, color: payload.color, notes: payload.notes, days
+      })
+        .then(function () { return (inChargeDev && inChargeDev !== prevInCharge) ? window.API.post('/events/' + code + '/incharge', { devoteeId: inChargeDev }) : null; })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   } else {
     const id = evNextId('EVN', EV.events, 3);
-    EV.events.push(Object.assign({ id, status: 'planning', createdDate: evToday() }, payload));
+    const local = Object.assign({ id, status: 'planning', createdDate: evToday() }, payload);
+    EV.events.push(local);
     evLog(id, window.t('ev_created', 'Event created'));
     evToast(name + ' — ' + window.t('ev_created', 'created'));
+    if (online) {
+      window.API.post('/events', { typeId, name, venue: payload.venue, expectedFootfall: payload.expectedFootfall, budget: payload.budget, color: payload.color, notes: payload.notes, days })
+        .then(function (c) {
+          const code = c && (c.code || c.id);
+          if (!code) throw new Error('no event code returned');
+          local.code = code;
+          return inChargeDev ? window.API.post('/events/' + code + '/incharge', { devoteeId: inChargeDev }) : null;
+        })
+        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
+    }
   }
   EV.editingEventId = null;
   const f = days.slice().sort((a, b) => a.date.localeCompare(b.date))[0];
@@ -182,11 +209,14 @@ function confirmDeleteEvent(id) {
     body: `<p><strong>${esc(e.name)}</strong></p>`,
     confirmLabel: window.t('delete'),
     onConfirm: () => {
+      const code = e.code || e.id;
+      const wasSynced = /^EVN-/i.test(code);
       EV.events = EV.events.filter(x => x.id !== id);
       EV.activity = EV.activity.filter(a => a.eventId !== id);
       if (EV.activeEventId === id) { EV.activeEventId = null; EV.view = 'directory'; }
       evToast(window.t('ev_deleted', 'Event deleted.'));
       renderEvents();
+      if (window.API && window.API.online && wasSynced) window.API.del('/events/' + code).catch(function (err) { evToast((err && err.message) || 'Delete failed to sync'); });
     }
   });
 }
@@ -220,8 +250,18 @@ function handleSaveEventType(ev) {
     icon: document.getElementById('evTypeFieldIcon').value.trim() || '📅',
     description: document.getElementById('evTypeFieldDesc').value.trim()
   };
-  if (EV.editingTypeId) Object.assign(evTypeById(EV.editingTypeId), payload);
-  else EV.eventTypes.push(Object.assign({ id: evNextId('EVT', EV.eventTypes, 3) }, payload));
+  const online = !!(window.API && window.API.online);
+  if (EV.editingTypeId) {
+    const t = evTypeById(EV.editingTypeId);
+    Object.assign(t, payload);
+    // events type route has no PATCH; recreate is not desirable — local-only edit
+  } else {
+    const t = Object.assign({ id: evNextId('EVT', EV.eventTypes, 3) }, payload);
+    EV.eventTypes.push(t);
+    if (online) window.API.post('/events/types', payload)
+      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
+  }
   EV.editingTypeId = null;
   closeModal('modalEventType');
   evToast(window.t('save') + ' ✓');
@@ -234,7 +274,14 @@ function confirmDeleteEventType(id) {
     title: window.t('ev_delete_type', 'Delete Event Type'), danger: true,
     body: `<p><strong>${esc((evTypeById(id) || {}).name || '')}</strong></p>`,
     confirmLabel: window.t('delete'),
-    onConfirm: () => { EV.eventTypes = EV.eventTypes.filter(t => t.id !== id); evToast(window.t('ev_type_deleted', 'Type deleted.')); renderEvents(); }
+    onConfirm: () => {
+      const t = evTypeById(id) || {};
+      const wasSynced = t.code || /^EVT-/i.test(id);
+      EV.eventTypes = EV.eventTypes.filter(t => t.id !== id);
+      evToast(window.t('ev_type_deleted', 'Type deleted.'));
+      renderEvents();
+      if (window.API && window.API.online && wasSynced) window.API.del('/events/types/' + (t.code || id)).catch(function () {});
+    }
   });
 }
 
