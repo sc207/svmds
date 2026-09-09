@@ -1369,15 +1369,11 @@ function panePoojaSettings(p) {
       </div>
       <form class="flex gap-2 mg-mt-sm" onsubmit="assignCoordinator(event,'${p.id}')">
         <select class="form-select" id="pjGrantSelect" required>
-          <option value="">— Select a coordinator —</option>
-          ${pool.map(c => `<option value="${c.id}">${esc(c.name)} · ${esc(c.mobile || '')}</option>`).join('')}
+          <option value="">— Select a devotee to grant access —</option>
+          ${pool.map(c => `<option value="${c.id}">${esc(c.name)}${c.mobile ? ' · ' + esc(c.mobile) : ''}</option>`).join('')}
         </select>
+        <button class="btn btn-outline" type="button" onclick="pjAddCoordinatorDevotee()">+ Add new devotee</button>
         <button class="btn btn-primary" type="submit">Grant Access</button>
-      </form>
-      <form class="flex gap-2 mg-mt-sm" onsubmit="addCoordinatorToPool(event)">
-        <input class="form-input" id="pjNewCoordName" placeholder="New coordinator name">
-        <input class="form-input" id="pjNewCoordMobile" placeholder="Mobile" maxlength="10">
-        <button class="btn btn-outline" type="submit">Add to Pool</button>
       </form>
     </div>
   </div>
@@ -1506,16 +1502,24 @@ function revokeCoordinator(poojaId, coordId) {
   renderPooja();
 }
 
-function addCoordinatorToPool(e) {
-  e.preventDefault();
-  const name = document.getElementById('pjNewCoordName').value.trim();
-  const mobile = document.getElementById('pjNewCoordMobile').value.replace(/\D/g, '').slice(0, 10);
-  if (!name) { pjToast('Enter a name.'); return; }
-  const id = nextId('CRD', POOJA.coordinators, 3);
-  POOJA.coordinators.push({ id, name, mobile, city: '' });
-  pjToast(`${name} added to the coordinator pool.`);
-  renderPooja();
+/* "+ Add new devotee" beside the Grant-Access select — same shared sheet,
+   then drop the person into the coordinator pool and preselect them. */
+function pjAddCoordinatorDevotee() {
+  if (typeof openDevoteeSheet !== 'function') { pjToast('Devotee form unavailable'); return; }
+  openDevoteeSheet({
+    title: 'Add a new devotee',
+    onSaved: function (dev) {
+      if (!POOJA.coordinators.some(c => String(c.id) === String(dev.id))) {
+        POOJA.coordinators.push({ id: dev.id, name: dev.name, mobile: dev.mobile || '', city: dev.city || '' });
+      }
+      renderPooja();
+      const sel = document.getElementById('pjGrantSelect');
+      if (sel) sel.value = dev.id;
+    }
+  });
 }
+/* legacy alias — the old inline mini-form is gone */
+function addCoordinatorToPool(e) { if (e) e.preventDefault(); pjAddCoordinatorDevotee(); }
 
 function changeScheduleMode(poojaId, mode) {
   const p = poojaById(poojaId);

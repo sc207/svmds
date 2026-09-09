@@ -488,16 +488,22 @@ function paneCmtWhatsApp(c) {
 
 function paneCmtSettings(c) {
   const admin = isCmtAdmin();
-  const leadOpts = (typeof personOptions === 'function')
-    ? personOptions(c.leaderId, '— ' + window.t('cmt_select_leader', 'Select leader') + ' —')
-    : CMT.leaders.map(l => `<option value="${l.id}" ${l.id === c.leaderId ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
+  const leaderName = (typeof personById === 'function' && personById(c.leaderId) || {}).name
+    || (typeof cmtLeadById === 'function' && cmtLeadById(c.leaderId) || {}).name || c.leaderId || '—';
+  const leaderCell = admin && typeof devoteeLinkField === 'function'
+    ? devoteeLinkField({
+        selId: 'setCmtLead', label: window.t('cmt_leader', 'Leader'), required: true,
+        selectedId: c.leaderId, selectedLabel: leaderName
+      })
+    : `<div class="form-group"><label class="form-label">${window.t('cmt_leader', 'Leader')} *</label>` +
+      `<input class="form-input" value="${esc(leaderName)}" disabled><input type="hidden" id="setCmtLead" value="${esc(c.leaderId || '')}"></div>`;
   return `
   <div class="flex justify-between items-center mg-pane-head"><div><h2 class="mg-pane-title">${window.t('cmt_settings', 'Committee Settings')}</h2>
     <p class="mg-page-sub">${admin ? window.t('cmt_settings_admin', 'Full settings including leader assignment') : window.t('cmt_settings_lead', 'Leaders can edit committee details. Leader assignment is admin-only.')}</p></div></div>
   <div class="card"><div class="card-body"><form onsubmit="saveCmtSettings(event,'${c.id}')">
     <div class="form-group"><label class="form-label">${window.t('cmt_name', 'Committee Name')} *</label><input class="form-input" id="setCmtName" value="${esc(c.name)}" required></div>
     <div class="grid mg-2col-form">
-      <div class="form-group"><label class="form-label">${window.t('cmt_leader', 'Leader')} *</label><select class="form-select" id="setCmtLead" ${admin ? '' : 'disabled'} required>${leadOpts}</select></div>
+      ${leaderCell}
       <div class="form-group"><label class="form-label">${window.t('cmt_samaj', 'Samaj')}</label><input class="form-input" id="setCmtSamaj" value="${esc(c.samaj || '')}" list="donCommitteeList"></div>
     </div>
     <div class="grid mg-2col-form">

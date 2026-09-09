@@ -1577,9 +1577,14 @@ function openWhatsAppLink(link) {
    ------------------------------------------------------------ */
 function paneSettings(m) {
   const team = membersOf(m.id).length;
-  const leadOpts = (typeof personOptions === 'function')
-    ? personOptions(m.leadId, '— ' + (window.t ? window.t('mg_select_lead', 'Select Management Lead') : 'Select Management Lead') + ' —')
-    : MG.leads.map(l => `<option value="${l.id}" ${l.id===m.leadId?'selected':''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');  const lockLead = !isAdmin();
+  const lockLead = !isAdmin();
+  const leadName = (typeof personById === 'function' && personById(m.leadId) || {}).name
+    || (typeof leadById === 'function' && leadById(m.leadId) || {}).name || m.leadId || '—';
+  const leadCell = !lockLead && typeof devoteeLinkField === 'function'
+    ? devoteeLinkField({ selId: 'setMgLead', label: 'Management Lead', required: true, selectedId: m.leadId, selectedLabel: leadName })
+    : `<div class="form-group"><label class="form-label">Management Lead *</label>` +
+      `<input class="form-input" value="${esc(leadName)}" disabled><input type="hidden" id="setMgLead" value="${esc(m.leadId || '')}">` +
+      `<div class="mg-muted-xs">Only an administrator can change the Lead.</div></div>`;
 
   return `
   <div class="flex justify-between items-center mg-pane-head">
@@ -1598,11 +1603,7 @@ function paneSettings(m) {
         </div>
 
         <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="setMgLead">Management Lead *</label>
-            <select class="form-select" id="setMgLead" ${lockLead ? 'disabled' : ''} required>${leadOpts}</select>
-            ${lockLead ? '<div class="mg-muted-xs">Only an administrator can change the Lead.</div>' : ''}
-          </div>
+          ${leadCell}
           <div class="form-group">
             <label class="form-label" for="setMgSize">Expected Team Size *</label>
             <input class="form-input" id="setMgSize" type="number" min="1" value="${m.expectedTeamSize}" required>
