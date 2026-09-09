@@ -147,6 +147,7 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/visits', require('./routes/visits'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/reminders', require('./routes/reminders'));   // opening announcements (derived, no event copy)
 app.use('/api', require('./routes/derived'));   // /calendar /dashboard /activity /reports
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));

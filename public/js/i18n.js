@@ -27,6 +27,10 @@
       venue:'Venue', actions:'Actions', all:'All', none:'None', today:'Today', upcoming:'Upcoming',
       completed:'Completed', pending:'Pending',
 
+      annc_kicker:"Today's Temple Updates", annc_update:'update', annc_updates:'updates',
+      annc_today:'Today', annc_tomorrow:'Tomorrow', annc_in_days:'In {n} days',
+      annc_view:'View details', annc_continue:'Continue to Dashboard',
+
       temple_name:'Shri Vihat Meldi Mata Mandir',
       temple_loc:'Sanand, Gujarat',
       sub_tagline:'Sanand, Gujarat — Central Management Platform',
@@ -184,6 +188,10 @@
       venue:'स्थान', actions:'क्रियाएँ', all:'सभी', none:'कोई नहीं', today:'आज', upcoming:'आगामी',
       completed:'पूर्ण', pending:'लंबित',
 
+      annc_kicker:'आज के मंदिर समाचार', annc_update:'सूचना', annc_updates:'सूचनाएँ',
+      annc_today:'आज', annc_tomorrow:'कल', annc_in_days:'{n} दिन में',
+      annc_view:'विवरण देखें', annc_continue:'डैशबोर्ड पर जाएँ',
+
       temple_name:'श्री विहत मेलडी माता मंदिर',
       temple_loc:'साणंद, गुजरात',
       sub_tagline:'साणंद, गुजरात — केंद्रीय प्रबंधन मंच',
@@ -338,6 +346,10 @@
       city:'શહેર', state:'રાજ્ય', role:'ભૂમિકા', notes:'નોંધ', date:'તારીખ', time:'સમય',
       venue:'સ્થળ', actions:'ક્રિયાઓ', all:'બધા', none:'કંઈ નહીં', today:'આજે', upcoming:'આગામી',
       completed:'પૂર્ણ', pending:'બાકી',
+
+      annc_kicker:'આજના મંદિર સમાચાર', annc_update:'સૂચના', annc_updates:'સૂચનાઓ',
+      annc_today:'આજે', annc_tomorrow:'આવતીકાલે', annc_in_days:'{n} દિવસમાં',
+      annc_view:'વિગતો જુઓ', annc_continue:'ડેશબોર્ડ પર જાઓ',
 
       temple_name:'શ્રી વિહત મેલડી માતા મંદિર',
       temple_loc:'સાણંદ, ગુજરાત',

@@ -3592,3 +3592,104 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 @media (max-width: 600px) {
   .ann-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   OPENING ANNOUNCEMENT  (js/announcements.js · #openingAnnounce)
+   Temple notification shown once per user per day for upcoming
+   activities. Sits above the splash loader (z 99999).
+   ============================================================ */
+body.annc-open { overflow: hidden; }
+
+.annc-overlay {
+  position: fixed; inset: 0; z-index: 100000;
+  display: grid; place-items: center;
+  padding: clamp(0px, 4vw, 40px);
+  background:
+    radial-gradient(circle at 50% 22%, rgba(232, 197, 120, 0.30), transparent 60%),
+    rgba(38, 20, 14, 0.62);
+  backdrop-filter: blur(3px);
+  animation: annc-fade .25s ease both;
+}
+@keyframes annc-fade { from { opacity: 0 } to { opacity: 1 } }
+
+.annc-card {
+  width: min(560px, 100%);
+  max-height: min(88vh, 760px);
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, var(--gold-bg) 0%, var(--ivory-card) 30%);
+  border: 1px solid var(--gold-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), 0 0 0 6px rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+  animation: annc-rise .32s cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes annc-rise { from { transform: translateY(14px) scale(.98); opacity: 0 } to { transform: none; opacity: 1 } }
+
+.annc-head {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+  padding: 18px 18px 14px;
+  background: linear-gradient(180deg, var(--primary-maroon) 0%, var(--primary-maroon-dark) 100%);
+  color: #fff;
+}
+.annc-emblem img { width: 42px; height: 42px; border-radius: 50%; background: #fff; padding: 3px; display: block; }
+.annc-kicker { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-light); font-weight: 700; }
+.annc-title {
+  margin: 2px 0 0; font-family: var(--font-heading); font-size: 1.12rem; font-weight: 700;
+  color: #fff; line-height: 1.25;
+}
+.annc-x {
+  background: rgba(255, 255, 255, 0.14); color: #fff; width: 32px; height: 32px;
+  border-radius: 50%; font-size: 1.25rem; line-height: 1; display: grid; place-items: center;
+  transition: background .15s;
+}
+.annc-x:hover { background: rgba(255, 255, 255, 0.28); }
+
+.annc-list { padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+
+.annc-item {
+  display: grid; grid-template-columns: auto 1fr; gap: 12px;
+  padding: 12px 13px;
+  background: var(--ivory-card);
+  border: 1px solid var(--warm-border);
+  border-left: 4px solid var(--c, var(--primary-maroon));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.annc-ico {
+  width: 38px; height: 38px; display: grid; place-items: center; font-size: 1.15rem;
+  background: var(--gold-bg); border-radius: 10px; align-self: start;
+}
+.annc-item-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
+.annc-chip {
+  font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: #fff; background: var(--c, var(--primary-maroon));
+  padding: 3px 9px; border-radius: 999px;
+}
+.annc-reason { font-size: .72rem; color: var(--muted-brown); font-weight: 600; }
+.annc-name { font-family: var(--font-heading); font-weight: 700; color: var(--primary-maroon); font-size: 1.02rem; line-height: 1.25; }
+.annc-sub { font-size: .82rem; color: var(--dark-brown); margin-top: 1px; }
+.annc-meta { font-size: .78rem; color: var(--muted-brown); margin-top: 4px; }
+.annc-view {
+  margin-top: 7px; font-size: .8rem; font-weight: 700; color: var(--saffron);
+  background: none; padding: 0;
+}
+.annc-view:hover { text-decoration: underline; }
+
+.annc-foot {
+  padding: 13px 16px; border-top: 1px solid var(--warm-border);
+  background: var(--off-white); display: flex; justify-content: flex-end;
+}
+.annc-foot .btn { min-width: 190px; }
+
+@media (max-width: 480px) {
+  .annc-card { max-height: 92vh; border-radius: var(--radius-md); }
+  .annc-foot .btn { width: 100%; min-width: 0; }
+  .annc-title { font-size: 1rem; }
+}
+
+.annc-loading {
+  width: 34px; height: 34px; margin: 26px auto;
+  border: 3px solid var(--warm-border); border-top-color: var(--antique-gold);
+  border-radius: 50%; animation: annc-spin .8s linear infinite;
+}
+@keyframes annc-spin { to { transform: rotate(360deg); } }

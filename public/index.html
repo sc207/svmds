@@ -140,6 +140,28 @@
   </div>
 </div>
 
+<!-- Opening announcement — a full-screen temple notification shown once per
+     user per day for upcoming poojas / meetings / sessions / events / annual
+     tithis relevant to the signed-in user's role & relationships. Content is
+     rendered by js/announcements.js from GET /api/reminders (canonical data,
+     no separate event store). Hidden until then. -->
+<div id="openingAnnounce" class="annc-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="anncTitle">
+  <div class="annc-card" role="document">
+    <div class="annc-head">
+      <div class="annc-emblem" aria-hidden="true"><img src="assets/icon.png" alt="" onerror="this.style.display='none'"></div>
+      <div>
+        <div class="annc-kicker" id="anncKicker">Today's Temple Updates</div>
+        <h2 class="annc-title" id="anncTitle">જય શ્રી વિહત મેલડી માતાજી 🙏</h2>
+      </div>
+      <button type="button" class="annc-x" id="anncClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="annc-list" id="anncList"><!-- reminder cards --></div>
+    <div class="annc-foot">
+      <button type="button" class="btn btn-primary" id="anncContinue">Continue to Dashboard</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   var loader = document.getElementById('appLoader');
@@ -702,6 +724,7 @@
 <script src="js/access-api.js"></script>
 <script src="js/search.js"></script>
 <script src="js/hydrate.js"></script>
+<script src="js/announcements.js"></script>
 <script>window.__boot && window.__boot(92, 'Almost ready');</script>
 
 </body>
