@@ -22,20 +22,33 @@
       .filter(function (p) { return p.kind !== 'committee'; });
   };
 
-  /* A checkbox roster: <div id=containerId> filled with tickable people +
-     a live count. selectedIds = array of ids to pre-tick. */
-  window.personCheckList = function (people, selectedIds, checkClass) {
+  /* A checkbox roster: <div id=containerId> filled with tickable people.
+     selectedIds  = array of ids to pre-tick (or [{id, role}] objects).
+     roleOptions  = optional array of role names → each row gets a role <select>. */
+  window.personCheckList = function (people, selectedIds, checkClass, roleOptions) {
     var sel = selectedIds || [];
+    var selIds = sel.map(function (x) { return (x && x.id != null) ? x.id : x; });
+    var roleOf = {};
+    sel.forEach(function (x) { if (x && x.id != null && x.role) roleOf[x.id] = x.role; });
     var cls = checkClass || 'dp-check';
     if (!people.length) {
       return '<div class="mg-pad-note">No one in the register yet — use “+ Add new”.</div>';
     }
+    var roleSel = function (id) {
+      if (!roleOptions || !roleOptions.length) return '';
+      var cur = roleOf[id] || roleOptions[0];
+      return '<select class="form-select mg-inline-select ' + cls + '-role" data-for="' + esc(id) + '" onclick="event.preventDefault()">' +
+        roleOptions.map(function (r) {
+          return '<option value="' + esc(r) + '"' + (r === cur ? ' selected' : '') + '>' + esc(r) + '</option>';
+        }).join('') + '</select>';
+    };
     return '<div class="pj-people-list">' + people.map(function (p) {
       return '<label class="pj-people-row">' +
         '<input type="checkbox" class="' + cls + '" value="' + esc(p.id) + '"' +
-          (sel.indexOf(p.id) !== -1 ? ' checked' : '') + '>' +
+          (selIds.indexOf(p.id) !== -1 ? ' checked' : '') + '>' +
         '<span class="pj-people-body"><strong>' + esc(p.name) + '</strong>' +
         '<small>' + (p.mobile ? esc(p.mobile) : '') + (p.city ? ' · ' + esc(p.city) : '') + '</small></span>' +
+        roleSel(p.id) +
       '</label>';
     }).join('') + '</div>';
   };
@@ -45,6 +58,16 @@
     return Array.prototype.slice
       .call(box.querySelectorAll('.' + (checkClass || 'dp-check') + ':checked'))
       .map(function (c) { return c.value; });
+  };
+  /** [{ id, role }] for every ticked row (role from the row's <select>, if any). */
+  window.checkedPeople = function (containerId, checkClass) {
+    var box = document.getElementById(containerId);
+    if (!box) return [];
+    var cls = checkClass || 'dp-check';
+    return Array.prototype.slice.call(box.querySelectorAll('.' + cls + ':checked')).map(function (c) {
+      var rs = box.querySelector('.' + cls + '-role[data-for="' + c.value.replace(/"/g, '\\"') + '"]');
+      return { id: c.value, role: rs ? rs.value : '' };
+    });
   };
 
   /* The reusable "Add a new devotee" sheet. opts:

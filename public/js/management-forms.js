@@ -34,7 +34,7 @@
         <div class="form-group">
           <div class="flex justify-between items-center"><label class="form-label" style="margin:0">Team members</label>
             <button class="btn btn-outline mg-btn-xs" type="button" onclick="mgAddMemberPerson()">+ Add new Devotee</button></div>
-          <div class="mg-muted-xs" style="margin-bottom:.4rem">Tick people from the register, or add new ones. The Lead is added automatically. You can also add volunteers later.</div>
+          <div class="mg-muted-xs" style="margin-bottom:.4rem">Tick people from the register (or add new ones) and set each one's role here. The Lead is added automatically. Status &amp; later edits are on the team's Volunteers tab.</div>
           <div id="mgMemberPicker"></div>
         </div>
 
@@ -407,7 +407,7 @@ function openEditManagement(id) {
   document.getElementById('mgFormSubmitBtn').textContent = 'Save Changes';
 
   document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(m.leadId);
-  mgRenderMemberPicker((membersOf(m.id)||[]).map(function(x){return x.devoteeId||x.id;}));
+  mgRenderMemberPicker((membersOf(m.id)||[]).map(function(x){return { id: x.devoteeId||x.id, role: x.role||"Volunteer" };}));
   document.getElementById('mgFieldName').value = m.name;
   document.getElementById('mgFieldSize').value = m.expectedTeamSize;
   document.getElementById('mgFieldStatus').value = m.status;
@@ -433,15 +433,16 @@ function mgAddLead() {
     onSaved: function (dev) { document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(dev.id); }
   });
 }
-function mgRenderMemberPicker(ids) {
+const MG_MEMBER_ROLES = ['Volunteer', 'Coordinator', 'In-charge'];
+function mgRenderMemberPicker(sel) {
   const box = document.getElementById('mgMemberPicker');
-  if (box) box.innerHTML = personCheckList((typeof allPeople === 'function' ? allPeople() : []), ids || [], 'mg-mem-check');
+  if (box) box.innerHTML = personCheckList((typeof allPeople === 'function' ? allPeople() : []), sel || [], 'mg-mem-check', MG_MEMBER_ROLES);
 }
 function mgAddMemberPerson() {
-  const keep = checkedIds('mgMemberPicker', 'mg-mem-check');
+  const keep = checkedPeople('mgMemberPicker', 'mg-mem-check');
   openDevoteeSheet({
     title: 'Add a new Team member (devotee)',
-    onSaved: function (dev) { keep.push(dev.id); mgRenderMemberPicker(keep); }
+    onSaved: function (dev) { keep.push({ id: dev.id, role: 'Volunteer' }); mgRenderMemberPicker(keep); }
   });
 }
 
@@ -450,7 +451,8 @@ function handleSaveManagement(e) {
 
   const name = document.getElementById('mgFieldName').value.trim();
   const leadId = document.getElementById('mgLeadSelect').value;
-  const memberIds = checkedIds('mgMemberPicker', 'mg-mem-check');
+  const members = checkedPeople('mgMemberPicker', 'mg-mem-check');   // [{id, role}]
+  const memberIds = members.map(function (m) { return m.id; });
   const size = parseInt(document.getElementById('mgFieldSize').value, 10);
   const desc = document.getElementById('mgFieldDesc').value.trim();
   const status = document.getElementById('mgFieldStatus').value;
@@ -475,7 +477,7 @@ function handleSaveManagement(e) {
   } else {
     const id = nextId('MGMT', MG.managements, 3);
     MG.managements.push({
-      id, name, leadId, memberIds, expectedTeamSize: size, description: desc, status, notes,
+      id, name, leadId, memberIds, members, expectedTeamSize: size, description: desc, status, notes,
       color: (typeof nextCardColor === 'function' ? nextCardColor(MG.managements.length) : '#6B1F2A'),
       createdAt: MG.today
     });
@@ -486,10 +488,14 @@ function handleSaveManagement(e) {
       window.API.post('/teams', { name, description: desc, expectedTeamSize: size }).then(function (t) {
         var code = t && (t.code || t.id); if (!code) return;
         if (leadId) window.API.post('/teams/' + code + '/lead', { devoteeId: leadId }).catch(function(){});
-        memberIds.forEach(function (mid) {
-          var p = (typeof personById === 'function') ? personById(mid) : null;
-          if (!p) return; var parts = String(p.name || '').trim().split(/s+/);
-          window.API.post('/teams/' + code + '/members', { firstName: parts.shift() || p.name, lastName: parts.join(' '), mobile: (p.mobile||'').replace(/D/g,''), city: p.city||'' }).catch(function(){});
+        members.forEach(function (m) {
+          var p = (typeof personById === 'function') ? personById(m.id) : null;
+          if (!p) return;
+          var parts = String(p.name || '').trim().split(/\s+/);
+          window.API.post('/teams/' + code + '/members', {
+            firstName: parts.shift() || p.name, lastName: parts.join(' '),
+            mobile: (p.mobile || '').replace(/\D/g, ''), city: p.city || '', role: m.role || 'Volunteer'
+          }).catch(function(){});
         });
       }).catch(function(){});
     }

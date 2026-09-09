@@ -25,7 +25,7 @@
         <div class="form-group">
           <div class="flex justify-between items-center"><label class="form-label" style="margin:0">Members</label>
             <button class="btn btn-outline mg-btn-xs" type="button" onclick="cmtAddMemberPerson()">+ Add new Devotee</button></div>
-          <div class="mg-muted-xs" style="margin-bottom:.4rem">Tick people from the register, or add new ones. The leader is added automatically.</div>
+          <div class="mg-muted-xs" style="margin-bottom:.4rem">Tick people from the register (or add new ones) and set each one's role here. The leader is added automatically. A member's status &amp; later edits are on the committee's Members tab.</div>
           <div id="cmtMemberPicker"></div>
         </div>
         <div class="grid mg-2col-form">
@@ -164,7 +164,7 @@ function openEditCommittee(id) {
   document.getElementById('committeeFormTitle').textContent = window.t('cmt_edit', 'Edit Committee');
   document.getElementById('committeeFormSubmitBtn').textContent = window.t('save');
   document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(c.leaderId);
-  cmtRenderMemberPicker((c.members||[]).map(function(m){return m.devoteeId||m.id;}));
+  cmtRenderMemberPicker((c.members||[]).map(function(m){return { id: m.devoteeId||m.id, role: m.role||'Member' };}));
   document.getElementById('cmtFieldName').value = c.name;
   document.getElementById('cmtFieldSamaj').value = c.samaj || '';
   document.getElementById('cmtFieldSize').value = c.expectedSize;
@@ -182,16 +182,17 @@ function cmtAddLeader() {
     }
   });
 }
-/* members roster inside the committee form */
-function cmtRenderMemberPicker(ids) {
+/* members roster inside the committee form — each ticked person also gets a role */
+const CMT_MEMBER_ROLES = ['Member', 'Secretary', 'Treasurer', 'Coordinator', 'Village In-charge', 'Mahila Wing'];
+function cmtRenderMemberPicker(sel) {
   const box = document.getElementById('cmtMemberPicker');
-  if (box) box.innerHTML = personCheckList((typeof allPeople === 'function' ? allPeople() : []), ids || [], 'cmt-mem-check');
+  if (box) box.innerHTML = personCheckList((typeof allPeople === 'function' ? allPeople() : []), sel || [], 'cmt-mem-check', CMT_MEMBER_ROLES);
 }
 function cmtAddMemberPerson() {
-  const keep = checkedIds('cmtMemberPicker', 'cmt-mem-check');
+  const keep = checkedPeople('cmtMemberPicker', 'cmt-mem-check');
   openDevoteeSheet({
     title: 'Add a new Member (devotee)',
-    onSaved: function (dev) { keep.push(dev.id); cmtRenderMemberPicker(keep); }
+    onSaved: function (dev) { keep.push({ id: dev.id, role: 'Member' }); cmtRenderMemberPicker(keep); }
   });
 }
 
@@ -199,7 +200,8 @@ function handleSaveCommittee(e) {
   e.preventDefault();
   const name = document.getElementById('cmtFieldName').value.trim();
   const leaderId = document.getElementById('cmtLeadSelect').value;
-  const memberIds = checkedIds('cmtMemberPicker', 'cmt-mem-check');
+  const members = checkedPeople('cmtMemberPicker', 'cmt-mem-check');   // [{id, role}]
+  const memberIds = members.map(function (m) { return m.id; });
   const size = parseInt(document.getElementById('cmtFieldSize').value, 10);
   const purpose = document.getElementById('cmtFieldPurpose').value.trim();
   if (!name) { cmtToast(window.t('cmt_need_name', 'Name is required.')); return; }
@@ -219,7 +221,7 @@ function handleSaveCommittee(e) {
     cmtToast(name + ' — ' + window.t('save') + ' ✓');
   } else {
     const id = cmtNextId('CMT', CMT.committees, 3);
-    CMT.committees.push(Object.assign({ id, createdDate: cmtToday(), memberIds }, payload));
+    CMT.committees.push(Object.assign({ id, createdDate: cmtToday(), memberIds, members }, payload));
     CMT.communication.push({ committeeId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
     cmtLogActivity(id, window.t('cmt_created', 'Committee created') + ' — ' + cmtLeadName(id));
     cmtToast(name + ' — ' + window.t('cmt_create', 'created'));
@@ -230,14 +232,14 @@ function handleSaveCommittee(e) {
           var code = c && (c.code || c.id);
           if (!code) return;
           if (leaderId) window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId }).catch(function () {});
-          memberIds.forEach(function (mid) {
-            var p = (typeof personById === 'function') ? personById(mid) : null;
-            if (p) {
-              var parts = String(p.name || '').trim().split(/\s+/);
-              window.API.post('/committees/' + code + '/members', {
-                firstName: parts.shift() || p.name, lastName: parts.join(' '), mobile: (p.mobile || '').replace(/\D/g, ''), city: p.city || ''
-              }).catch(function () {});
-            }
+          members.forEach(function (m) {
+            var p = (typeof personById === 'function') ? personById(m.id) : null;
+            if (!p) return;
+            var parts = String(p.name || '').trim().split(/\s+/);
+            window.API.post('/committees/' + code + '/members', {
+              firstName: parts.shift() || p.name, lastName: parts.join(' '),
+              mobile: (p.mobile || '').replace(/\D/g, ''), city: p.city || '', role: m.role || 'Member'
+            }).catch(function () {});
           });
         }).catch(function () {});
     }
