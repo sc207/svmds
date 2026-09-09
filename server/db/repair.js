@@ -391,6 +391,8 @@ async function repairDatabase({ dryRun = false } = {}) {
      `SELECT devotee_id k FROM sevarthis WHERE devotee_id IS NOT NULL AND is_deleted = 0 GROUP BY devotee_id HAVING COUNT(*) > 1`],
     ['ux_donations_receipt', `CREATE UNIQUE INDEX IF NOT EXISTS ux_donations_receipt ON donations(receipt_no) WHERE receipt_no IS NOT NULL AND receipt_no <> '' AND is_deleted = 0`,
      `SELECT receipt_no k FROM donations WHERE receipt_no IS NOT NULL AND receipt_no <> '' AND is_deleted = 0 GROUP BY receipt_no HAVING COUNT(*) > 1`],
+    ['ux_donations_cert', `CREATE UNIQUE INDEX IF NOT EXISTS ux_donations_cert ON donations(cert_no) WHERE cert_no IS NOT NULL AND cert_no <> '' AND is_deleted = 0`,
+     `SELECT cert_no k FROM donations WHERE cert_no IS NOT NULL AND cert_no <> '' AND is_deleted = 0 GROUP BY cert_no HAVING COUNT(*) > 1`],
     ['ux_pcoord_pd', `CREATE UNIQUE INDEX IF NOT EXISTS ux_pcoord_pd ON pooja_coordinator_links(pooja_id, devotee_id) WHERE devotee_id IS NOT NULL`,
      `SELECT pooja_id || ':' || devotee_id k FROM pooja_coordinator_links WHERE devotee_id IS NOT NULL GROUP BY pooja_id, devotee_id HAVING COUNT(*) > 1`],
     ['ux_pcoord_pu', `CREATE UNIQUE INDEX IF NOT EXISTS ux_pcoord_pu ON pooja_coordinator_links(pooja_id, user_id) WHERE user_id IS NOT NULL`,

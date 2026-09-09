@@ -372,14 +372,20 @@ router.post('/:id/coordinators', adminTier, async (req, res, next) => {
     }
 
     if (uid) {
-      const has = await queryOne('SELECT role FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'pooja_coordinator']);
-      if (!has) await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [uid, 'pooja_coordinator']);
+      await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
+                 (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [uid, 'pooja_coordinator', uid, 'pooja_coordinator']);
     }
     const linked = await queryOne(
       'SELECT rowid AS rid, user_id FROM pooja_coordinator_links WHERE pooja_id = ? AND (devotee_id = ? OR user_id = ?) LIMIT 1',
       [row.id, devId || -1, uid || -1]);
     if (!linked) {
-      await run('INSERT INTO pooja_coordinator_links (pooja_id, user_id, devotee_id) VALUES (?, ?, ?)', [row.id, uid, devId]);
+      try {
+        await run('INSERT INTO pooja_coordinator_links (pooja_id, user_id, devotee_id) VALUES (?, ?, ?)', [row.id, uid, devId]);
+      } catch (e) {
+        // ux_pcoord_pd / ux_pcoord_pu — a concurrent grant already linked this person
+        const now = await queryOne('SELECT 1 x FROM pooja_coordinator_links WHERE pooja_id = ? AND (devotee_id = ? OR user_id = ?)', [row.id, devId || -1, uid || -1]);
+        if (!now) throw e;
+      }
     } else if (uid && !linked.user_id) {
       await run('UPDATE pooja_coordinator_links SET user_id = ? WHERE rowid = ?', [uid, linked.rid]);
     }

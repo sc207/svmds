@@ -216,7 +216,8 @@ router.post('/:id/incharge', adminTier, async (req, res, next) => {
       [uid, devId, row.id]);
     if (uid) {
       const has = await queryOne('SELECT 1 AS x FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'event_incharge']);
-      if (!has) await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [uid, 'event_incharge']);
+      if (!has) await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
+                           (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [uid, 'event_incharge', uid, 'event_incharge']);
     }
     if (prev && prev !== uid) {
       const still = await queryOne('SELECT 1 AS x FROM events WHERE in_charge_id = ? AND is_deleted = 0 LIMIT 1', [prev]);

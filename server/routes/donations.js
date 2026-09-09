@@ -93,18 +93,30 @@ router.post('/', async (req, res, next) => {
 
     const id = crypto.randomUUID();
     const code = await nextCode('donation');
-    // pledged donations get a receipt number only once received
-    const receiptNo = status === 'received' ? await nextReceiptNo(b.date) : null;
     const recordedBy = req.user.email || String(req.user.id);
 
-    await run(
-      `INSERT INTO donations
-         (id, code, receipt_no, donor_id, category_id, mode, amount, item, qty, valuation,
-          date, purpose, committee, status, notes, recorded_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, code, receiptNo, donor.id, cat.id, mode, amount, item, qty, valuation,
-       b.date, b.purpose || '', b.committee || donor.committee || '', status, b.notes || '', recordedBy]
-    );
+    // nextReceiptNo() is a max()+1 scan, so two donations on the same date can
+    // compute the same number. ux_donations_receipt is the hard stop — on a
+    // collision, recompute and retry (a few times) so every 80G receipt is unique.
+    let attempts = 0;
+    while (true) {
+      const receiptNo = status === 'received' ? await nextReceiptNo(b.date) : null;
+      try {
+        await run(
+          `INSERT INTO donations
+             (id, code, receipt_no, donor_id, category_id, mode, amount, item, qty, valuation,
+              date, purpose, committee, status, notes, recorded_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, code, receiptNo, donor.id, cat.id, mode, amount, item, qty, valuation,
+           b.date, b.purpose || '', b.committee || donor.committee || '', status, b.notes || '', recordedBy]
+        );
+        break;
+      } catch (e) {
+        if (++attempts >= 5 || !receiptNo) throw e;
+        // small jitter so parallel writers don't lock-step onto the same next number
+        await new Promise(r => setTimeout(r, 15 + Math.floor(Math.random() * 40)));
+      }
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Donations',
       action: 'CREATE', entityType: 'donation', entityId: code,
       details: { donor: donor.code, category: cat.code, amount: amount || valuation, status } });
@@ -132,17 +144,27 @@ router.patch('/:id', async (req, res, next) => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) return res.status(400).json({ error: 'bad date' });
       sets.push('date = ?'); args.push(b.date);
     }
+    let allocReceipt = false;
     if (b.status !== undefined) {
       if (!['received', 'pledged'].includes(b.status)) return res.status(400).json({ error: 'bad status' });
       sets.push('status = ?'); args.push(b.status);
-      if (b.status === 'received' && !row.receipt_no) {
-        sets.push('receipt_no = ?'); args.push(await nextReceiptNo(b.date || row.date));
-      }
+      allocReceipt = (b.status === 'received' && !row.receipt_no);
     }
     if (!sets.length) return res.json(mapDonation(row));
     sets.push(`updated_at = datetime('now')`);
-    args.push(row.id);
-    await run(`UPDATE donations SET ${sets.join(', ')} WHERE id = ?`, args);
+
+    // allocate the receipt number inside a retry loop (ux_donations_receipt hard-stop)
+    let attempts = 0;
+    while (true) {
+      const s2 = sets.slice(), a2 = args.slice();
+      if (allocReceipt) { s2.splice(s2.length - 1, 0, 'receipt_no = ?'); a2.push(await nextReceiptNo(b.date || row.date)); }
+      a2.push(row.id);
+      try { await run(`UPDATE donations SET ${s2.join(', ')} WHERE id = ?`, a2); break; }
+      catch (e) {
+        if (!allocReceipt || ++attempts >= 5) throw e;
+        await new Promise(r => setTimeout(r, 15 + Math.floor(Math.random() * 40)));
+      }
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Donations',
       action: 'UPDATE', entityType: 'donation', entityId: row.code });
     res.json(mapDonation(await oneByIdOrCode(row.id)));
@@ -155,9 +177,18 @@ router.post('/:id/certificate', async (req, res, next) => {
     const row = await oneByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Donation not found' });
     if (row.cert_no) return res.json(mapDonation(row));   // idempotent
-    const certNo = await nextCertNo(row.date);
-    await run(`UPDATE donations SET cert_no = ?, certificate_issued = 1, updated_at = datetime('now') WHERE id = ?`,
-      [certNo, row.id]);
+    let certNo, attempts = 0;
+    while (true) {
+      certNo = await nextCertNo(row.date);
+      try {
+        await run(`UPDATE donations SET cert_no = ?, certificate_issued = 1, updated_at = datetime('now') WHERE id = ? AND cert_no IS NULL`,
+          [certNo, row.id]);
+        break;
+      } catch (e) {
+        if (++attempts >= 5) throw e;
+        await new Promise(r => setTimeout(r, 15 + Math.floor(Math.random() * 40)));
+      }
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Donations',
       action: 'CERTIFY', entityType: 'donation', entityId: row.code, details: { certNo } });
     res.json(mapDonation(await oneByIdOrCode(row.id)));

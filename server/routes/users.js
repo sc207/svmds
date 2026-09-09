@@ -205,7 +205,8 @@ router.post('/:id/roles', adminTier, async (req, res, next) => {
     await assertSingleSuperadmin(role, u.id);
 
     if (!u.roles.includes(role)) {
-      await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [u.id, role]);
+      await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
+                 (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [u.id, role, u.id, role]);
       await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Access',
         action: 'GRANT', entityType: 'user', entityId: u.id, details: { role } });
     }
