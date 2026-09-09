@@ -6,7 +6,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
-const { ensureDevotee } = require('../services/people');
+const { ensureDevotee, digits } = require('../services/people');
 const { mapVisit } = require('../utils/mappers');
 
 const router = express.Router();
@@ -51,18 +51,28 @@ router.post('/', async (req, res, next) => {
     if (b.status !== undefined && !STATUS.includes(b.status)) return res.status(400).json({ error: 'bad status' });
     const purpose = b.purpose || 'other';
     const status = b.status || 'requested';
-    const mobile = String(b.mobile || '').trim();
+    const mobile = digits(b.mobile);
+    if (mobile && mobile.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
+    const city = String(b.city || '').trim();
 
-    // a padhramani is for a person → create-or-reuse the shared devotee row
-    const devoteeId = await ensureDevotee({
-      name, mobile, city: b.city, state: b.state,
-    });
+    // a padhramani is for a person → link to the shared devotee row, but only
+    // when the person is identifiable (explicit id, a 10-digit mobile, or a
+    // name + city). A bare name alone stays unlinked (still stored on the visit).
+    let devoteeId = null;
+    if (b.devoteeId != null && String(b.devoteeId).trim()) {
+      const d = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(b.devoteeId, 10) || -1, String(b.devoteeId)]);
+      if (!d) return res.status(400).json({ error: 'That devotee no longer exists' });
+      devoteeId = d.id;
+    } else if ((mobile && mobile.length === 10) || city) {
+      devoteeId = await ensureDevotee({ name, mobile, city, state: b.state });
+    }
     const id = crypto.randomUUID();
     const code = await nextCode('visit');
     await run(
       `INSERT INTO visits (id, code, devotee_name, devotee_id, mobile, purpose, address, city, state, date, time, escort_team, status, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, code, name, devoteeId, mobile, purpose, b.address || '', b.city || '', b.state || 'Gujarat',
+      [id, code, name, devoteeId, mobile, purpose, b.address || '', city, b.state || 'Gujarat',
        b.date, b.time || '', b.escortTeam || '', status, b.notes || '']
     );
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Visits',
@@ -83,7 +93,22 @@ router.patch('/:id', async (req, res, next) => {
     })) {
       if (typeof b[k] === 'string') { sets.push(`${col} = ?`); args.push(b[k]); }
     }
-    if (b.mobile !== undefined) { sets.push('mobile = ?'); args.push(String(b.mobile || '').trim()); }
+    if (b.mobile !== undefined) {
+      const m = digits(b.mobile);
+      if (m && m.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
+      sets.push('mobile = ?'); args.push(m);
+    }
+    // re-resolve the devotee link when the identifying fields change and the
+    // visit isn't already tied to a devotee the user picked explicitly
+    if ((b.devoteeName !== undefined || b.mobile !== undefined || b.city !== undefined)) {
+      const nm = b.devoteeName !== undefined ? String(b.devoteeName).trim() : row.devotee_name;
+      const mob = b.mobile !== undefined ? digits(b.mobile) : row.mobile;
+      const cty = b.city !== undefined ? String(b.city).trim() : row.city;
+      if ((mob && mob.length === 10) || cty) {
+        const devId = await ensureDevotee({ name: nm, mobile: mob, city: cty, state: b.state || row.state });
+        if (devId && devId !== row.devotee_id) { sets.push('devotee_id = ?'); args.push(devId); }
+      }
+    }
     if (b.date !== undefined) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) return res.status(400).json({ error: 'bad date' });
       sets.push('date = ?'); args.push(b.date);

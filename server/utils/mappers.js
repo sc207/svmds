@@ -199,7 +199,8 @@ function mapPooja(row, extra = {}) {
     createdDate: row.created_date || row.created_at,
     sessions: extra.sessions || [],
     sevarthiIds: extra.sevarthiIds || [],
-    coordinatorIds: extra.coordinatorIds || [],
+    coordinatorIds: extra.coordinatorIds || [],          // devotee codes (person identity)
+    coordinatorUserIds: extra.coordinatorUserIds || [],  // account ids, where an account exists
     guests: extra.guests || [],
     createdAt: row.created_at,
     updatedAt: row.updated_at || null,
@@ -432,6 +433,7 @@ function mapEvent(row, days = []) {
     name: row.name,
     venue: row.venue || '',
     inChargeId: row.in_charge_id || null,
+    inChargeDevoteeId: row.in_charge_devotee_id || null,
     expectedFootfall: Number(row.expected_footfall || 0),
     budget: Number(row.budget || 0),
     status: row.status || 'planning',

@@ -61,6 +61,20 @@ router.post('/teams/:teamId/signups', signupLimiter, async (req, res, next) => {
     );
     if (!sess) return res.status(400).json({ error: 'That session is not open for signups' });
 
+    // double-submit guard: an existing pending row for the same session + mobile
+    // (or session + lower(name) when no mobile) just returns its reference.
+    let existing = null;
+    if (mobile) {
+      existing = await queryOne(
+        `SELECT code FROM public_signups WHERE session_id = ? AND mobile = ? AND status = 'pending' AND is_deleted = 0`,
+        [sess.id, mobile]);
+    } else {
+      existing = await queryOne(
+        `SELECT code FROM public_signups WHERE session_id = ? AND lower(trim(name)) = lower(trim(?)) AND status = 'pending' AND is_deleted = 0`,
+        [sess.id, name]);
+    }
+    if (existing) return res.status(200).json({ ok: true, reference: existing.code, _deduped: true });
+
     const id = crypto.randomUUID();
     const code = await nextCode('public_signup');
     await run(

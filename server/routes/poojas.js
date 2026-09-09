@@ -9,7 +9,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
-const { ensureDevotee } = require('../services/people');
+const { ensureDevotee, digits } = require('../services/people');
 const { nextColorFor } = require('../services/palette');
 const { mapPooja, mapPoojaSession, mapSevarthi, mapGuest } = require('../utils/mappers');
 
@@ -23,14 +23,20 @@ async function hydrate(poojaRow) {
     queryAll('SELECT * FROM pooja_sessions WHERE pooja_id = ? AND is_deleted = 0 ORDER BY date, start_time', [poojaRow.id]),
     queryAll(`SELECT s.* FROM sevarthis s JOIN pooja_sevarthi_links l ON l.sevarthi_id = s.id
               WHERE l.pooja_id = ? AND s.is_deleted = 0`, [poojaRow.id]),
-    queryAll('SELECT user_id FROM pooja_coordinator_links WHERE pooja_id = ?', [poojaRow.id]),
+    queryAll(`SELECT l.user_id, l.devotee_id, d.code AS devotee_code
+              FROM pooja_coordinator_links l LEFT JOIN devotees d ON d.id = l.devotee_id
+              WHERE l.pooja_id = ?`, [poojaRow.id]),
     queryAll(`SELECT g.* FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
               WHERE l.pooja_id = ? AND g.is_deleted = 0`, [poojaRow.id]),
   ]);
+  // coordinatorIds = the person identity (devotee code) so the client links the
+  // same way whether or not that person has a login account.
   return mapPooja(poojaRow, {
     sessions: sessRows.map(mapPoojaSession),
     sevarthiIds: sevRows.map(r => r.code || String(r.id)),
-    coordinatorIds: coordRows.map(r => r.user_id),
+    coordinatorIds: coordRows.map(r => r.devotee_code || (r.devotee_id != null ? String(r.devotee_id) : null))
+      .filter(Boolean),
+    coordinatorUserIds: coordRows.map(r => r.user_id).filter(v => v != null),
     guests: guestRows.map(mapGuest),
   });
 }
@@ -49,8 +55,11 @@ async function poojaByIdOrCode(v) {
 async function canManage(req, poojaRow) {
   if (isAdminTier(req.user)) return true;
   if ((req.user.roles || []).includes('pooja_coordinator')) {
-    const link = await queryOne('SELECT 1 AS x FROM pooja_coordinator_links WHERE pooja_id = ? AND user_id = ?',
-      [poojaRow.id, req.user.id]);
+    const me = await queryOne('SELECT devotee_id FROM users WHERE id = ?', [req.user.id]);
+    const devId = (me && me.devotee_id) || -1;
+    const link = await queryOne(
+      'SELECT 1 AS x FROM pooja_coordinator_links WHERE pooja_id = ? AND (user_id = ? OR devotee_id = ?)',
+      [poojaRow.id, req.user.id, devId]);
     return !!link;
   }
   return false;
@@ -182,6 +191,10 @@ router.delete('/:id', adminTier, async (req, res, next) => {
     const row = await poojaByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Pooja not found' });
     await run(`UPDATE poojas SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [row.id]);
+    await run('UPDATE pooja_sessions SET is_deleted = 1 WHERE pooja_id = ?', [row.id]);
+    await run('DELETE FROM pooja_sevarthi_links WHERE pooja_id = ?', [row.id]);
+    await run('DELETE FROM pooja_coordinator_links WHERE pooja_id = ?', [row.id]);
+    await run('DELETE FROM pooja_guest_links WHERE pooja_id = ?', [row.id]);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
       action: 'DELETE', entityType: 'pooja', entityId: row.code });
     res.json({ ok: true });
@@ -252,23 +265,42 @@ router.post('/:id/sevarthis', async (req, res, next) => {
         [b.sevarthiId, parseInt(b.sevarthiId, 10) || -1]);
       if (!sev) return res.status(400).json({ error: 'Unknown sevarthiId' });
     } else {
-      const first = String(b.firstName || '').trim();
-      const mobile = String(b.mobile || '').trim();
-      if (!first) return res.status(400).json({ error: 'firstName is required' });
-      if (mobile && !/^[0-9]{10}$/.test(mobile)) return res.status(400).json({ error: 'mobile must be 10 digits' });
-      if (mobile) sev = await queryOne('SELECT * FROM sevarthis WHERE mobile = ? AND is_deleted = 0', [mobile]);
-      if (!sev) {
-        const devoteeId = await ensureDevotee({
-          firstName: first, lastName: b.lastName, mobile,
+      const mobile = digits(b.mobile);
+      if (mobile && mobile.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
+
+      let devoteeId = null;
+      if (b.devoteeId != null && String(b.devoteeId).trim()) {
+        const dev = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+          [parseInt(b.devoteeId, 10) || -1, String(b.devoteeId)]);
+        if (!dev) return res.status(400).json({ error: 'That devotee no longer exists' });
+        devoteeId = dev.id;
+      } else {
+        const first = String(b.firstName || '').trim();
+        if (!first && !b.name && !mobile) return res.status(400).json({ error: 'devoteeId or firstName is required' });
+        devoteeId = await ensureDevotee({
+          firstName: first, lastName: b.lastName, name: b.name, mobile,
           city: b.city, state: b.state, samaj: b.committee,
         });
+      }
+
+      // reuse an existing sevarthi for this person (by devotee link, then mobile)
+      if (devoteeId) sev = await queryOne('SELECT * FROM sevarthis WHERE devotee_id = ? AND is_deleted = 0', [devoteeId]);
+      if (!sev && mobile) sev = await queryOne('SELECT * FROM sevarthis WHERE mobile = ? AND is_deleted = 0', [mobile]);
+      if (!sev) {
+        const dev = await queryOne('SELECT * FROM devotees WHERE id = ?', [devoteeId]);
+        const parts = String((dev && dev.name) || b.firstName || '').trim().split(/\s+/);
+        const first = parts.shift() || (b.firstName || '');
         const code = await nextCode('sevarthi');
         const r = await run(
           `INSERT INTO sevarthis (code, devotee_id, first_name, last_name, mobile, city, state, committee, status, notes, added_date)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
-          [code, devoteeId, first, b.lastName || '', mobile, b.city || '', b.state || 'Gujarat', b.committee || '', b.notes || '']
+          [code, devoteeId, first, parts.join(' ') || (b.lastName || ''),
+           (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
+           (dev && dev.state) || b.state || 'Gujarat', b.committee || '', b.notes || '']
         );
         sev = await queryOne('SELECT * FROM sevarthis WHERE id = ?', [r.lastInsertRowid]);
+      } else if (devoteeId && !sev.devotee_id) {
+        await run('UPDATE sevarthis SET devotee_id = ? WHERE id = ?', [devoteeId, sev.id]);
       }
     }
 
@@ -293,49 +325,118 @@ router.delete('/:id/sevarthis/:sevId', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/* ---------- coordinators (admin tier) ---------- */
+/* ---------- coordinators (admin tier) ----------
+   body: { userId } — an account holder, OR { devoteeId } — a person with no login.
+   The link stores both the devotee identity and the account id when one exists;
+   the role is granted only for an actual account. */
 router.post('/:id/coordinators', adminTier, async (req, res, next) => {
   try {
     const row = await poojaByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    const uid = parseInt(req.body.userId, 10);
-    const u = uid ? await queryOne('SELECT * FROM users WHERE id = ? AND is_deleted = 0', [uid]) : null;
-    if (!u) return res.status(400).json({ error: 'Unknown userId' });
-    const has = await queryOne('SELECT role FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'pooja_coordinator']);
-    if (!has) await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [uid, 'pooja_coordinator']);
-    const linked = await queryOne('SELECT 1 AS x FROM pooja_coordinator_links WHERE pooja_id = ? AND user_id = ?', [row.id, uid]);
-    if (!linked) await run('INSERT INTO pooja_coordinator_links (pooja_id, user_id) VALUES (?, ?)', [row.id, uid]);
+
+    let u = null, devId = null;
+    if (req.body.userId != null && String(req.body.userId).trim()) {
+      const uid = parseInt(req.body.userId, 10) || -1;
+      u = await queryOne('SELECT * FROM users WHERE id = ? AND is_deleted = 0', [uid]);
+      if (!u) return res.status(400).json({ error: 'Unknown userId' });
+      devId = u.devotee_id;
+    } else if (req.body.devoteeId != null && String(req.body.devoteeId).trim()) {
+      const d = await queryOne('SELECT * FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]);
+      if (!d) return res.status(400).json({ error: 'Unknown devoteeId' });
+      devId = d.id;
+      u = await queryOne('SELECT * FROM users WHERE devotee_id = ? AND is_deleted = 0', [d.id]);
+    } else {
+      return res.status(400).json({ error: 'userId or devoteeId is required' });
+    }
+
+    const uid = u ? u.id : null;
+    if (!devId && u) {
+      devId = await ensureDevotee({ name: u.name, mobile: u.mobile, city: u.city });
+      if (devId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, uid]);
+    }
+
+    if (uid) {
+      const has = await queryOne('SELECT role FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'pooja_coordinator']);
+      if (!has) await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [uid, 'pooja_coordinator']);
+    }
+    const linked = await queryOne(
+      'SELECT rowid AS rid, user_id FROM pooja_coordinator_links WHERE pooja_id = ? AND (devotee_id = ? OR user_id = ?) LIMIT 1',
+      [row.id, devId || -1, uid || -1]);
+    if (!linked) {
+      await run('INSERT INTO pooja_coordinator_links (pooja_id, user_id, devotee_id) VALUES (?, ?, ?)', [row.id, uid, devId]);
+    } else if (uid && !linked.user_id) {
+      await run('UPDATE pooja_coordinator_links SET user_id = ? WHERE rowid = ?', [uid, linked.rid]);
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'GRANT', entityType: 'pooja_coordinator', entityId: String(uid), scopeId: row.code });
+      action: 'GRANT', entityType: 'pooja_coordinator', entityId: String(uid || 'dev:' + devId), scopeId: row.code });
     res.json(await hydrate(await poojaByIdOrCode(row.id)));
   } catch (e) { next(e); }
 });
 
-router.delete('/:id/coordinators/:userId', adminTier, async (req, res, next) => {
+router.delete('/:id/coordinators/:ref', adminTier, async (req, res, next) => {
   try {
     const row = await poojaByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    const uid = parseInt(req.params.userId, 10);
-    await run('DELETE FROM pooja_coordinator_links WHERE pooja_id = ? AND user_id = ?', [row.id, uid]);
-    // if this user now coordinates nothing, drop the role
-    const still = await queryOne('SELECT 1 AS x FROM pooja_coordinator_links WHERE user_id = ? LIMIT 1', [uid]);
-    if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'pooja_coordinator']);
-    await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [uid]);
+    const ref = req.params.ref;
+    // ref may be a user id OR a devotee id/code
+    const dev = await queryOne('SELECT id FROM devotees WHERE id = ? OR code = ?', [parseInt(ref, 10) || -1, ref]);
+    const devId = dev ? dev.id : -1;
+    const uid = parseInt(ref, 10) || -1;
+    const links = await queryAll(
+      'SELECT rowid AS rid, user_id FROM pooja_coordinator_links WHERE pooja_id = ? AND (user_id = ? OR devotee_id = ?)',
+      [row.id, uid, devId]);
+    for (const l of links) await run('DELETE FROM pooja_coordinator_links WHERE rowid = ?', [l.rid]);
+    // drop the role for any freed account that now coordinates nothing
+    for (const l of links) {
+      if (!l.user_id) continue;
+      const still = await queryOne('SELECT 1 AS x FROM pooja_coordinator_links WHERE user_id = ? LIMIT 1', [l.user_id]);
+      if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [l.user_id, 'pooja_coordinator']);
+      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [l.user_id]);
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'REVOKE', entityType: 'pooja_coordinator', entityId: String(uid), scopeId: row.code });
+      action: 'REVOKE', entityType: 'pooja_coordinator', entityId: String(ref), scopeId: row.code });
     res.json(await hydrate(await poojaByIdOrCode(row.id)));
   } catch (e) { next(e); }
 });
 
 /* ---------- guests ---------- */
 async function addGuest(poojaId, g) {
-  const first = String(g.firstName || g.name || '').trim();
-  if (!first) return;
+  const raw = String(g.firstName || g.name || '').trim();
+  if (!raw) return;
+  const parts = raw.split(/\s+/);
+  const first = g.firstName ? String(g.firstName).trim() : (parts.shift() || raw);
+  const last = g.lastName != null ? String(g.lastName) : parts.join(' ');
+  const mobile = digits(g.mobile);
+  const city = String(g.city || '').trim();
+
+  // link the guest to a devotee when we can identify the person (10-digit mobile,
+  // or a name + city) so "guest at N poojas" rolls up on the devotee 360 tab.
+  let devoteeId = null;
+  if ((mobile && mobile.length === 10) || (raw && city)) {
+    devoteeId = await ensureDevotee({
+      firstName: first, lastName: last, name: raw, mobile, city, state: g.state,
+    });
+  }
+
+  // dedupe within this pooja by devotee, else by mobile
+  if (devoteeId) {
+    const dup = await queryOne(
+      `SELECT g.id FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
+       WHERE l.pooja_id = ? AND g.devotee_id = ? AND g.is_deleted = 0 LIMIT 1`, [poojaId, devoteeId]);
+    if (dup) return;
+  } else if (mobile) {
+    const dup = await queryOne(
+      `SELECT g.id FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
+       WHERE l.pooja_id = ? AND g.mobile = ? AND g.is_deleted = 0 LIMIT 1`, [poojaId, mobile]);
+    if (dup) return;
+  }
+
   const code = await nextCode('guest');
   const r = await run(
-    `INSERT INTO guests (code, first_name, last_name, role, mobile, city, state, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [code, first, g.lastName || '', g.role || g.title || '', g.mobile || '', g.city || '', g.state || 'Gujarat', g.notes || '']
+    `INSERT INTO guests (code, devotee_id, first_name, last_name, role, mobile, city, state, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [code, devoteeId, first, last, g.role || g.title || '', mobile, city, g.state || 'Gujarat', g.notes || '']
   );
   await run('INSERT INTO pooja_guest_links (pooja_id, guest_id) VALUES (?, ?)', [poojaId, r.lastInsertRowid]);
 }

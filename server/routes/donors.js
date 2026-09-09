@@ -5,7 +5,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
-const { ensureDevotee } = require('../services/people');
+const { ensureDevotee, digits } = require('../services/people');
 const { mapDonor } = require('../utils/mappers');
 
 const router = express.Router();
@@ -43,25 +43,50 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const type = TYPES.includes(req.body.type) ? req.body.type : 'individual';
-    const mobile = String(req.body.mobile || '').trim();
+    const mobile = digits(req.body.mobile);
     const orgName = String(req.body.orgName || '').trim();
     const firstName = String(req.body.firstName || '').trim();
+    const pan = String(req.body.pan || '').trim();
     if (type === 'individual' && !firstName) return res.status(400).json({ error: 'firstName is required for an individual' });
     if (type !== 'individual' && !orgName) return res.status(400).json({ error: 'orgName is required for an organization / trust' });
-    if (mobile && !/^[0-9]{10}$/.test(mobile)) return res.status(400).json({ error: 'mobile must be 10 digits' });
+    if (mobile && mobile.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
 
+    // dedupe: individual by mobile or by an explicit devotee link; org/trust by
+    // lower(org_name) [+ pan when given]. Always a 200 {_deduped:true}.
     if (mobile) {
       const dup = await queryOne('SELECT * FROM donors WHERE mobile = ? AND is_deleted = 0', [mobile]);
       if (dup) return res.status(200).json({ ...mapDonor(dup), _deduped: true });
     }
+    if (type === 'individual' && req.body.devoteeId != null && String(req.body.devoteeId).trim()) {
+      const d = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]);
+      if (d) {
+        const dup = await queryOne('SELECT * FROM donors WHERE devotee_id = ? AND is_deleted = 0', [d.id]);
+        if (dup) return res.status(200).json({ ...mapDonor(dup), _deduped: true });
+      }
+    }
+    if (type !== 'individual' && orgName) {
+      const dup = pan
+        ? await queryOne(`SELECT * FROM donors WHERE lower(org_name) = lower(?) AND pan = ? AND is_deleted = 0`, [orgName, pan])
+        : await queryOne(`SELECT * FROM donors WHERE lower(org_name) = lower(?) AND is_deleted = 0`, [orgName]);
+      if (dup) return res.status(200).json({ ...mapDonor(dup), _deduped: true });
+    }
 
-    // an individual donor is a person → create-or-reuse the shared devotee row
-    const devoteeId = type === 'individual'
-      ? await ensureDevotee({
+    // an individual donor is a person → use the picked devotee, else create-or-reuse
+    let devoteeId = null;
+    if (type === 'individual') {
+      if (req.body.devoteeId != null && String(req.body.devoteeId).trim()) {
+        const d = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+          [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]);
+        if (!d) return res.status(400).json({ error: 'That devotee no longer exists' });
+        devoteeId = d.id;
+      } else {
+        devoteeId = await ensureDevotee({
           firstName, lastName: req.body.lastName, mobile,
           city: req.body.city, state: req.body.state, samaj: req.body.committee,
-        })
-      : null;
+        });
+      }
+    }
 
     const code = await nextCode('donor');
     const r = await run(
@@ -95,8 +120,8 @@ router.patch('/:id', async (req, res, next) => {
       sets.push('type = ?'); args.push(req.body.type);
     }
     if (req.body.mobile !== undefined) {
-      const m = String(req.body.mobile || '').trim();
-      if (m && !/^[0-9]{10}$/.test(m)) return res.status(400).json({ error: 'mobile must be 10 digits' });
+      const m = digits(req.body.mobile);
+      if (m && m.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
       if (m && m !== row.mobile) {
         const dup = await queryOne('SELECT id FROM donors WHERE mobile = ? AND is_deleted = 0 AND id != ?', [m, row.id]);
         if (dup) return res.status(409).json({ error: 'Another donor already has that mobile' });
@@ -104,6 +129,23 @@ router.patch('/:id', async (req, res, next) => {
       sets.push('mobile = ?'); args.push(m);
     }
     if (!sets.length) return res.json(mapDonor(row));
+
+    // for an individual, keep the shared devotee row in step with a name/mobile edit
+    const finalType = req.body.type !== undefined ? req.body.type : row.type;
+    if (finalType === 'individual'
+        && (req.body.firstName !== undefined || req.body.lastName !== undefined || req.body.mobile !== undefined
+            || req.body.city !== undefined || req.body.state !== undefined)) {
+      const devId = await ensureDevotee({
+        firstName: req.body.firstName !== undefined ? req.body.firstName : row.first_name,
+        lastName: req.body.lastName !== undefined ? req.body.lastName : row.last_name,
+        mobile: req.body.mobile !== undefined ? digits(req.body.mobile) : row.mobile,
+        city: req.body.city !== undefined ? req.body.city : row.city,
+        state: req.body.state !== undefined ? req.body.state : row.state,
+        samaj: req.body.committee !== undefined ? req.body.committee : row.committee,
+      });
+      if (devId && devId !== row.devotee_id) { sets.push('devotee_id = ?'); args.push(devId); }
+    }
+
     sets.push(`updated_at = datetime('now')`);
     args.push(row.id);
     await run(`UPDATE donors SET ${sets.join(', ')} WHERE id = ?`, args);

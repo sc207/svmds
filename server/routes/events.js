@@ -9,6 +9,7 @@ const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
 const { nextColorFor } = require('../services/palette');
+const { ensureDevotee } = require('../services/people');
 const { mapEventType, mapEvent } = require('../utils/mappers');
 
 const router = express.Router();
@@ -180,25 +181,50 @@ router.delete('/:id', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/* in-charge assignment (admin tier) */
+/* in-charge assignment (admin tier) ----------
+   body: { userId } — an account holder, OR { devoteeId } — a person with no login.
+   Stores both in_charge_id (when an account exists) and in_charge_devotee_id so a
+   later-created account is picked up by attachScope's devotee union. */
 router.post('/:id/incharge', adminTier, async (req, res, next) => {
   try {
     const row = await eventByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Event not found' });
-    const uid = parseInt(req.body.userId, 10);
-    const u = uid ? await queryOne('SELECT * FROM users WHERE id = ? AND is_deleted = 0', [uid]) : null;
-    if (!u) return res.status(400).json({ error: 'Unknown userId' });
+
+    let u = null, devId = null;
+    if (req.body.userId != null && String(req.body.userId).trim()) {
+      u = await queryOne('SELECT * FROM users WHERE id = ? AND is_deleted = 0', [parseInt(req.body.userId, 10) || -1]);
+      if (!u) return res.status(400).json({ error: 'Unknown userId' });
+      devId = u.devotee_id;
+    } else if (req.body.devoteeId != null && String(req.body.devoteeId).trim()) {
+      const d = await queryOne('SELECT * FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]);
+      if (!d) return res.status(400).json({ error: 'Unknown devoteeId' });
+      devId = d.id;
+      u = await queryOne('SELECT * FROM users WHERE devotee_id = ? AND is_deleted = 0', [d.id]);
+    } else {
+      return res.status(400).json({ error: 'userId or devoteeId is required' });
+    }
+
+    const uid = u ? u.id : null;
+    if (!devId && u) {
+      devId = await ensureDevotee({ name: u.name, mobile: u.mobile, city: u.city });
+      if (devId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, uid]);
+    }
+
     const prev = row.in_charge_id;
-    await run(`UPDATE events SET in_charge_id = ?, updated_at = datetime('now') WHERE id = ?`, [uid, row.id]);
-    const has = await queryOne('SELECT 1 AS x FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'event_incharge']);
-    if (!has) await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [uid, 'event_incharge']);
+    await run(`UPDATE events SET in_charge_id = ?, in_charge_devotee_id = ?, updated_at = datetime('now') WHERE id = ?`,
+      [uid, devId, row.id]);
+    if (uid) {
+      const has = await queryOne('SELECT 1 AS x FROM user_roles WHERE user_id = ? AND role = ?', [uid, 'event_incharge']);
+      if (!has) await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [uid, 'event_incharge']);
+    }
     if (prev && prev !== uid) {
       const still = await queryOne('SELECT 1 AS x FROM events WHERE in_charge_id = ? AND is_deleted = 0 LIMIT 1', [prev]);
       if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'event_incharge']);
       await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
     }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Events',
-      action: 'GRANT', entityType: 'event_incharge', entityId: String(uid), scopeId: row.code });
+      action: 'GRANT', entityType: 'event_incharge', entityId: String(uid || 'dev:' + devId), scopeId: row.code });
     res.json(await withDays(await eventByIdOrCode(row.id)));
   } catch (e) { next(e); }
 });

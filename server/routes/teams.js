@@ -10,7 +10,7 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole, isAdminTier } = require('../middleware/authz');
 const { nextCode } = require('../services/entityCode');
 const { logAudit } = require('../services/audit');
-const { ensureDevotee, addAsMember } = require('../services/people');
+const { ensureDevotee, addAsMember, digits } = require('../services/people');
 const { nextColorFor } = require('../services/palette');
 const shared = require('../services/sharedTables');
 const {
@@ -187,24 +187,48 @@ router.post('/:id/members', async (req, res, next) => {
     if (!row) return res.status(404).json({ error: 'Team not found' });
     if (!leadCanManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
     const b = req.body || {};
-    const first = String(b.firstName || '').trim();
-    const mobile = String(b.mobile || '').trim();
-    if (!first) return res.status(400).json({ error: 'firstName is required' });
-    if (mobile && !/^[0-9]{10}$/.test(mobile)) return res.status(400).json({ error: 'mobile must be 10 digits' });
-    if (mobile) {
-      const dup = await queryOne('SELECT id FROM team_members WHERE team_id = ? AND mobile = ? AND is_deleted = 0', [row.id, mobile]);
-      if (dup) return res.status(409).json({ error: 'Already a member of this team' });
+    const mobile = digits(b.mobile);
+    if (mobile && mobile.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
+
+    let devoteeId = null;
+    if (b.devoteeId != null && String(b.devoteeId).trim()) {
+      const dev = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(b.devoteeId, 10) || -1, String(b.devoteeId)]);
+      if (!dev) return res.status(400).json({ error: 'That devotee no longer exists' });
+      devoteeId = dev.id;
+    } else {
+      const first = String(b.firstName || '').trim();
+      if (!first && !b.name && !mobile) return res.status(400).json({ error: 'devoteeId or firstName is required' });
+      devoteeId = await ensureDevotee({
+        firstName: first, lastName: b.lastName, name: b.name, mobile,
+        city: b.city, state: b.state, samaj: b.samaj,
+      });
     }
-    // one person = one devotee row (create if the mobile is new, else reuse)
-    const devoteeId = await ensureDevotee({
-      firstName: first, lastName: b.lastName, mobile,
-      city: b.city, state: b.state, samaj: b.samaj,
-    });
+
+    const prior = await queryOne(
+      'SELECT id, is_deleted FROM team_members WHERE team_id = ? AND devotee_id = ? ORDER BY is_deleted ASC LIMIT 1',
+      [row.id, devoteeId]);
+    if (prior && !prior.is_deleted) return res.status(409).json({ error: 'Already a member of this team' });
+    if (prior && prior.is_deleted) {
+      await run(`UPDATE team_members SET is_deleted = 0, role = ?, status = 'active', updated_at = datetime('now') WHERE id = ?`,
+        [b.role || 'Volunteer', prior.id]);
+      return res.status(200).json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
+    }
+    if (mobile) {
+      const dupM = await queryOne('SELECT id FROM team_members WHERE team_id = ? AND mobile = ? AND is_deleted = 0', [row.id, mobile]);
+      if (dupM) return res.status(409).json({ error: 'Already a member of this team' });
+    }
+
+    const dev = await queryOne('SELECT * FROM devotees WHERE id = ?', [devoteeId]);
+    const parts = String((dev && dev.name) || b.firstName || '').trim().split(/\s+/);
+    const first = parts.shift() || (b.firstName || '');
     const code = await nextCode('team_member');
     await run(
       `INSERT INTO team_members (code, team_id, devotee_id, first_name, last_name, mobile, city, state, role, status, notes, joined_date)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
-      [code, row.id, devoteeId, first, b.lastName || '', mobile, b.city || '', b.state || 'Gujarat', b.role || 'Volunteer', b.notes || '']
+      [code, row.id, devoteeId, first, parts.join(' ') || (b.lastName || ''),
+       (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
+       (dev && dev.state) || b.state || 'Gujarat', b.role || 'Volunteer', b.notes || '']
     );
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
       action: 'CREATE', entityType: 'team_member', entityId: code, scopeId: row.code });
@@ -225,11 +249,35 @@ router.patch('/:id/members/:mid', async (req, res, next) => {
     for (const [k, col] of Object.entries(map)) {
       if (typeof req.body[k] === 'string') { sets.push(`${col} = ?`); args.push(req.body[k]); }
     }
+    let newMobile;
+    if (req.body.mobile !== undefined) {
+      const mob = digits(req.body.mobile);
+      if (mob && mob.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
+      sets.push('mobile = ?'); args.push(mob);
+      newMobile = mob;
+    }
     if (req.body.status === 'active' || req.body.status === 'inactive') { sets.push('status = ?'); args.push(req.body.status); }
     if (sets.length) {
       sets.push(`updated_at = datetime('now')`);
       args.push(m.id);
       await run(`UPDATE team_members SET ${sets.join(', ')} WHERE id = ?`, args);
+    }
+
+    if (m.devotee_id) {
+      if (newMobile && newMobile.length === 10) {
+        const other = await queryOne('SELECT id FROM devotees WHERE mobile = ? AND is_deleted = 0', [newMobile]);
+        if (other && other.id !== m.devotee_id) {
+          await run('UPDATE team_members SET devotee_id = ? WHERE id = ?', [other.id, m.id]);
+        }
+      }
+      const ds = [], da = [];
+      if (typeof req.body.firstName === 'string' || typeof req.body.lastName === 'string') {
+        const nm = `${req.body.firstName != null ? req.body.firstName : m.first_name} ${req.body.lastName != null ? req.body.lastName : m.last_name}`.trim();
+        if (nm) { ds.push(`name = CASE WHEN name IN ('', '(unnamed)') THEN ? ELSE name END`); da.push(nm); }
+      }
+      if (newMobile) { ds.push(`mobile = CASE WHEN mobile = '' THEN ? ELSE mobile END`); da.push(newMobile); }
+      if (typeof req.body.city === 'string' && req.body.city.trim()) { ds.push(`city = CASE WHEN city = '' THEN ? ELSE city END`); da.push(req.body.city.trim()); }
+      if (ds.length) { da.push(m.devotee_id); await run(`UPDATE devotees SET ${ds.join(', ')} WHERE id = ?`, da); }
     }
     res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
@@ -411,15 +459,23 @@ router.post('/:id/signups/:sid/approve', async (req, res, next) => {
     if (!su) return res.status(404).json({ error: 'Signup not found' });
     if (su.status === 'approved') return res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
 
-    // create the team member (dedupe by mobile) and attach to the session
-    let member = su.mobile
-      ? await queryOne('SELECT * FROM team_members WHERE team_id = ? AND mobile = ? AND is_deleted = 0', [row.id, su.mobile])
+    // one person = one devotee: resolve first, then dedupe the roster on
+    // (team_id, devotee_id) — reactivate a soft-deleted row rather than insert.
+    const [first, ...rest] = String(su.name || '').trim().split(/\s+/);
+    const devoteeId = await ensureDevotee({
+      firstName: first, lastName: rest.join(' '), name: su.name, mobile: su.mobile, city: su.city,
+    });
+    let member = devoteeId
+      ? await queryOne('SELECT * FROM team_members WHERE team_id = ? AND devotee_id = ? ORDER BY is_deleted ASC LIMIT 1', [row.id, devoteeId])
       : null;
+    if (!member && su.mobile) {
+      member = await queryOne('SELECT * FROM team_members WHERE team_id = ? AND mobile = ? AND is_deleted = 0', [row.id, su.mobile]);
+    }
+    if (member && member.is_deleted) {
+      await run(`UPDATE team_members SET is_deleted = 0, status = 'active', updated_at = datetime('now') WHERE id = ?`, [member.id]);
+      member = await queryOne('SELECT * FROM team_members WHERE id = ?', [member.id]);
+    }
     if (!member) {
-      const [first, ...rest] = String(su.name || '').trim().split(/\s+/);
-      const devoteeId = await ensureDevotee({
-        firstName: first, lastName: rest.join(' '), mobile: su.mobile, city: su.city,
-      });
       const code = await nextCode('team_member');
       const r = await run(
         `INSERT INTO team_members (code, team_id, devotee_id, first_name, last_name, mobile, city, state, role, status, joined_date)

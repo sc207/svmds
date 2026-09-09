@@ -8,7 +8,7 @@ const { requireRole, ROLE_PAGES, pagesForUser } = require('../middleware/authz')
 const { assertCanGrant, assertCanTouchUser, assertSingleSuperadmin, assertRootOwnerSafe, isRootOwner } = require('../services/authz');
 const { getUser, listUsers } = require('../services/userStore');
 const { logAudit } = require('../services/audit');
-const { ensureDevotee } = require('../services/people');
+const { ensureDevotee, digits } = require('../services/people');
 const { mapUser } = require('../utils/mappers');
 
 const router = express.Router();
@@ -65,9 +65,11 @@ router.post('/', adminTier, async (req, res, next) => {
       if (taken) return res.status(409).json({ error: 'That devotee already has a login account' });
     }
 
-    const name = linkedDev
+    // an account ALWAYS resolves to a person — never leave devotee_id null
+    const name = (linkedDev
       ? linkedDev.name
-      : String(req.body.name || `${req.body.firstName || ''} ${req.body.lastName || ''}`).trim();
+      : String(req.body.name || `${req.body.firstName || ''} ${req.body.lastName || ''}`).trim())
+      || email.split('@')[0];
     const mobile = linkedDev ? (linkedDev.mobile || '') : (req.body.mobile || '');
     const city = linkedDev ? (linkedDev.city || '') : (req.body.city || '');
     const roles = [...new Set(req.body.roles || [])];
@@ -95,12 +97,29 @@ router.post('/', adminTier, async (req, res, next) => {
       await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [userId, role]);
     }
 
-    // link the person: the picked devotee, else create-or-reuse one by mobile
+    // link the person: the picked devotee, else create-or-reuse one (ensureDevotee
+    // never returns null now that a name is always derivable)
     const devoteeId = linkedDev ? linkedDev.id : await ensureDevotee({
       name, firstName: req.body.firstName, lastName: req.body.lastName,
       mobile, city, state: req.body.state, samaj: req.body.samaj,
     });
-    if (devoteeId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devoteeId, userId]);
+    await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devoteeId, userId]);
+
+    // adopt any committee / team / event / pooja this person was assigned to
+    // BY DEVOTEE ID before they had an account — fill the account pointer and
+    // grant the matching scoped role so they don't sign in to an empty module.
+    const adopt = async (sql, role) => {
+      const r = await run(sql, [userId, devoteeId]);
+      if (r.changes > 0) {
+        await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
+                   (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [userId, role, userId, role]);
+      }
+    };
+    await adopt(`UPDATE committees SET leader_id = ? WHERE leader_devotee_id = ? AND leader_id IS NULL AND is_deleted = 0`, 'committee_leader');
+    await adopt(`UPDATE teams      SET lead_id   = ? WHERE lead_devotee_id   = ? AND lead_id   IS NULL AND is_deleted = 0`, 'management_lead');
+    await adopt(`UPDATE events     SET in_charge_id = ? WHERE in_charge_devotee_id = ? AND in_charge_id IS NULL AND is_deleted = 0`, 'event_incharge');
+    await adopt(`UPDATE pooja_coordinator_links SET user_id = ? WHERE devotee_id = ? AND user_id IS NULL`, 'pooja_coordinator');
+
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Access',
       action: 'CREATE', entityType: 'user', entityId: userId, details: { email, roles } });
 
@@ -128,6 +147,20 @@ router.patch('/:id', adminTier, async (req, res, next) => {
     sets.push(`updated_at = datetime('now')`);
     args.push(u.id);
     await run(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, args);
+
+    // conservatively push profile edits onto the linked devotee — only FILL
+    // blanks, never overwrite (the devotee master stays canonical)
+    if (u.devotee_id) {
+      const ds = [], da = [];
+      if (typeof req.body.name === 'string' && req.body.name.trim())
+        { ds.push(`name = CASE WHEN name IN ('', '(unnamed)') THEN ? ELSE name END`); da.push(req.body.name.trim()); }
+      if (typeof req.body.mobile === 'string' && digits(req.body.mobile))
+        { ds.push(`mobile = CASE WHEN mobile = '' THEN ? ELSE mobile END`); da.push(digits(req.body.mobile)); }
+      if (typeof req.body.city === 'string' && req.body.city.trim())
+        { ds.push(`city = CASE WHEN city = '' THEN ? ELSE city END`); da.push(req.body.city.trim()); }
+      if (ds.length) { ds.push(`updated_at = datetime('now')`); da.push(u.devotee_id);
+        await run(`UPDATE devotees SET ${ds.join(', ')} WHERE id = ?`, da); }
+    }
 
     // disabling a user immediately kills their live sessions (ChallanPro gap)
     if (req.body.active === false) {
@@ -191,6 +224,16 @@ router.delete('/:id', adminTier, async (req, res, next) => {
     assertCanTouchUser(req.user, u);
     assertRootOwnerSafe(u, 'delete');
     if (u.id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
+
+    // detach this account from anything it scoped — the entity keeps its
+    // *_devotee_id so it still remembers the person, and a future re-account
+    // for that devotee re-adopts it (see POST /). Roles go with the account.
+    await run('UPDATE committees SET leader_id = NULL WHERE leader_id = ?', [u.id]);
+    await run('UPDATE teams SET lead_id = NULL WHERE lead_id = ?', [u.id]);
+    await run('UPDATE events SET in_charge_id = NULL WHERE in_charge_id = ?', [u.id]);
+    await run('DELETE FROM pooja_coordinator_links WHERE user_id = ? AND devotee_id IS NULL', [u.id]);
+    await run('UPDATE pooja_coordinator_links SET user_id = NULL WHERE user_id = ?', [u.id]);
+    await run('DELETE FROM user_roles WHERE user_id = ?', [u.id]);
 
     await run(`UPDATE users SET is_deleted = 1, active = 0, updated_at = datetime('now') WHERE id = ?`, [u.id]);
     await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [u.id]);
