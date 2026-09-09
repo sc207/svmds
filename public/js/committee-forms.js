@@ -437,6 +437,11 @@ function handleSaveCmtMember(e) {
       .then(done);
   }
 }
+function cmtSyncMemberStatus(x) {
+  if (!window.API || !window.API.online || !x.code) return;
+  const c = cmtById(x.committeeId);
+  if (c && (c.code || c.id)) window.API.patch('/committees/' + (c.code || c.id) + '/members/' + x.code, { status: x.status }).catch(function () {});
+}
 function toggleCmtMemberStatus(id) {
   const x = cmtMemberById(id); if (!x) return;
   if (x.status === 'active') {
@@ -444,9 +449,9 @@ function toggleCmtMemberStatus(id) {
       title: window.t('cmt_deactivate', 'Deactivate Member'),
       body: `<p>${window.t('cmt_deactivate_body', 'They stop appearing in new meetings but history is kept.')}<br><strong>${esc(cmtMemberName(x))}</strong></p>`,
       confirmLabel: window.t('cmt_deactivate', 'Deactivate'),
-      onConfirm: () => { x.status = 'inactive'; cmtToast(cmtMemberName(x) + ' — ' + window.t('inactive').toLowerCase()); renderCommittee(); }
+      onConfirm: () => { x.status = 'inactive'; cmtToast(cmtMemberName(x) + ' — ' + window.t('inactive').toLowerCase()); renderCommittee(); cmtSyncMemberStatus(x); }
     });
-  } else { x.status = 'active'; cmtToast(cmtMemberName(x) + ' — ' + window.t('active').toLowerCase()); renderCommittee(); }
+  } else { x.status = 'active'; cmtToast(cmtMemberName(x) + ' — ' + window.t('active').toLowerCase()); renderCommittee(); cmtSyncMemberStatus(x); }
 }
 function confirmRemoveCmtMember(id) {
   const x = cmtMemberById(id); if (!x) return;

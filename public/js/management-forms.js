@@ -719,6 +719,7 @@ function toggleMemberStatus(id) {
         logActivity(x.managementId, `${memberName(x)} deactivated — attendance history preserved`);
         mgToast(`${memberName(x)} deactivated.`);
         renderManagement();
+        mgSyncMemberStatus(x);
       }
     });
   } else {
@@ -726,7 +727,13 @@ function toggleMemberStatus(id) {
     logActivity(x.managementId, `${memberName(x)} reactivated`);
     mgToast(`${memberName(x)} reactivated.`);
     renderManagement();
+    mgSyncMemberStatus(x);
   }
+}
+function mgSyncMemberStatus(x) {
+  if (!window.API || !window.API.online || !x.code) return;
+  const m = mgmtById(x.managementId);
+  if (m && (m.code || m.id)) window.API.patch('/teams/' + (m.code || m.id) + '/members/' + x.code, { status: x.status }).catch(function () {});
 }
 
 function confirmRemoveMember(id) {

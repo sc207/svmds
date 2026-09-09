@@ -684,6 +684,9 @@ function confirmDeletePooja(id) {
    STATUS ACTIONS — mark done / extended / cancelled / reopen
    Any admin or assigned coordinator may set these.
    ------------------------------------------------------------ */
+function pjSyncStatus(p) {
+  if (window.API && window.API.online && p.code) window.API.patch("/poojas/" + p.code, { status: p.status || "planned" }).catch(function () {});
+}
 function markPoojaDone(id) {
   const p = poojaById(id);
   if (!p) return;
@@ -700,6 +703,7 @@ function markPoojaDone(id) {
       logPoojaActivity(id, `Pooja marked completed by ${POOJA.session.userName}`);
       pjToast(`${p.name} marked completed.`);
       renderPooja();
+      pjSyncStatus(p);
     }
   });
 }
@@ -739,6 +743,7 @@ function confirmExtendPooja(id) {
   closeSheet();
   pjToast('Pooja marked as extended.');
   renderPooja();
+  pjSyncStatus(p);
 }
 
 function cancelPooja(id) {
@@ -754,6 +759,7 @@ function cancelPooja(id) {
       logPoojaActivity(id, `Pooja cancelled by ${POOJA.session.userName}`);
       pjToast('Pooja marked cancelled.');
       renderPooja();
+      pjSyncStatus(p);
     }
   });
 }
@@ -766,6 +772,7 @@ function reopenPooja(id) {
   logPoojaActivity(id, `Pooja reopened by ${POOJA.session.userName} — status back to automatic`);
   pjToast('Pooja reopened. Status now follows the dates again.');
   renderPooja();
+  pjSyncStatus(p);
 }
 
 function isoPlusDays(iso, n) {
@@ -1046,13 +1053,18 @@ function toggleSevarthiStatus(id) {
         s.status = 'inactive';
         pjToast(`${s.firstName} ${s.lastName} deactivated.`);
         renderPooja();
+        pjSyncSevarthiStatus(s);
       }
     });
   } else {
     s.status = 'active';
     pjToast(`${s.firstName} ${s.lastName} reactivated.`);
     renderPooja();
+    pjSyncSevarthiStatus(s);
   }
+}
+function pjSyncSevarthiStatus(s) {
+  if (window.API && window.API.online && s.code) window.API.patch('/sevarthis/' + s.code, { status: s.status }).catch(function () {});
 }
 
 /* ------------------------------------------------------------
