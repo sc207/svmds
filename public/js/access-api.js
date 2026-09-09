@@ -219,106 +219,87 @@
     return Array.prototype.slice.call(form.querySelectorAll('input[type=checkbox]:checked')).map(function (c) { return c.value; });
   }
 
+  /* <option> list of every devotee, disabling any that already hold an account */
+  function accDevoteeOptions() {
+    var withAcct = devWithAccount();
+    return DEVOTEES.map(function (d) {
+      var busy = withAcct[String(d.id)];
+      return '<option value="' + esc(d.id) + '"' + (busy ? ' disabled' : '') + '>' +
+        esc(d.name) + (d.mobile ? ' · ' + esc(d.mobile) : '') + (d.city ? ' · ' + esc(d.city) : '') +
+        (busy ? '  — already has an account' : '') + '</option>';
+    }).join('');
+  }
+
   window.accAddAccount = function () {
     if (typeof openSheet !== 'function') { toast('UI not ready'); return; }
-    var names = DEVOTEES.map(function (d) { return '<option value="' + esc(d.name) + '"></option>'; }).join('');
     openSheet({
       title: 'Add account',
       body: '<form id="accAddForm">' +
-        '<div class="form-group"><label class="form-label">Google email *</label><input class="form-input" name="email" type="email" placeholder="person@gmail.com" required></div>' +
-        '<div class="form-group"><label class="form-label">Person</label>' +
-          '<input class="form-input" name="person" list="accDevList" autocomplete="off" placeholder="Type a name — matches from the register show below" oninput="accPersonLookup()">' +
-          '<datalist id="accDevList">' + names + '</datalist>' +
-          '<input type="hidden" name="devoteeId" id="accDevoteeId">' +
+        /* PERSON — always a devotee: pick an existing one or add a new devotee record */
+        '<div class="form-group"><div class="flex justify-between items-center">' +
+          '<label class="form-label" style="margin:0">Person (devotee) *</label>' +
+          '<button type="button" class="btn btn-outline mg-btn-xs" onclick="accAddDevotee()">+ Add new devotee</button></div>' +
+          '<select class="form-select" name="devoteeId" id="accDevoteeSel" onchange="accDevoteePicked()">' +
+            '<option value="">— pick a devotee —</option>' + accDevoteeOptions() + '</select>' +
           '<div id="accPersonHint" class="mg-muted-xs" style="margin-top:.35rem">' +
-            (DEVOTEES.length ? DEVOTEES.length + ' people in the register — pick one or type a new name' : 'The register is empty — this will create the first devotee') +
+            (DEVOTEES.length ? DEVOTEES.length + ' devotees in the register — pick one, or add a new devotee'
+                             : 'The register is empty — use “+ Add new devotee” to create the first person') +
           '</div></div>' +
-        '<div class="grid mg-2col-form">' +
-          '<div class="form-group"><label class="form-label">Mobile</label><input class="form-input" name="mobile" maxlength="10" inputmode="numeric" oninput="accPersonLookup()"></div>' +
-          '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city"></div>' +
-        '</div>' +
+        /* EXTRA — what belongs to the account, not the person */
+        '<div class="form-group"><label class="form-label">Google email *</label>' +
+          '<input class="form-input" name="email" type="email" placeholder="person@gmail.com" required></div>' +
         '<div class="form-group"><label class="form-label">Roles</label>' + roleCheckboxes([]) + '</div></form>',
       footer: '<button class="btn btn-outline" onclick="closeSheet()">Cancel</button>' +
               '<button class="btn btn-primary" onclick="accSubmitAdd()">Create</button>',
     });
   };
 
-  /* live "is this person already in the DB?" lookup as the admin types */
-  window.accPersonLookup = function () {
+  /* the shared devotee sheet, on top of the account sheet — then link the new person */
+  window.accAddDevotee = function () {
+    if (typeof openDevoteeSheet !== 'function') { toast('Devotee form unavailable'); return; }
+    openDevoteeSheet({
+      title: 'Add a new devotee',
+      onSaved: function (dev) {
+        if (!DEVOTEES.some(function (x) { return String(x.id) === String(dev.id); })) DEVOTEES.push(dev);
+        var sel = document.getElementById('accDevoteeSel');
+        if (sel) {
+          sel.innerHTML = '<option value="">— pick a devotee —</option>' + accDevoteeOptions();
+          sel.value = dev.id;
+          accDevoteePicked();
+        }
+      }
+    });
+  };
+
+  window.accDevoteePicked = function () {
     var f = document.getElementById('accAddForm'); if (!f) return;
     var hint = document.getElementById('accPersonHint');
-    var q = (f.person.value || '').trim().toLowerCase();
-    var mob = digits(f.mobile.value);
-    f.devoteeId.value = '';   // any edit clears an earlier pick until re-matched
-    var withAcct = devWithAccount();
-
-    if (!q && !mob) {
-      hint.innerHTML = DEVOTEES.length + ' people in the register — pick one or type a new name';
+    var d = DEVOTEES.filter(function (x) { return String(x.id) === String(f.devoteeId.value); })[0];
+    if (!d) {
+      hint.textContent = DEVOTEES.length + ' devotees in the register — pick one, or add a new devotee';
       return;
     }
-    var matches = DEVOTEES.filter(function (d) {
-      return (q && (d.name || '').toLowerCase().indexOf(q) !== -1) || (mob.length >= 6 && digits(d.mobile) === mob);
-    }).slice(0, 6);
-
-    // exact single match on name or a full mobile hit → auto-link
-    var exact = DEVOTEES.filter(function (d) {
-      return (mob.length === 10 && digits(d.mobile) === mob) || (q && (d.name || '').toLowerCase() === q);
-    })[0];
-    if (exact) {
-      if (withAcct[String(exact.id)]) {
-        hint.innerHTML = '<span style="color:var(--primary-maroon)">⚠ ' + esc(exact.name) +
-          ' already has an account (' + esc(withAcct[String(exact.id)]) + ')</span>';
-        return;
-      }
-      f.devoteeId.value = exact.id;
-      if (!f.mobile.value) f.mobile.value = exact.mobile || '';
-      if (!f.city.value) f.city.value = exact.city || '';
-      hint.innerHTML = '<span style="color:var(--success,#2E7D6B)">✓ Linking existing devotee: <strong>' + esc(exact.name) + '</strong>' +
-        (exact.mobile ? ' · ' + esc(exact.mobile) : '') + (exact.city ? ' · ' + esc(exact.city) : '') + '</span>';
+    var busy = devWithAccount()[String(d.id)];
+    if (busy) {
+      hint.innerHTML = '<span style="color:var(--primary-maroon)">⚠ ' + esc(d.name) + ' already has an account (' + esc(busy) + ')</span>';
       return;
     }
-    if (matches.length) {
-      hint.innerHTML = 'Found in the register — click to link:<div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.3rem">' +
-        matches.map(function (d) {
-          var busy = withAcct[String(d.id)];
-          return '<button type="button" class="btn btn-outline mg-btn-xs" style="text-align:left"' +
-            (busy ? ' disabled' : ' onclick="accPickDevotee(\'' + d.id + '\')"') + '>' +
-            esc(d.name) + (d.mobile ? ' · ' + esc(d.mobile) : '') + (d.city ? ' · ' + esc(d.city) : '') +
-            (busy ? '  — has account (' + esc(busy) + ')' : '') + '</button>';
-        }).join('') + '</div>';
-    } else {
-      hint.innerHTML = '<span class="mg-muted-xs">No match — a new devotee record will be created for “' + esc(f.person.value.trim()) + '”.</span>';
-    }
-  };
-  window.accPickDevotee = function (id) {
-    var f = document.getElementById('accAddForm'); if (!f) return;
-    var d = DEVOTEES.filter(function (x) { return String(x.id) === String(id); })[0];
-    if (!d) return;
-    f.person.value = d.name;
-    f.mobile.value = d.mobile || '';
-    f.city.value = d.city || '';
-    f.devoteeId.value = d.id;
-    document.getElementById('accPersonHint').innerHTML =
-      '<span style="color:var(--success,#2E7D6B)">✓ Linking existing devotee: <strong>' + esc(d.name) + '</strong></span>';
+    hint.innerHTML = '<span style="color:var(--success,#2E7D6B)">✓ <strong>' + esc(d.name) + '</strong>' +
+      (d.mobile ? ' · ' + esc(d.mobile) : '') + (d.city ? ' · ' + esc(d.city) : '') +
+      ' — the account links to this devotee record.</span>';
   };
 
   window.accSubmitAdd = async function () {
     var f = document.getElementById('accAddForm'); if (!f) return;
     var email = f.email.value.trim();
-    if (!email) { toast('Email required'); return; }
-    var mobile = digits(f.mobile.value);
-    if (mobile && mobile.length !== 10) { toast('Mobile must be 10 digits'); return; }
-    var body = { email: email, roles: pickedRoles(f) };
-    if (f.devoteeId.value) {
-      body.devoteeId = f.devoteeId.value;                 // link the picked person, no duplicate
-    } else {
-      body.name = f.person.value.trim();
-      body.mobile = mobile;
-      body.city = f.city.value.trim();
-      if (!body.name) { toast('Enter a name or pick a devotee'); return; }
-    }
-    try { await window.API.post('/users', body); if (typeof closeSheet === 'function') closeSheet(); toast('Account created'); await refresh(); }
-    catch (e) { toast(e.message); }
+    if (!email) { toast('Google email is required'); return; }
+    var devoteeId = f.devoteeId.value;
+    if (!devoteeId) { toast('Pick a devotee, or add a new one.'); return; }
+    try {
+      await window.API.post('/users', { email: email, roles: pickedRoles(f), devoteeId: devoteeId });
+      if (typeof closeSheet === 'function') closeSheet();
+      toast('Account created'); await refresh();
+    } catch (e) { toast(e.message); }
   };
 
   window.accEditProfile = function (id) {
@@ -326,22 +307,31 @@
     if (!u || typeof openSheet !== 'function') { toast('UI not ready'); return; }
     var priv = (u.roles || []).some(function (r) { return PRIVILEGED[r]; });
     if (priv && !iAmSuper()) { toast('Only a superadmin can edit an admin / superadmin account'); return; }
+    var linked = u.devoteeId ? DEVOTEES.filter(function (x) { return String(x.id) === String(u.devoteeId); })[0] : null;
+    var personBlock = u.devoteeId
+      ? '<div class="form-group"><label class="form-label">Person (devotee)</label>' +
+          '<input class="form-input" value="' + esc((linked && linked.name) || u.name || '—') +
+            (linked && linked.mobile ? ' · ' + esc(linked.mobile) : '') +
+            (linked && linked.city ? ' · ' + esc(linked.city) : '') + '" disabled>' +
+          '<span class="mg-muted-xs">Linked to devotee ' + esc(u.devoteeId) +
+            ' — edit the person\'s name / mobile / city in the People register; it updates everywhere.</span></div>'
+      : '<div class="form-group"><label class="form-label">Name</label><input class="form-input" name="name" value="' + esc(u.name || '') + '"></div>' +
+        '<div class="form-group"><label class="form-label">Mobile</label><input class="form-input" name="mobile" maxlength="10" value="' + esc(u.mobile || '') + '"></div>' +
+        '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city" value="' + esc(u.city || '') + '"></div>';
     openSheet({
       title: 'Edit profile — ' + esc(u.name || u.email),
       body: '<form id="accProfileForm">' +
         '<div class="form-group"><label class="form-label">Google email</label>' +
           '<input class="form-input" value="' + esc(u.email) + '" disabled>' +
           '<span class="mg-muted-xs">The sign-in email cannot be changed. Remove this account and add the new email instead.</span></div>' +
-        '<div class="form-group"><label class="form-label">Name</label><input class="form-input" name="name" value="' + esc(u.name || '') + '"></div>' +
-        '<div class="form-group"><label class="form-label">Mobile</label><input class="form-input" name="mobile" maxlength="10" value="' + esc(u.mobile || '') + '"></div>' +
-        '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city" value="' + esc(u.city || '') + '"></div>' +
+        personBlock +
       '</form>',
       footer: '<button class="btn btn-outline" onclick="closeSheet()">Cancel</button>' +
-              '<button class="btn btn-primary" onclick="accSubmitProfile(\'' + id + '\')">Save</button>',
+              (u.devoteeId ? '' : '<button class="btn btn-primary" onclick="accSubmitProfile(\'' + id + '\')">Save</button>'),
     });
   };
   window.accSubmitProfile = async function (id) {
-    var f = document.getElementById('accProfileForm'); if (!f) return;
+    var f = document.getElementById('accProfileForm'); if (!f || !f.name) return;
     var mobile = f.mobile.value.trim();
     if (mobile && !/^[0-9]{10}$/.test(mobile)) { toast('Mobile must be 10 digits'); return; }
     var body = { name: f.name.value.trim(), mobile: mobile, city: f.city.value.trim() };

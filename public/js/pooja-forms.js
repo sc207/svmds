@@ -116,31 +116,8 @@
     </div>
     <div class="modal-body">
       <form id="formSevarthi" onsubmit="handleSaveSevarthi(event)">
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="sevFieldFirst">First Name *</label>
-            <input type="text" class="form-input" id="sevFieldFirst" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="sevFieldLast">Last Name *</label>
-            <input type="text" class="form-input" id="sevFieldLast" required>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="sevFieldMobile">Mobile Number *</label>
-          <input type="tel" class="form-input" id="sevFieldMobile" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile" required oninput="checkExistingSevarthi()">
-          <div id="sevExistingHint"></div>
-        </div>
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="sevFieldCity">City</label>
-            <input type="text" class="form-input" id="sevFieldCity" placeholder="e.g. Sanand">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="sevFieldState">State</label>
-            <input type="text" class="form-input" id="sevFieldState" placeholder="e.g. Gujarat">
-          </div>
-        </div>
+        <div id="sevPersonMount"></div>
+        <div id="sevExistingHint"></div>
         <div class="grid mg-2col-form">
           <div class="form-group">
             <label class="form-label" for="sevFieldCommittee">Committee / Samaj</label>
@@ -181,44 +158,19 @@
     </div>
     <div class="modal-body">
       <form id="formGuest" onsubmit="handleSaveGuest(event)">
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="gstFieldFirst">First Name *</label>
-            <input type="text" class="form-input" id="gstFieldFirst" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="gstFieldLast">Last Name</label>
-            <input type="text" class="form-input" id="gstFieldLast">
-          </div>
-        </div>
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="gstFieldRole">Role</label>
-            <input type="text" class="form-input" id="gstFieldRole" list="gstRoleList" placeholder="e.g. Chief Guest, Priest">
-            <datalist id="gstRoleList">
-              <option value="Chief Guest"></option>
-              <option value="Guest of Honour"></option>
-              <option value="Trust President"></option>
-              <option value="Trustee"></option>
-              <option value="Yagna Acharya"></option>
-              <option value="Path Acharya"></option>
-              <option value="Mahila Mandal Head"></option>
-            </datalist>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="gstFieldMobile">Mobile Number</label>
-            <input type="tel" class="form-input" id="gstFieldMobile" maxlength="10" placeholder="10-digit mobile">
-          </div>
-        </div>
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="gstFieldCity">City</label>
-            <input type="text" class="form-input" id="gstFieldCity" placeholder="e.g. Sanand">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="gstFieldState">State</label>
-            <input type="text" class="form-input" id="gstFieldState" placeholder="e.g. Gujarat">
-          </div>
+        <div id="gstPersonMount"></div>
+        <div class="form-group">
+          <label class="form-label" for="gstFieldRole">Role at this event</label>
+          <input type="text" class="form-input" id="gstFieldRole" list="gstRoleList" placeholder="e.g. Chief Guest, Priest">
+          <datalist id="gstRoleList">
+            <option value="Chief Guest"></option>
+            <option value="Guest of Honour"></option>
+            <option value="Trust President"></option>
+            <option value="Trustee"></option>
+            <option value="Yagna Acharya"></option>
+            <option value="Path Acharya"></option>
+            <option value="Mahila Mandal Head"></option>
+          </datalist>
         </div>
         <div class="form-group">
           <label class="form-label" for="gstFieldNotes">Notes</label>
@@ -719,7 +671,10 @@ function openAddGuest(returnTo) {
   document.getElementById('guestFormTitle').textContent = 'Add Guest';
   document.getElementById('guestFormSubmitBtn').textContent = 'Add Guest';
   document.getElementById('formGuest').reset();
-  document.getElementById('gstFieldState').value = 'Gujarat';
+  document.getElementById('gstPersonMount').innerHTML = devoteeLinkField({
+    selId: 'gstDevoteeSel', label: 'Guest (devotee)', required: true,
+    hint: 'Pick from the register, or add a new devotee. The role below is specific to this event.'
+  });
   openModal('modalGuest');
 }
 function openEditGuest(id, returnTo) {
@@ -729,40 +684,42 @@ function openEditGuest(id, returnTo) {
   POOJA.editingGuestId = id;
   document.getElementById('guestFormTitle').textContent = 'Edit Guest';
   document.getElementById('guestFormSubmitBtn').textContent = 'Save Changes';
-  document.getElementById('gstFieldFirst').value = x.firstName || '';
-  document.getElementById('gstFieldLast').value = x.lastName || '';
+  document.getElementById('gstPersonMount').innerHTML = devoteeLinkField({
+    selId: 'gstDevoteeSel', label: 'Guest (devotee)', required: true,
+    selectedId: x.devoteeId,
+    selectedLabel: personName(x) + (x.mobile ? ' · ' + x.mobile : '') + (x.city ? ' · ' + x.city : '')
+  });
   document.getElementById('gstFieldRole').value = x.role || '';
-  document.getElementById('gstFieldMobile').value = x.mobile || '';
-  document.getElementById('gstFieldCity').value = x.city || '';
-  document.getElementById('gstFieldState').value = x.state || '';
   document.getElementById('gstFieldNotes').value = x.notes || '';
   openModal('modalGuest');
 }
 function handleSaveGuest(e) {
   e.preventDefault();
-  const first = document.getElementById('gstFieldFirst').value.trim();
-  const last = document.getElementById('gstFieldLast').value.trim();
+  const person = (typeof devoteeLinkValue === 'function') ? devoteeLinkValue('gstDevoteeSel') : null;
+  if (!person) { pjToast('Pick a devotee, or add a new one.'); return; }
+  const first = person.firstName;
+  const last = person.lastName || '';
   const role = document.getElementById('gstFieldRole').value.trim();
-  const mobile = document.getElementById('gstFieldMobile').value.replace(/\D/g, '').slice(0, 10);
-  const city = document.getElementById('gstFieldCity').value.trim();
-  const state = document.getElementById('gstFieldState').value.trim();
+  const mobile = String(person.mobile || '').replace(/\D/g, '').slice(0, 10);
+  const city = person.city || '';
+  const state = person.state || 'Gujarat';
   const notes = document.getElementById('gstFieldNotes').value.trim();
-  if (!first) { pjToast('First name is required.'); return; }
-  if (mobile && !/^[0-9]{10}$/.test(mobile)) { pjToast('Mobile must be 10 digits (or left blank).'); return; }
+  const pickedDevoteeId = person.id;
+  if (!first) { pjToast('The chosen devotee has no name on record.'); return; }
 
   const wasEditing = !!POOJA.editingGuestId;
   let savedId;
   if (wasEditing) {
     const x = personById(POOJA.editingGuestId);
-    Object.assign(x, { firstName: first, lastName: last, role, mobile, city, state, notes });
+    Object.assign(x, { devoteeId: pickedDevoteeId || x.devoteeId, firstName: first, lastName: last, role, mobile, city, state, notes });
     savedId = x.id;
     pjToast(`${personName(x)} updated.`);
   } else {
-    const dupe = POOJA.people.find(x => x.mobile && x.mobile === mobile);
-    if (dupe && mobile) { pjToast(`${personName(dupe)} already has this mobile — edit that record instead.`); return; }
+    const dupe = POOJA.people.find(x => x.devoteeId === pickedDevoteeId || (mobile && x.mobile === mobile));
+    if (dupe) { pjToast(`${personName(dupe)} is already in the guest registry.`); return; }
     savedId = nextId('GST', POOJA.people, 3);
-    POOJA.people.push({ id: savedId, firstName: first, lastName: last, role, mobile, city, state, notes });
-    pjToast(`${first} ${last} added to Guests.`);
+    POOJA.people.push({ id: savedId, devoteeId: pickedDevoteeId, firstName: first, lastName: last, role, mobile, city, state, notes });
+    pjToast(`${(first + ' ' + last).trim()} added to Guests.`);
   }
 
   POOJA.editingGuestId = null;
@@ -809,7 +766,10 @@ function openAddSevarthi(poojaId) {
   document.getElementById('sevFormPooja').textContent = p.name;
 
   document.getElementById('formSevarthi').reset();
-  document.getElementById('sevFieldState').value = 'Gujarat';
+  document.getElementById('sevPersonMount').innerHTML = devoteeLinkField({
+    selId: 'sevDevoteeSel', label: 'Sevarthi (devotee)', required: true,
+    hint: 'Pick from the register, or add a new devotee. The same person can sponsor several poojas.'
+  });
   document.getElementById('sevFieldStatus').value = 'active';
   document.getElementById('sevExistingHint').innerHTML = '';
   openModal('modalSevarthi');
@@ -825,11 +785,11 @@ function openEditSevarthi(id) {
   document.getElementById('sevarthiFormSubmitBtn').textContent = 'Save Changes';
   document.getElementById('sevFormPooja').textContent = p ? p.name : '—';
 
-  document.getElementById('sevFieldFirst').value = s.firstName;
-  document.getElementById('sevFieldLast').value = s.lastName;
-  document.getElementById('sevFieldMobile').value = s.mobile;
-  document.getElementById('sevFieldCity').value = s.city || '';
-  document.getElementById('sevFieldState').value = s.state || '';
+  document.getElementById('sevPersonMount').innerHTML = devoteeLinkField({
+    selId: 'sevDevoteeSel', label: 'Sevarthi (devotee)', required: true,
+    selectedId: s.devoteeId,
+    selectedLabel: (s.firstName + ' ' + s.lastName).trim() + (s.mobile ? ' · ' + s.mobile : '') + (s.city ? ' · ' + s.city : '')
+  });
   document.getElementById('sevFieldCommittee').value = s.committee || '';
   document.getElementById('sevFieldStatus').value = s.status || 'active';
   document.getElementById('sevFieldNotes').value = s.notes || '';
@@ -837,9 +797,12 @@ function openEditSevarthi(id) {
   openModal('modalSevarthi');
 }
 
-/** Live check — reuse an existing sevarthi record by mobile. */
+/** Live check — retained for legacy callers; the devotee picker now handles
+    reuse. Guarded no-op when the old mobile field is absent. */
 function checkExistingSevarthi() {
-  const mobile = document.getElementById('sevFieldMobile').value.trim();
+  const el = document.getElementById('sevFieldMobile');
+  if (!el) return;
+  const mobile = el.value.trim();
   const hint = document.getElementById('sevExistingHint');
   if (!hint || POOJA.editingSevarthiId) return;
   if (mobile.length < 10) { hint.innerHTML = ''; return; }
@@ -866,35 +829,40 @@ function handleSaveSevarthi(e) {
   const p = poojaById(POOJA.activePoojaId);
   if (!p) return;
 
-  const firstName = document.getElementById('sevFieldFirst').value.trim();
-  const lastName = document.getElementById('sevFieldLast').value.trim();
-  const mobile = document.getElementById('sevFieldMobile').value.trim();
-  const city = document.getElementById('sevFieldCity').value.trim();
-  const state = document.getElementById('sevFieldState').value.trim();
+  const person = (typeof devoteeLinkValue === 'function') ? devoteeLinkValue('sevDevoteeSel') : null;
+  if (!person) { pjToast('Pick a devotee, or add a new one.'); return; }
+  const firstName = person.firstName;
+  const lastName = person.lastName || '';
+  const mobile = String(person.mobile || '').replace(/\D/g, '');
+  const city = person.city || '';
+  const state = person.state || 'Gujarat';
+  const pickedDevoteeId = person.id;
   const committee = document.getElementById('sevFieldCommittee').value.trim();
   const status = document.getElementById('sevFieldStatus').value;
   const notes = document.getElementById('sevFieldNotes').value.trim();
 
-  if (!firstName) { pjToast('First Name is required.'); return; }
-  if (!lastName) { pjToast('Last Name is required.'); return; }
-  if (!/^[0-9]{10}$/.test(mobile)) { pjToast('Mobile Number must be exactly 10 digits.'); return; }
+  if (!firstName) { pjToast('The chosen devotee has no name on record.'); return; }
+  if (mobile && !/^[0-9]{10}$/.test(mobile)) { pjToast('That devotee’s mobile is not 10 digits — fix it in the register.'); return; }
 
   if (POOJA.editingSevarthiId) {
     const s = sevarthiById(POOJA.editingSevarthiId);
-    Object.assign(s, { firstName, lastName, mobile, city, state, committee, status, notes });
+    Object.assign(s, { devoteeId: pickedDevoteeId || s.devoteeId, firstName, lastName, mobile, city, state, committee, status, notes });
     logPoojaActivity(p.id, `Sevarthi ${firstName} ${lastName} details updated`);
     pjToast(`${firstName} ${lastName} updated.`);
   } else {
-    if ((p.sevarthiIds || []).some(id => (sevarthiById(id) || {}).mobile === mobile)) {
+    if ((p.sevarthiIds || []).some(id => {
+      const sv = sevarthiById(id) || {};
+      return sv.devoteeId === pickedDevoteeId || (mobile && sv.mobile === mobile);
+    })) {
       pjToast(`${firstName} ${lastName} is already a sevarthi of this pooja.`); return;
     }
-    const existing = POOJA.sevarthis.find(s => s.mobile === mobile);
+    const existing = POOJA.sevarthis.find(s => s.devoteeId === pickedDevoteeId || (mobile && s.mobile === mobile));
     let record = existing;
     if (existing) {
       logPoojaActivity(p.id, `${firstName} ${lastName} (${existing.devoteeId}) linked as sevarthi`);
     } else {
       const mgIds = (typeof MG !== 'undefined' && MG.members) ? MG.members.map(x => ({ id: x.devoteeId })) : [];
-      const devoteeId = nextId('DEV', POOJA.sevarthis.map(x => ({ id: x.devoteeId })).concat(mgIds), 3);
+      const devoteeId = pickedDevoteeId || nextId('DEV', POOJA.sevarthis.map(x => ({ id: x.devoteeId })).concat(mgIds), 3);
       record = {
         id: nextId('SEV', POOJA.sevarthis, 3), devoteeId,
         firstName, lastName, mobile, city, state, committee, status, notes, addedDate: pjToday()

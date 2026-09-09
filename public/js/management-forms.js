@@ -77,35 +77,9 @@
     </div>
     <div class="modal-body">
       <form id="formMember" onsubmit="handleSaveMember(event)">
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="memFieldFirst">First Name *</label>
-            <input type="text" class="form-input" id="memFieldFirst" placeholder="e.g. Rajesh" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="memFieldLast">Last Name *</label>
-            <input type="text" class="form-input" id="memFieldLast" placeholder="e.g. Rabari" required>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="memFieldMobile">Mobile Number *</label>
-          <input type="tel" class="form-input" id="memFieldMobile" placeholder="10-digit mobile number"
-                 pattern="[0-9]{10}" maxlength="10" required oninput="checkExistingDevotee()">
-          <span class="mg-muted-xs">If this devotee already volunteers elsewhere, they are linked — not duplicated.</span>
-          <div id="memExistingHint"></div>
-        </div>
-
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="memFieldCity">City</label>
-            <input type="text" class="form-input" id="memFieldCity" placeholder="e.g. Sanand">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="memFieldState">State</label>
-            <input type="text" class="form-input" id="memFieldState" placeholder="e.g. Gujarat">
-          </div>
-        </div>
+        <div id="memPersonMount"></div>
+        <span class="mg-muted-xs">If this devotee already volunteers elsewhere, they are linked — not duplicated.</span>
+        <div id="memExistingHint"></div>
 
         <div class="grid mg-2col-form">
           <div class="form-group">
@@ -558,11 +532,10 @@ function openAddMember(mgmtId) {
   document.getElementById('memberFormMgmt').textContent = m.name;
 
   document.getElementById('formMember').reset();
-  document.getElementById('memFieldFirst').value = '';
-  document.getElementById('memFieldLast').value = '';
-  document.getElementById('memFieldMobile').value = '';
-  document.getElementById('memFieldCity').value = 'Ahmedabad';
-  document.getElementById('memFieldState').value = 'Gujarat';
+  document.getElementById('memPersonMount').innerHTML = devoteeLinkField({
+    selId: 'memDevoteeSel', label: 'Volunteer (devotee)', required: true,
+    hint: 'Pick from the register, or add a new devotee. One person can serve in several teams.'
+  });
   document.getElementById('memFieldRole').value = 'Volunteer';
   document.getElementById('memFieldStatus').value = 'active';
   document.getElementById('memFieldNotes').value = '';
@@ -581,11 +554,11 @@ function openEditMember(id) {
   document.getElementById('memberFormSubmitBtn').textContent = 'Save Changes';
   document.getElementById('memberFormMgmt').textContent = m.name;
 
-  document.getElementById('memFieldFirst').value = x.firstName;
-  document.getElementById('memFieldLast').value = x.lastName;
-  document.getElementById('memFieldMobile').value = x.mobile;
-  document.getElementById('memFieldCity').value = x.city || '';
-  document.getElementById('memFieldState').value = x.state || '';
+  document.getElementById('memPersonMount').innerHTML = devoteeLinkField({
+    selId: 'memDevoteeSel', label: 'Volunteer (devotee)', required: true,
+    selectedId: x.devoteeId,
+    selectedLabel: memberName(x) + (x.mobile ? ' · ' + x.mobile : '') + (x.city ? ' · ' + x.city : '')
+  });
   document.getElementById('memFieldRole').value = x.role || 'Volunteer';
   document.getElementById('memFieldStatus').value = x.status;
   document.getElementById('memFieldNotes').value = x.notes || '';
@@ -598,9 +571,12 @@ function openEditMember(id) {
   openModal('modalMember');
 }
 
-/** Live check — if this mobile already exists, reuse the devotee record. */
+/** Live check — kept for any legacy callers; the devotee picker now handles
+    "reuse, don't duplicate", so this is a guarded no-op when the old field is gone. */
 function checkExistingDevotee() {
-  const mobile = document.getElementById('memFieldMobile').value.trim();
+  const el = document.getElementById('memFieldMobile');
+  if (!el) return;
+  const mobile = el.value.trim();
   const hint = document.getElementById('memExistingHint');
   if (!hint || MG.editingMemberId) return;
   if (mobile.length < 10) { hint.innerHTML = ''; return; }
@@ -628,30 +604,33 @@ function handleSaveMember(e) {
   const m = mgmtById(mgmtId);
   if (!m) return;
 
-  const firstName = document.getElementById('memFieldFirst').value.trim();
-  const lastName  = document.getElementById('memFieldLast').value.trim();
-  const mobile    = document.getElementById('memFieldMobile').value.trim();
-  const city      = document.getElementById('memFieldCity').value.trim();
-  const state     = document.getElementById('memFieldState').value.trim();
+  const person = (typeof devoteeLinkValue === 'function') ? devoteeLinkValue('memDevoteeSel') : null;
+  if (!person) { mgToast('Pick a devotee, or add a new one.'); return; }
+  const firstName = person.firstName;
+  const lastName  = person.lastName || '';
+  const mobile    = String(person.mobile || '').replace(/\D/g, '');
+  const city      = person.city || '';
+  const state     = person.state || 'Gujarat';
+  const pickedDevoteeId = person.id;
   const role      = document.getElementById('memFieldRole').value.trim() || 'Volunteer';
   const status    = document.getElementById('memFieldStatus').value;
   const notes     = document.getElementById('memFieldNotes').value.trim();
 
-  if (!firstName) { mgToast('First Name is required.'); return; }
-  if (!lastName)  { mgToast('Last Name is required.'); return; }
-  if (!/^[0-9]{10}$/.test(mobile)) { mgToast('Mobile Number must be exactly 10 digits.'); return; }
+  if (!firstName) { mgToast('The chosen devotee has no name on record.'); return; }
+  if (mobile && !/^[0-9]{10}$/.test(mobile)) { mgToast('That devotee’s mobile is not 10 digits — fix it in the register.'); return; }
 
   if (MG.editingMemberId) {
     const x = memberById(MG.editingMemberId);
-    Object.assign(x, { firstName, lastName, mobile, city, state, role, status, notes });
+    Object.assign(x, { devoteeId: pickedDevoteeId || x.devoteeId, firstName, lastName, mobile, city, state, role, status, notes });
     logActivity(mgmtId, `Volunteer ${memberName(x)} details updated`);
     mgToast(`${memberName(x)} updated.`);
   } else {
-    const dupe = MG.members.find(x => x.mobile === mobile && x.managementId === mgmtId);
+    const dupe = MG.members.find(x => x.managementId === mgmtId &&
+      (x.devoteeId === pickedDevoteeId || (mobile && x.mobile === mobile)));
     if (dupe) { mgToast(`${memberName(dupe)} is already in this Management.`); return; }
 
-    const existing = MG.members.find(x => x.mobile === mobile);
-    const devoteeId = existing ? existing.devoteeId : nextId('DEV', MG.members.map(x => ({ id:x.devoteeId })), 3);
+    const existing = MG.members.find(x => x.devoteeId === pickedDevoteeId || (mobile && x.mobile === mobile));
+    const devoteeId = pickedDevoteeId || (existing ? existing.devoteeId : nextId('DEV', MG.members.map(x => ({ id:x.devoteeId })), 3));
 
     const id = nextId('MEM', MG.members, 3);
     MG.members.push({ id, managementId: mgmtId, devoteeId, firstName, lastName, mobile,

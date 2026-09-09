@@ -117,6 +117,75 @@
     });
   };
 
+  /* ============================================================
+     devoteeLinkField — the ONE "person = devotee" field for any form.
+     A <select> of the register + "+ Add new devotee" (opens the shared
+     sheet on top). The host form supplies only its context-specific
+     extras (role, status, PAN, title, notes …). Read it back with
+     devoteeLinkValue(selId).
+       opts = { selId, label?, hint?, required?, selectedId?, onChange? }
+     ============================================================ */
+  window.devoteeLinkField = function (opts) {
+    opts = opts || {};
+    var selId = opts.selId || 'devLinkSel';
+    var label = opts.label || 'Person (devotee)';
+    var sel = opts.selectedId != null ? String(opts.selectedId) : '';
+    var people = (typeof window.allPeople === 'function') ? window.allPeople() : [];
+    var matched = false;
+    var options = '<option value="">— pick a devotee —</option>' + people.map(function (p) {
+      var on = sel && String(p.id) === sel;
+      if (on) matched = true;
+      return '<option value="' + esc(p.id) + '"' + (on ? ' selected' : '') + '>' + esc(p.name) +
+        (p.mobile ? ' · ' + esc(p.mobile) : '') + (p.city ? ' · ' + esc(p.city) : '') + '</option>';
+    }).join('');
+    if (sel && !matched && opts.selectedLabel) {
+      options += '<option value="' + esc(sel) + '" selected>' + esc(opts.selectedLabel) + '</option>';
+    }
+    var onCh = opts.onChange ? (' onchange="' + esc(opts.onChange) + '"') : '';
+    return '<div class="form-group"><div class="flex justify-between items-center">' +
+        '<label class="form-label" for="' + selId + '" style="margin:0">' + esc(label) + (opts.required ? ' *' : '') + '</label>' +
+        '<button type="button" class="btn btn-outline mg-btn-xs" onclick="devLinkAdd(\'' + selId + '\')">+ Add new devotee</button></div>' +
+      '<select class="form-select" id="' + selId + '"' + onCh + '>' + options + '</select>' +
+      (opts.hint ? '<div class="mg-muted-xs" style="margin-top:.3rem">' + esc(opts.hint) + '</div>' : '') +
+    '</div>';
+  };
+  window.devLinkAdd = function (selId) {
+    if (typeof window.openDevoteeSheet !== 'function') {
+      if (typeof showToast === 'function') showToast('Devotee form unavailable');
+      return;
+    }
+    window.openDevoteeSheet({
+      title: 'Add a new devotee',
+      onSaved: function (dev) {
+        var sel = document.getElementById(selId);
+        if (!sel) return;
+        var o = Array.prototype.slice.call(sel.options).filter(function (x) { return String(x.value) === String(dev.id); })[0];
+        if (!o) {
+          o = document.createElement('option');
+          o.value = dev.id;
+          o.textContent = dev.name + (dev.mobile ? ' · ' + dev.mobile : '') + (dev.city ? ' · ' + dev.city : '');
+          sel.appendChild(o);
+        }
+        sel.value = dev.id;
+        try { sel.dispatchEvent(new Event('change')); } catch (e) {}
+      }
+    });
+  };
+  /** { id, name, firstName, lastName, mobile, city, state } for the chosen person, or null. */
+  window.devoteeLinkValue = function (selId) {
+    var sel = document.getElementById(selId);
+    if (!sel || !sel.value) return null;
+    var people = (typeof window.allPeople === 'function') ? window.allPeople() : [];
+    var p = people.filter(function (x) { return String(x.id) === String(sel.value); })[0];
+    var name = p ? p.name : ((sel.options[sel.selectedIndex] || {}).textContent || '').split(' · ')[0];
+    var parts = String(name || '').trim().split(/\s+/);
+    return {
+      id: sel.value, name: name,
+      firstName: parts.shift() || '', lastName: parts.join(' '),
+      mobile: (p && p.mobile) || '', city: (p && p.city) || '', state: (p && p.state) || 'Gujarat'
+    };
+  };
+
   /* One field of markup for an optional extra input.
      f = { name, label, type:'text'|'textarea'|'select', options?, placeholder?, value? } */
   function extraFieldHTML(fld) {

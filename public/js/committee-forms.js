@@ -54,19 +54,10 @@
     </div>
     <div class="modal-body">
       <form id="formCmtMember" onsubmit="handleSaveCmtMember(event)">
+        <div id="cmmPersonMount"></div>
+        <div id="cmmExistingHint"></div>
         <div class="grid mg-2col-form">
-          <div class="form-group"><label class="form-label" for="cmmFieldFirst">First Name *</label><input type="text" class="form-input" id="cmmFieldFirst" required></div>
-          <div class="form-group"><label class="form-label" for="cmmFieldLast">Last Name *</label><input type="text" class="form-input" id="cmmFieldLast" required></div>
-        </div>
-        <div class="form-group"><label class="form-label" for="cmmFieldMobile">Mobile Number *</label>
-          <input type="tel" class="form-input" id="cmmFieldMobile" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile" required oninput="checkExistingCmtMember()">
-          <div id="cmmExistingHint"></div></div>
-        <div class="grid mg-2col-form">
-          <div class="form-group"><label class="form-label" for="cmmFieldCity">City</label><input type="text" class="form-input" id="cmmFieldCity"></div>
-          <div class="form-group"><label class="form-label" for="cmmFieldState">State</label><input type="text" class="form-input" id="cmmFieldState"></div>
-        </div>
-        <div class="grid mg-2col-form">
-          <div class="form-group"><label class="form-label" for="cmmFieldRole">Role</label>
+          <div class="form-group"><label class="form-label" for="cmmFieldRole">Role in this committee</label>
             <input type="text" class="form-input" id="cmmFieldRole" list="cmtRoleList" placeholder="e.g. Treasurer, Member">
             <datalist id="cmtRoleList"><option value="Member"></option><option value="Secretary"></option><option value="Treasurer"></option><option value="Coordinator"></option><option value="Village In-charge"></option><option value="Mahila Wing"></option></datalist></div>
           <div class="form-group"><label class="form-label" for="cmmFieldStatus">Status</label><select class="form-select" id="cmmFieldStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
@@ -286,7 +277,10 @@ function openAddCmtMember(cid) {
   document.getElementById('cmtMemberFormSubmitBtn').textContent = window.t('cmt_add_member', 'Add Member');
   document.getElementById('cmtMemberFormCmt').textContent = cmtById(cid).name;
   document.getElementById('formCmtMember').reset();
-  document.getElementById('cmmFieldState').value = 'Gujarat';
+  document.getElementById('cmmPersonMount').innerHTML = devoteeLinkField({
+    selId: 'cmmDevoteeSel', label: 'Member (devotee)', required: true,
+    hint: 'Pick from the register, or add a new devotee. One person can be on several committees.'
+  });
   document.getElementById('cmmFieldRole').value = 'Member';
   document.getElementById('cmmFieldStatus').value = 'active';
   document.getElementById('cmmExistingHint').innerHTML = '';
@@ -298,11 +292,11 @@ function openEditCmtMember(id) {
   document.getElementById('cmtMemberFormTitle').textContent = window.t('cmt_edit_member', 'Edit Member');
   document.getElementById('cmtMemberFormSubmitBtn').textContent = window.t('save');
   document.getElementById('cmtMemberFormCmt').textContent = cmtById(x.committeeId).name;
-  document.getElementById('cmmFieldFirst').value = x.firstName;
-  document.getElementById('cmmFieldLast').value = x.lastName;
-  document.getElementById('cmmFieldMobile').value = x.mobile;
-  document.getElementById('cmmFieldCity').value = x.city || '';
-  document.getElementById('cmmFieldState').value = x.state || '';
+  document.getElementById('cmmPersonMount').innerHTML = devoteeLinkField({
+    selId: 'cmmDevoteeSel', label: 'Member (devotee)', required: true,
+    selectedId: x.devoteeId,
+    selectedLabel: cmtMemberName(x) + (x.mobile ? ' · ' + x.mobile : '') + (x.city ? ' · ' + x.city : '')
+  });
   document.getElementById('cmmFieldRole').value = x.role || 'Member';
   document.getElementById('cmmFieldStatus').value = x.status;
   document.getElementById('cmmFieldNotes').value = x.notes || '';
@@ -310,7 +304,9 @@ function openEditCmtMember(id) {
   openModal('modalCmtMember');
 }
 function checkExistingCmtMember() {
-  const mobile = document.getElementById('cmmFieldMobile').value.trim();
+  const el = document.getElementById('cmmFieldMobile');
+  if (!el) return;
+  const mobile = el.value.trim();
   const hint = document.getElementById('cmmExistingHint');
   if (!hint || CMT.editingMemberId || mobile.length < 10) { if (hint) hint.innerHTML = ''; return; }
   const found = CMT.members.find(m => m.mobile === mobile);
@@ -328,26 +324,29 @@ function checkExistingCmtMember() {
 function handleSaveCmtMember(e) {
   e.preventDefault();
   const cid = CMT.editingMemberId ? cmtMemberById(CMT.editingMemberId).committeeId : CMT.activeCmtId;
-  const first = document.getElementById('cmmFieldFirst').value.trim();
-  const last = document.getElementById('cmmFieldLast').value.trim();
-  const mobile = document.getElementById('cmmFieldMobile').value.trim();
-  if (!first || !last) { cmtToast(window.t('cmt_need_member_name', 'First and last name are required.')); return; }
-  if (!/^[0-9]{10}$/.test(mobile)) { cmtToast(window.t('cmt_need_mobile', 'Mobile must be 10 digits.')); return; }
+  const person = (typeof devoteeLinkValue === 'function') ? devoteeLinkValue('cmmDevoteeSel') : null;
+  if (!person) { cmtToast('Pick a devotee, or add a new one.'); return; }
+  const first = person.firstName;
+  const last = person.lastName || '';
+  const mobile = String(person.mobile || '').replace(/\D/g, '');
+  const pickedDevoteeId = person.id;
+  if (!first) { cmtToast('The chosen devotee has no name on record.'); return; }
+  if (mobile && !/^[0-9]{10}$/.test(mobile)) { cmtToast(window.t('cmt_need_mobile', 'That devotee’s mobile is not 10 digits — fix it in the register.')); return; }
   const fields = {
     firstName: first, lastName: last, mobile,
-    city: document.getElementById('cmmFieldCity').value.trim(),
-    state: document.getElementById('cmmFieldState').value.trim(),
+    city: person.city || '',
+    state: person.state || 'Gujarat',
     role: document.getElementById('cmmFieldRole').value.trim() || 'Member',
     status: document.getElementById('cmmFieldStatus').value,
     notes: document.getElementById('cmmFieldNotes').value.trim()
   };
   if (CMT.editingMemberId) {
-    Object.assign(cmtMemberById(CMT.editingMemberId), fields);
-    cmtToast(first + ' ' + last + ' — ' + window.t('save') + ' ✓');
+    Object.assign(cmtMemberById(CMT.editingMemberId), fields, { devoteeId: pickedDevoteeId || cmtMemberById(CMT.editingMemberId).devoteeId });
+    cmtToast((first + ' ' + last).trim() + ' — ' + window.t('save') + ' ✓');
   } else {
-    if (CMT.members.some(m => m.mobile === mobile && m.committeeId === cid)) { cmtToast(window.t('cmt_already_member', 'already on this committee.')); return; }
-    const existing = CMT.members.find(m => m.mobile === mobile);
-    const devoteeId = existing ? existing.devoteeId : cmtNextId('DEV', CMT.members.map(m => ({ id: m.devoteeId })), 3);
+    if (CMT.members.some(m => m.committeeId === cid && (m.devoteeId === pickedDevoteeId || (mobile && m.mobile === mobile)))) { cmtToast(window.t('cmt_already_member', 'already on this committee.')); return; }
+    const existing = CMT.members.find(m => m.devoteeId === pickedDevoteeId || (mobile && m.mobile === mobile));
+    const devoteeId = pickedDevoteeId || (existing ? existing.devoteeId : cmtNextId('DEV', CMT.members.map(m => ({ id: m.devoteeId })), 3));
     const id = cmtNextId('CMM', CMT.members, 3);
     CMT.members.push(Object.assign({ id, committeeId: cid, devoteeId, joinedDate: cmtToday() }, fields));
     cmtLogActivity(cid, first + ' ' + last + ' ' + window.t('cmt_added_word', 'added'));
