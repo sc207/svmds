@@ -643,8 +643,8 @@ function openDevoteeEdit(id) {
     title: window.t('dv_edit', 'Edit devotee'),
     body:
       '<form id="dvEditForm" class="grid mg-2col-form" onsubmit="return false">' +
-        '<div class="form-group"><label class="form-label">' + window.t('name', 'Name') + '</label>' +
-          '<input class="form-input" id="dvE_name" value="' + esc(d.name || '') + '"></div>' +
+        '<div class="form-group" style="grid-column:1/-1"><label class="form-label">' + window.t('dv_full_name', 'Full name') + ' *</label>' +
+          '<input class="form-input" id="dvE_name" value="' + esc(d.name || '') + '" placeholder="e.g. Rameshbhai Rabari"></div>' +
         '<div class="form-group"><label class="form-label">' + window.t('mobile', 'Mobile') + '</label>' +
           '<input class="form-input" id="dvE_mobile" maxlength="10" inputmode="numeric" value="' + esc(d.mobile || d.phone || '') + '"></div>' +
         '<div class="form-group"><label class="form-label">' + window.t('city', 'City') + '</label>' +
@@ -668,8 +668,8 @@ function saveDevoteeEdit(id) {
   if (!d) return;
   const g = x => (document.getElementById(x) || {}).value || '';
   const mob = devoDigits(g('dvE_mobile')).slice(0, 10);
-  const name = g('dvE_name').trim();
-  if (!name) { devoToast(window.t('dv_need_name', 'Name is required.')); return; }
+  const name = g('dvE_name').trim().replace(/\s+/g, ' ');
+  if (!name) { devoToast(window.t('dv_need_name', 'Full name is required.')); return; }
   if (mob && mob.length !== 10) { devoToast(window.t('dv_need_mobile', 'Mobile must be 10 digits.')); return; }
   Object.assign(d, {
     name: name, mobile: mob, phone: mob,     // keep BOTH — templePeople() reads d.phone || d.mobile

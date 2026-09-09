@@ -221,9 +221,7 @@
      Dedupes by mobile; persists to /api/devotees when online. */
   window.openDevoteeSheet = function (opts) {
     opts = opts || {};
-    var nameParts = String(opts.prefillName || '').trim().split(/\s+/);
-    var pf = nameParts.shift() || '';
-    var pl = nameParts.join(' ');
+    var pf = String(opts.prefillName || '').trim();
     var commOpts = (typeof committeeNames === 'function' ? committeeNames() : [])
       .map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join('');
     window.__dpExtra = Array.isArray(opts.extraFields) ? opts.extraFields : [];
@@ -238,10 +236,8 @@
       body:
         '<form id="dpForm" class="grid mg-2col-form">' +
           '<div class="dp-form-caption">Person details — shared devotee record</div>' +
-          '<div class="form-group"><label class="form-label">First name *</label>' +
-            '<input class="form-input" name="firstName" value="' + esc(pf) + '" required></div>' +
-          '<div class="form-group"><label class="form-label">Last name</label>' +
-            '<input class="form-input" name="lastName" value="' + esc(pl) + '"></div>' +
+          '<div class="form-group" style="grid-column:1/-1"><label class="form-label">Full name *</label>' +
+            '<input class="form-input" name="fullName" value="' + esc(pf) + '" placeholder="e.g. Rameshbhai Rabari" required></div>' +
           '<div class="form-group"><label class="form-label">Contact number *</label>' +
             '<input class="form-input" name="mobile" maxlength="10" inputmode="numeric" placeholder="10-digit mobile" required oninput="dpMobileLookup()">' +
             '<div id="dpHint" class="mg-muted-xs" style="margin-top:.3rem"></div></div>' +
@@ -277,12 +273,10 @@
 
   window.dpSubmit = function () {
     var f = document.getElementById('dpForm'); if (!f) return;
-    var first = f.firstName.value.trim();
-    var last = f.lastName.value.trim();
+    var name = (f.elements['fullName'].value || '').trim().replace(/\s+/g, ' ');
     var mobile = digits(f.mobile.value);
-    if (!first) { toast('First name is required'); return; }
+    if (!name) { toast('Full name is required'); return; }
     if (mobile.length !== 10) { toast('Contact number must be 10 digits'); return; }
-    var name = (first + ' ' + last).trim();
     var city = f.city.value.trim();
     var st = f.state.value.trim() || 'Gujarat';   // NOT `state` — that's the global store
     var samaj = f.samaj.value.trim();
