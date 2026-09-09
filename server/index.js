@@ -101,7 +101,7 @@ app.get('/health', async (req, res) => {
       ? 'turso (persistent)'
       : 'local-file (EPHEMERAL — data is lost on every restart/redeploy)';
     try {
-      const u = await queryOne('SELECT COUNT(*) AS n FROM users');
+      const u = await queryOne('SELECT COUNT(*) AS n FROM users WHERE is_deleted = 0');
       const a = await queryOne('SELECT COUNT(*) AS n FROM audit_logs');
       const s = await queryOne('SELECT COUNT(*) AS n FROM sessions WHERE revoked = 0');
       info.counts = { users: Number(u.n), auditLogs: Number(a.n), activeSessions: Number(s.n) };
@@ -177,6 +177,25 @@ async function start() {
   // 7 annual Tithi events. It never touches devotees / donations / poojas etc.
   await require('./db/seed/reference-data').seedReferenceData();
   await require('./services/bootstrap').ensureAdminUser();
+
+  // Optional data-hygiene pass. Default unset = do nothing. 'dry' logs drift on
+  // every deploy (recommended steady state); '1'/'true' actually applies the
+  // repair. A failure here is logged and the server still starts.
+  const mode = String(process.env.DB_REPAIR_ON_BOOT || '').toLowerCase();
+  if (['dry', '1', 'true'].includes(mode)) {
+    try {
+      const { repairDatabase } = require('./db/repair');
+      const s = await repairDatabase({ dryRun: mode === 'dry' });
+      const drift = s.devoteesMerged + s.rosterRowsMerged + s.usersDevoteeBackfilled
+        + s.leadersLinkedForward + s.leadersLinkedReverse + s.guestsBackfilled
+        + s.donorsBackfilled + s.coordinatorDevoteeBackfilled;
+      console.log(`▶ DB_REPAIR_ON_BOOT=${mode}: ${mode === 'dry' ? 'drift' : 'changed'} ${drift} row(s)` +
+        (s.indexesSkipped.length ? `, ${s.indexesSkipped.length} index(es) blocked` : ''));
+    } catch (e) {
+      console.error('[repair] failed, continuing to listen —', e.message);
+    }
+  }
+
   const port = process.env.PORT || config.port || 3000;
   app.listen(port, () => console.log(`✔ listening on :${port}  (health: /health)`));
 }

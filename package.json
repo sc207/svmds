@@ -9,7 +9,10 @@
     "dev": "node server/index.js",
     "migrate": "node server/db/migrate.js",
     "seed": "node server/db/migrate.js --seed",
-    "wipe": "node server/db/wipe.js"
+    "wipe": "node server/db/wipe.js",
+    "db:repair:dry": "node server/db/repair-cli.js --dry-run",
+    "db:repair": "node server/db/repair-cli.js",
+    "db:compact": "node server/db/compact.js"
   },
   "engines": {
     "node": "20.x"
