@@ -28,7 +28,6 @@ const state = {
 document.addEventListener('DOMContentLoaded', () => {
   setupNavigation();
   applySessionChrome();
-  renderDevoteeTable();
   renderInventoryTable();
   renderExpensesTable();
   initCharts();
@@ -200,66 +199,7 @@ function changeLanguage(lang) {
   if (typeof setLanguage === 'function') setLanguage(lang);
 }
 
-// Devotees Table Renderer & Filter
-function renderDevoteeTable() {
-  const tbody = document.getElementById('devoteeTableBody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  state.devotees.forEach(dev => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${dev.id}</strong></td>
-      <td>${dev.name}</td>
-      <td>${dev.phone}</td>
-      <td>${dev.city}</td>
-      <td><span class="badge badge-maroon">${dev.samaj}</span></td>
-      <td><span class="badge badge-confirmed">${dev.status}</span></td>
-      <td>
-        <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="showToast('Profile: ${dev.name} (${dev.visits} visits)')">Profile</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  const label = document.getElementById('devoteeCountLabel');
-  if (label) label.innerText = `Showing ${state.devotees.length} Devotees`;
-}
-
-function filterDevotees() {
-  const query = (document.getElementById('devoteeSearch')?.value || '').toLowerCase();
-  const filterSamaj = document.getElementById('devoteeSamajFilter')?.value || 'all';
-
-  const filtered = state.devotees.filter(dev => {
-    const matchesQuery = dev.name.toLowerCase().includes(query) || dev.phone.includes(query) || dev.city.toLowerCase().includes(query);
-    const matchesSamaj = filterSamaj === 'all' || dev.samaj === filterSamaj;
-    return matchesQuery && matchesSamaj;
-  });
-
-  const tbody = document.getElementById('devoteeTableBody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  filtered.forEach(dev => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${dev.id}</strong></td>
-      <td>${dev.name}</td>
-      <td>${dev.phone}</td>
-      <td>${dev.city}</td>
-      <td><span class="badge badge-maroon">${dev.samaj}</span></td>
-      <td><span class="badge badge-confirmed">${dev.status}</span></td>
-      <td>
-        <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="showToast('Profile: ${dev.name}')">Profile</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  const label = document.getElementById('devoteeCountLabel');
-  if (label) label.innerText = `Showing ${filtered.length} Devotees`;
-}
-
+// Devotees are handled by the Devotees 360° module (devotees.js).
 // Donations are handled by the Donations module (donations*.js).
 
 // Inventory Table Renderer
@@ -322,25 +262,6 @@ function closeModal(id) {
 }
 
 // Form Submission Handlers
-function handleSaveDevotee(e) {
-  e.preventDefault();
-  const name = document.getElementById('inputDevoteeName').value;
-  const phone = document.getElementById('inputDevoteePhone').value;
-  const samaj = document.getElementById('inputDevoteeSamaj').value;
-  const city = document.getElementById('inputDevoteeCity').value;
-
-  const newDevotee = {
-    id: `#DEV-${1000 + state.devotees.length + 1}`,
-    name, phone, city, samaj, status: 'Active', visits: 1
-  };
-
-  state.devotees.unshift(newDevotee);
-  renderDevoteeTable();
-  closeModal('modalAddDevotee');
-  e.target.reset();
-  showToast(`Devotee ${name} registered successfully!`);
-}
-
 function handleSaveExpense(e) {
   e.preventDefault();
   const title = document.getElementById('inputExpenseTitle').value;

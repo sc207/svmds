@@ -56,11 +56,12 @@
     try {
       var devotees = await window.API.get('/devotees');
       swap(state.devotees, devotees.map(function (d) {
-        return { id: d.code || d.id, name: d.name, phone: d.phone || d.mobile,
+        var mob = d.mobile || d.phone || '';
+        return { id: d.code || d.id, name: d.name, phone: mob, mobile: mob,
                  city: d.city, samaj: d.samaj, status: d.status,
                  visits: d.visits || 0 };
       }));
-      if (typeof renderDevoteeTable === 'function') renderDevoteeTable();
+      if (typeof renderDevotees === 'function') renderDevotees();
       log('devotees: ' + state.devotees.length);
     } catch (e) { log('devotees failed: ' + e.message); }
 

@@ -378,7 +378,7 @@ function applyWorkingDate() {
   if (typeof MG !== 'undefined') { MG.today = d; MG.nowTime = /^\d{2}:\d{2}$/.test(t) ? t : MG.nowTime; }
   try { localStorage.setItem('svmmm_clock', JSON.stringify({ date: d, time: (typeof MG !== 'undefined' ? MG.nowTime : t) })); } catch (e) {}
   ['renderManagement', 'renderPooja', 'renderDonations', 'renderCommittee', 'renderEvents',
-   'renderVisits', 'renderUnifiedCalendar', 'renderDashboard'].forEach(fn => {
+   'renderVisits', 'renderDevotees', 'renderUnifiedCalendar', 'renderDashboard'].forEach(fn => {
     if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} }
   });
   renderSettings();

@@ -144,7 +144,7 @@
       { icon: '🪔', label: t('pj_schedule_btn', 'Schedule Pooja / Seva'), page: 'puja', run: function () { if (typeof openAddPooja === 'function') openAddPooja(); } },
       { icon: '📅', label: t('ev_add', 'Add Event'), page: 'events', run: function () { if (typeof openAddEvent === 'function') openAddEvent(); } },
       { icon: '🛕', label: t('vis_add', 'Add Visit'), page: 'visits', run: function () { if (typeof openAddVisit === 'function') openAddVisit(); } },
-      { icon: '👥', label: t('add_devotee', 'Register Devotee'), page: 'devotees', run: function () { if (typeof openModal === 'function') openModal('modalAddDevotee'); } }
+      { icon: '👥', label: t('add_devotee', 'Register Devotee'), page: 'devotees', run: function () { if (typeof openDevoteeAdd === 'function') openDevoteeAdd(); } }
     ];
     return qa.filter(function (a) { return allowed(a.page); }).map(function (a) {
       return { type: 'Action', icon: a.icon, label: a.label, sub: t('search_action', 'Quick action'),
