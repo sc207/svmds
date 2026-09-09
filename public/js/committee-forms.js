@@ -138,7 +138,7 @@
 
 /* ---- committee ---- */
 function cmtLeadOptions(sel) {
-  if (typeof personOptions === 'function') return personOptions(sel, '— ' + window.t('cmt_select_leader', 'Select leader') + ' —');
+  if (typeof personOptions === 'function') return personOptions(sel, '— ' + window.t('cmt_select_leader', 'Select leader') + ' —', { peopleOnly: true });
   return `<option value="">— ${window.t('cmt_select_leader', 'Select leader')} —</option>` +
     CMT.leaders.map(l => `<option value="${l.id}" ${l.id === sel ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
 }
@@ -160,7 +160,13 @@ function openEditCommittee(id) {
   document.getElementById('committeeFormTitle').textContent = window.t('cmt_edit', 'Edit Committee');
   document.getElementById('committeeFormSubmitBtn').textContent = window.t('save');
   document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(c.leaderId);
-  cmtRenderMemberPicker((c.members||[]).map(function(m){return { id: m.devoteeId||m.id, role: m.role||'Member' };}));
+  // prefill from the live roster (CMT.members) so members added on the workspace
+  // tab also show; the leader lives in its own picker, so exclude it here
+  cmtRenderMemberPicker(
+    CMT.members
+      .filter(function (m) { return m.committeeId === id && String(m.devoteeId || m.id) !== String(c.leaderId); })
+      .map(function (m) { return { id: m.devoteeId || m.id, role: m.role || 'Member' }; })
+  );
   document.getElementById('cmtFieldName').value = c.name;
   document.getElementById('cmtFieldSamaj').value = c.samaj || '';
   document.getElementById('cmtFieldSize').value = c.expectedSize;

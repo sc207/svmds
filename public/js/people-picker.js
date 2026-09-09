@@ -138,8 +138,9 @@
 
   /** <option> string for a <select>. Keeps a previously-saved value even if the
       person is no longer in the list; nudges the admin when the list is empty. */
-  window.personOptions = function (selectedId, placeholder) {
+  window.personOptions = function (selectedId, placeholder, opts) {
     var all = window.templePeople();
+    if (opts && opts.peopleOnly) all = all.filter(function (p) { return p.kind !== 'committee'; });
     var html = '<option value="">' + (placeholder || '— none —') + '</option>';
     var matched = false;
     all.forEach(function (p) {

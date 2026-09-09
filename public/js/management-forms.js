@@ -384,7 +384,12 @@ function openEditManagement(id) {
   document.getElementById('mgFormSubmitBtn').textContent = 'Save Changes';
 
   document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(m.leadId);
-  mgRenderMemberPicker((membersOf(m.id)||[]).map(function(x){return { id: x.devoteeId||x.id, role: x.role||"Volunteer" };}));
+  // the Lead has its own picker — exclude it from the team-members roster below
+  mgRenderMemberPicker(
+    (membersOf(m.id) || [])
+      .filter(function (x) { return String(x.devoteeId || x.id) !== String(m.leadId); })
+      .map(function (x) { return { id: x.devoteeId || x.id, role: x.role || 'Volunteer' }; })
+  );
   document.getElementById('mgFieldName').value = m.name;
   document.getElementById('mgFieldSize').value = m.expectedTeamSize;
   document.getElementById('mgFieldStatus').value = m.status;
@@ -395,7 +400,7 @@ function openEditManagement(id) {
 }
 
 function leadOptionsHTML(selected) {
-  if (typeof personOptions === 'function') return personOptions(selected, '— ' + (window.t ? window.t('mg_select_lead', 'Select Management Lead') : 'Select Management Lead') + ' —');
+  if (typeof personOptions === 'function') return personOptions(selected, '— ' + (window.t ? window.t('mg_select_lead', 'Select Management Lead') : 'Select Management Lead') + ' —', { peopleOnly: true });
   return `<option value="">— Select Management Lead —</option>` +
     MG.leads.map(l => {
       const owns = MG.managements.filter(m => m.leadId === l.id).length;

@@ -237,7 +237,8 @@ function handleSaveVisit(e) {
   } else if (selVal) {
     devoteeId = selVal;
     const p = visPeople().find(x => String(x.id) === String(selVal));
-    name = p ? p.name : (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '');
+    name = p ? p.name
+             : ((sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '').split(' · ')[0].trim());
   }
   if (!devoteeId && VISITS.editingId) {
     const prev = visitById(VISITS.editingId);

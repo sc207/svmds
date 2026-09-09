@@ -429,7 +429,7 @@ function openEditPooja(id) {
   document.getElementById('pjFieldNotes').value = p.notes || '';
   renderSessionRows(poojaSessions(p));
   renderGuestPicker(p.guestIds || []);
-  pjRenderPeoplePickers(p.sevarthiIds || [], p.coordinatorIds || []);
+  pjRenderPeoplePickers(pjSevarthiIdsToDevoteeIds(p.sevarthiIds || []), p.coordinatorIds || []);
   document.getElementById('pjCustomRows').innerHTML = poojaCustomRowsHTML(p.custom || []);
   onPoojaTypeChange();
   openModal('modalPooja');
@@ -443,6 +443,39 @@ function collectSessionRows() {
     endTime: row.querySelector('.pj-sess-end').value,
     venue: row.querySelector('.pj-sess-venue').value.trim()
   }));
+}
+
+/* The inline Sevarthi picker works in DEVOTEE ids, but POOJA.sevarthis and
+   p.sevarthiIds work in SEV-### ids. Turn a devotee-id list into SEV-### ids,
+   creating sevarthi records on demand (dedup by devoteeId, then mobile). */
+function pjMaterialiseSevarthis(devoteeIds) {
+  return (devoteeIds || []).map(function (did) {
+    var per = (typeof window.personById === 'function') ? window.personById(did) : null;
+    var nm = per ? per.name : String(did);
+    var parts = String(nm).trim().split(/\s+/);
+    var mobile = (per && per.mobile) ? String(per.mobile).replace(/\D/g, '') : '';
+    var rec = POOJA.sevarthis.find(function (s) {
+      return s.devoteeId === did || (mobile && s.mobile === mobile);
+    });
+    if (!rec) {
+      rec = {
+        id: nextId('SEV', POOJA.sevarthis, 3), devoteeId: did,
+        firstName: parts.shift() || nm, lastName: parts.join(' '),
+        mobile: mobile, city: (per && per.city) || '', state: (per && per.state) || 'Gujarat',
+        committee: (per && per.samaj) || '', status: 'active', notes: '', addedDate: pjToday()
+      };
+      POOJA.sevarthis.push(rec);
+    }
+    return rec.id;
+  });
+}
+/* SEV-### ids → devotee ids, for pre-checking the picker on edit (tolerates
+   legacy poojas whose sevarthiIds already hold devotee ids). */
+function pjSevarthiIdsToDevoteeIds(sevIds) {
+  return (sevIds || []).map(function (id) {
+    var s = sevarthiById(id);
+    return s ? (s.devoteeId || s.id) : id;
+  });
 }
 
 function handleSavePooja(e) {
@@ -467,8 +500,8 @@ function handleSavePooja(e) {
   if (mode === 'single') sessions = [sessions[0]];
 
   const guestIds = Array.from(document.querySelectorAll('#pjGuestPicker .pj-guest-check:checked')).map(c => c.value);
-  const sevarthiIds = checkedIds('pjSevarthiPicker', 'pj-sev-check');
-  const coordinatorIds = checkedIds('pjCoordPicker', 'pj-coord-check');
+  const sevarthiIds = pjMaterialiseSevarthis(checkedIds('pjSevarthiPicker', 'pj-sev-check'));  // → SEV-### ids
+  const coordinatorIds = checkedIds('pjCoordPicker', 'pj-coord-check');                        // devotee ids (resolved via personById)
   const custom = Array.from(document.querySelectorAll('#pjCustomRows .pj-custom-row'))
     .map(r => ({ label: r.querySelector('.pj-cf-label').value.trim(), value: r.querySelector('.pj-cf-value').value.trim() }))
     .filter(c => c.label);
