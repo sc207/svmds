@@ -6,12 +6,20 @@
    No pooja types, no event types, no members / leaders / sessions / donations. */
 const { run, queryOne } = require('../connection');
 
+// SEED_REFERENCE_SYNC=1 restores the old "re-sync canonical names on every boot"
+// behaviour (a one-off resync). Unset (default) = insert-once, so admin edits to
+// category names / annual-event names in the UI are never silently reverted.
+const SYNC = process.env.SEED_REFERENCE_SYNC === '1';
+
 async function upsert(table, code, cols) {
   const keys = Object.keys(cols);
+  const onConflict = SYNC
+    ? `DO UPDATE SET ${keys.map(k => `${k} = excluded.${k}`).join(', ')}`
+    : 'DO NOTHING';
   await run(
     `INSERT INTO ${table} (code, ${keys.join(', ')})
        VALUES (?, ${keys.map(() => '?').join(', ')})
-     ON CONFLICT(code) DO UPDATE SET ${keys.map(k => `${k} = excluded.${k}`).join(', ')}`,
+     ON CONFLICT(code) ${onConflict}`,
     [code, ...keys.map(k => cols[k])]
   );
 }
@@ -106,8 +114,9 @@ async function seedReferenceData() {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [code, name, name_gu, activity, activity_gu, type, masa, paksha, tithi, fm, fd]
       );
-    } else {
-      // keep the canonical temple names in sync (masa/tithi/overrides/active untouched)
+    } else if (SYNC) {
+      // only when explicitly asked: re-sync the canonical temple names
+      // (masa/tithi/overrides/active always left untouched)
       await run(
         `UPDATE annual_events SET name = ?, name_gu = ?, activity = ?, activity_gu = ?, updated_at = datetime('now') WHERE code = ?`,
         [name, name_gu, activity, activity_gu, code]

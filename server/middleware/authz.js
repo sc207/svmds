@@ -1,7 +1,7 @@
 /* Server-side authorization — replaces the client persona guard.
    ROLE_PAGES mirrors js/people.js ROLE_META so the two never drift.
    (BACKEND_PLAN.md §5.2) */
-const { queryAll } = require('../db/connection');
+const { queryAll, queryOne } = require('../db/connection');
 
 // Every role can open the Unified Calendar; it self-restricts its categories
 // for non-admins on the client (public/js/calendar.js).
@@ -63,25 +63,33 @@ async function attachScope(req, res, next) {
     };
 
     if (!scope.isAdmin && user.id) {
+      // resolve the caller's devotee once, and match owned entities by EITHER the
+      // account (lead_id / leader_id / user_id / in_charge_id) OR the devotee
+      // link (lead_devotee_id / leader_devotee_id / …). A leader assigned only by
+      // devotee id — before their account existed — is still scoped correctly.
+      const me = await queryOne('SELECT devotee_id FROM users WHERE id = ?', [user.id]);
+      const devId = (me && me.devotee_id) || -1;   // -1 never matches a real id
+      const ids = rows => [...new Set(rows.map(r => r.id))];
+
       if (roles.includes('management_lead')) {
-        scope.teamIds = (await queryAll(
-          'SELECT id FROM teams WHERE lead_id = ? AND is_deleted = 0', [user.id]
-        )).map(r => r.id);
+        scope.teamIds = ids(await queryAll(
+          'SELECT id FROM teams WHERE is_deleted = 0 AND (lead_id = ? OR lead_devotee_id = ?)',
+          [user.id, devId]));
       }
       if (roles.includes('committee_leader')) {
-        scope.committeeIds = (await queryAll(
-          'SELECT id FROM committees WHERE leader_id = ? AND is_deleted = 0', [user.id]
-        )).map(r => r.id);
+        scope.committeeIds = ids(await queryAll(
+          'SELECT id FROM committees WHERE is_deleted = 0 AND (leader_id = ? OR leader_devotee_id = ?)',
+          [user.id, devId]));
       }
       if (roles.includes('pooja_coordinator')) {
-        scope.poojaIds = (await queryAll(
-          'SELECT pooja_id AS id FROM pooja_coordinator_links WHERE user_id = ?', [user.id]
-        )).map(r => r.id);
+        scope.poojaIds = ids(await queryAll(
+          'SELECT pooja_id AS id FROM pooja_coordinator_links WHERE user_id = ? OR devotee_id = ?',
+          [user.id, devId]));
       }
       if (roles.includes('event_incharge')) {
-        scope.eventIds = (await queryAll(
-          'SELECT id FROM events WHERE in_charge_id = ? AND is_deleted = 0', [user.id]
-        )).map(r => r.id);
+        scope.eventIds = ids(await queryAll(
+          'SELECT id FROM events WHERE is_deleted = 0 AND (in_charge_id = ? OR in_charge_devotee_id = ?)',
+          [user.id, devId]));
       }
     }
 
