@@ -317,7 +317,7 @@
             (linked && linked.city ? ' · ' + esc(linked.city) : '') + '" disabled>' +
           '<span class="mg-muted-xs">Linked to devotee ' + esc(u.devoteeId) +
             ' — edit the person\'s name / mobile / city in the People register; it updates everywhere.</span></div>'
-      : '<div class="form-group"><label class="form-label">Name</label><input class="form-input" name="name" value="' + esc(u.name || '') + '"></div>' +
+      : '<div class="form-group"><label class="form-label">Full name</label><input class="form-input" name="fullName" value="' + esc(u.name || '') + '" placeholder="e.g. Rameshbhai Rabari"></div>' +
         '<div class="form-group"><label class="form-label">Mobile</label><input class="form-input" name="mobile" maxlength="10" value="' + esc(u.mobile || '') + '"></div>' +
         '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city" value="' + esc(u.city || '') + '"></div>';
     openSheet({
@@ -333,10 +333,14 @@
     });
   };
   window.accSubmitProfile = async function (id) {
-    var f = document.getElementById('accProfileForm'); if (!f || !f.name) return;
+    var f = document.getElementById('accProfileForm');
+    var nameEl = f && f.elements['fullName'];
+    if (!nameEl) return;                              // linked account — nothing editable here
+    var name = (nameEl.value || '').trim().replace(/\s+/g, ' ');
+    if (!name) { toast('Full name is required'); return; }
     var mobile = f.mobile.value.trim();
     if (mobile && !/^[0-9]{10}$/.test(mobile)) { toast('Mobile must be 10 digits'); return; }
-    var body = { name: f.name.value.trim(), mobile: mobile, city: f.city.value.trim() };
+    var body = { name: name, mobile: mobile, city: f.city.value.trim() };
     try {
       await window.API.patch('/users/' + id, body);
       if (typeof closeSheet === 'function') closeSheet();

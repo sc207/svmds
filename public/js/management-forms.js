@@ -608,32 +608,10 @@ function openEditMember(id) {
   openModal('modalMember');
 }
 
-/** Live check — kept for any legacy callers; the devotee picker now handles
-    "reuse, don't duplicate", so this is a guarded no-op when the old field is gone. */
-function checkExistingDevotee() {
-  const el = document.getElementById('memFieldMobile');
-  if (!el) return;
-  const mobile = el.value.trim();
-  const hint = document.getElementById('memExistingHint');
-  if (!hint || MG.editingMemberId) return;
-  if (mobile.length < 10) { hint.innerHTML = ''; return; }
-
-  const found = MG.members.find(x => x.mobile === mobile);
-  if (!found) { hint.innerHTML = ''; return; }
-
-  const already = MG.members.some(x => x.mobile === mobile && x.managementId === MG.activeMgmtId);
-  if (already) {
-    hint.innerHTML = `<div class="mg-note-box mg-warn">⚠ ${esc(memberName(found))} is already a member of this Management.</div>`;
-  } else {
-    const teams = assignmentsOfDevotee(found.devoteeId).map(a => esc(a.management.name)).join(', ');
-    hint.innerHTML = `<div class="mg-note-box">✓ Existing devotee <strong>${esc(found.devoteeId)} — ${esc(memberName(found))}</strong> found.
-      Currently in: ${teams}. Adding here creates a second assignment, not a duplicate devotee.</div>`;
-    document.getElementById('memFieldFirst').value = found.firstName;
-    document.getElementById('memFieldLast').value = found.lastName;
-    document.getElementById('memFieldCity').value = found.city || '';
-    document.getElementById('memFieldState').value = found.state || '';
-  }
-}
+/* checkExistingDevotee() was the old mobile-field live lookup on the Add
+   Volunteer modal. That modal is now a devotee picker, which handles
+   "reuse, don't duplicate" itself, so the function is gone. */
+function checkExistingDevotee() {}
 
 function handleSaveMember(e) {
   e.preventDefault();

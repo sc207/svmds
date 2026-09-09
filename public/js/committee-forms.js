@@ -343,24 +343,10 @@ function openEditCmtMember(id) {
   document.getElementById('cmmExistingHint').innerHTML = '';
   openModal('modalCmtMember');
 }
-function checkExistingCmtMember() {
-  const el = document.getElementById('cmmFieldMobile');
-  if (!el) return;
-  const mobile = el.value.trim();
-  const hint = document.getElementById('cmmExistingHint');
-  if (!hint || CMT.editingMemberId || mobile.length < 10) { if (hint) hint.innerHTML = ''; return; }
-  const found = CMT.members.find(m => m.mobile === mobile);
-  if (!found) { hint.innerHTML = ''; return; }
-  const already = CMT.members.some(m => m.mobile === mobile && m.committeeId === CMT.activeCmtId);
-  if (already) hint.innerHTML = `<div class="mg-note-box mg-warn">⚠ ${esc(cmtMemberName(found))} ${window.t('cmt_already_member', 'is already on this committee.')}</div>`;
-  else {
-    hint.innerHTML = `<div class="mg-note-box">✓ ${window.t('cmt_existing_devotee', 'Existing devotee')} <strong>${esc(found.devoteeId)}</strong> — ${window.t('cmt_will_link', 'will be linked, not duplicated.')}</div>`;
-    document.getElementById('cmmFieldFirst').value = found.firstName;
-    document.getElementById('cmmFieldLast').value = found.lastName;
-    document.getElementById('cmmFieldCity').value = found.city || '';
-    document.getElementById('cmmFieldState').value = found.state || '';
-  }
-}
+/* checkExistingCmtMember() was the old mobile-field live lookup on the Add
+   Member modal. That modal is now a devotee picker, which handles reuse
+   itself, so the function is gone. */
+function checkExistingCmtMember() {}
 function handleSaveCmtMember(e) {
   e.preventDefault();
   const cid = CMT.editingMemberId ? cmtMemberById(CMT.editingMemberId).committeeId : CMT.activeCmtId;

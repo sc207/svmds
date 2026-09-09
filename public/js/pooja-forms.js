@@ -832,32 +832,10 @@ function openEditSevarthi(id) {
   openModal('modalSevarthi');
 }
 
-/** Live check — retained for legacy callers; the devotee picker now handles
-    reuse. Guarded no-op when the old mobile field is absent. */
-function checkExistingSevarthi() {
-  const el = document.getElementById('sevFieldMobile');
-  if (!el) return;
-  const mobile = el.value.trim();
-  const hint = document.getElementById('sevExistingHint');
-  if (!hint || POOJA.editingSevarthiId) return;
-  if (mobile.length < 10) { hint.innerHTML = ''; return; }
-
-  const found = POOJA.sevarthis.find(s => s.mobile === mobile);
-  if (!found) { hint.innerHTML = ''; return; }
-
-  const p = poojaById(POOJA.activePoojaId);
-  const already = p && (p.sevarthiIds || []).indexOf(found.id) !== -1;
-  if (already) {
-    hint.innerHTML = `<div class="mg-note-box mg-warn">⚠ ${esc(found.firstName + ' ' + found.lastName)} is already a sevarthi of this pooja.</div>`;
-  } else {
-    hint.innerHTML = `<div class="mg-note-box">✓ Existing devotee <strong>${esc(found.devoteeId)} — ${esc(found.firstName + ' ' + found.lastName)}</strong> found. Adding here links the same record — it will not be duplicated.</div>`;
-    document.getElementById('sevFieldFirst').value = found.firstName;
-    document.getElementById('sevFieldLast').value = found.lastName;
-    document.getElementById('sevFieldCity').value = found.city || '';
-    document.getElementById('sevFieldState').value = found.state || '';
-    document.getElementById('sevFieldCommittee').value = found.committee || '';
-  }
-}
+/* checkExistingSevarthi() was the old mobile-field live lookup. The Sevarthi
+   modal is now a devotee picker (select an existing devotee or "+ Add new
+   devotee"), which handles reuse itself, so the function is gone. */
+function checkExistingSevarthi() {}
 
 function handleSaveSevarthi(e) {
   e.preventDefault();

@@ -125,15 +125,9 @@
         </div>
 
         <div id="donorIndividualFields">
-          <div class="grid mg-2col-form">
-            <div class="form-group">
-              <label class="form-label" for="donorFieldFirst">First Name *</label>
-              <input type="text" class="form-input" id="donorFieldFirst">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="donorFieldLast">Last Name *</label>
-              <input type="text" class="form-input" id="donorFieldLast">
-            </div>
+          <div class="form-group">
+            <label class="form-label" for="donorFieldName">Full Name *</label>
+            <input type="text" class="form-input" id="donorFieldName" placeholder="e.g. Rameshbhai Rabari">
           </div>
         </div>
 
@@ -436,8 +430,7 @@ function openEditDonor(id, returnTo) {
   document.getElementById('donorFormTitle').textContent = window.t('don_edit_donor');
   document.getElementById('donorFormSubmitBtn').textContent = window.t('save');
   document.getElementById('donorFieldType').value = d.type || 'individual';
-  document.getElementById('donorFieldFirst').value = d.firstName || '';
-  document.getElementById('donorFieldLast').value = d.lastName || '';
+  document.getElementById('donorFieldName').value = ((d.firstName || '') + ' ' + (d.lastName || '')).trim();
   document.getElementById('donorFieldOrg').value = d.orgName || '';
   document.getElementById('donorFieldContact').value = d.contactPerson || '';
   document.getElementById('donorFieldMobile').value = d.mobile || '';
@@ -464,8 +457,10 @@ function checkExistingDonor() {
 function handleSaveDonor(e) {
   e.preventDefault();
   const type = document.getElementById('donorFieldType').value;
-  const first = document.getElementById('donorFieldFirst').value.trim();
-  const last = document.getElementById('donorFieldLast').value.trim();
+  const fullName = document.getElementById('donorFieldName').value.trim().replace(/\s+/g, ' ');
+  const nParts = fullName ? fullName.split(' ') : [];
+  const first = nParts.shift() || '';
+  const last = nParts.join(' ');
   const org = document.getElementById('donorFieldOrg').value.trim();
   const contact = document.getElementById('donorFieldContact').value.trim();
   const mobile = document.getElementById('donorFieldMobile').value.replace(/\D/g, '').slice(0, 10);
@@ -476,7 +471,7 @@ function handleSaveDonor(e) {
   const notes = document.getElementById('donorFieldNotes').value.trim();
 
   if (type === 'individual') {
-    if (!first || !last) { donToast(window.t('don_need_name')); return; }
+    if (!first) { donToast(window.t('don_need_name')); return; }
   } else if (!org) { donToast(window.t('don_need_org')); return; }
   if (!/^[0-9]{10}$/.test(mobile)) { donToast(window.t('don_need_mobile')); return; }
   if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) { donToast(window.t('don_bad_pan')); return; }
