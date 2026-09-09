@@ -249,42 +249,72 @@ function handleSaveCommittee(e) {
   };
   // card colour is auto-assigned in creation order — never picked by the user
   if (!CMT.editingCmtId) payload.color = nextCardColor((CMT.committees || []).length);
+  const online = !!(window.API && window.API.online);
+  const btn = document.getElementById('committeeFormSubmitBtn');
+  if (btn) btn.disabled = true;
+  const done = function () { if (btn) btn.disabled = false; CMT.editingCmtId = null; closeModal('modalCommittee'); populateCmtRoleOptions(); renderCommittee(); };
+
   if (CMT.editingCmtId) {
-    Object.assign(cmtById(CMT.editingCmtId), payload, { memberIds, members });
+    const cur = cmtById(CMT.editingCmtId);
+    const prevLeader = cur.leaderId;
+    const code = cur.code || cur.id;
+    Object.assign(cur, payload, { memberIds, members });
     materialiseCmtRoster(CMT.editingCmtId, members, leaderId);
     cmtLogActivity(CMT.editingCmtId, window.t('cmt_updated_by', 'Committee updated by') + ' ' + CMT.session.userName);
-    cmtToast(name + ' — ' + window.t('save') + ' ✓');
+    if (!online) { cmtToast(name + ' — ' + window.t('save') + ' ✓'); return done(); }
+    window.API.patch('/committees/' + code, {
+      name, samaj: payload.samaj, purpose: payload.purpose, expectedSize: payload.expectedSize,
+      status: payload.status, notes: payload.notes
+    })
+      .then(function () { return leaderId && leaderId !== prevLeader ? window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId }) : null; })
+      .then(function () { return cmtSyncRoster(code, CMT.editingCmtId, members, leaderId); })
+      .then(function () { cmtToast(name + ' — ' + window.t('save') + ' ✓'); return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); })
+      .then(done);
   } else {
     const id = cmtNextId('CMT', CMT.committees, 3);
-    CMT.committees.push(Object.assign({ id, createdDate: cmtToday(), memberIds, members }, payload));
+    const local = Object.assign({ id, createdDate: cmtToday(), memberIds, members }, payload);
+    CMT.committees.push(local);
     CMT.communication.push({ committeeId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
-    // materialise the picked people (+ the leader) into the committee's roster
     materialiseCmtRoster(id, members, leaderId);
     cmtLogActivity(id, window.t('cmt_created', 'Committee created') + ' — ' + cmtLeadName(id));
-    cmtToast(name + ' — ' + window.t('cmt_create', 'created'));
-    // best-effort DB persist: committee + leader + each member
-    if (window.API && window.API.online) {
-      window.API.post('/committees', { name, samaj: payload.samaj, purpose: payload.purpose, expectedSize: payload.expectedSize })
-        .then(function (c) {
-          var code = c && (c.code || c.id);
-          if (!code) return;
-          if (leaderId) window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId }).catch(function () {});
-          members.forEach(function (m) {
-            var p = (typeof personById === 'function') ? personById(m.id) : null;
-            if (!p) return;
-            var parts = String(p.name || '').trim().split(/\s+/);
-            window.API.post('/committees/' + code + '/members', {
-              firstName: parts.shift() || p.name, lastName: parts.join(' '),
-              mobile: (p.mobile || '').replace(/\D/g, ''), city: p.city || '', role: m.role || 'Member'
-            }).catch(function () {});
-          });
-        }).catch(function () {});
-    }
+    if (!online) { cmtToast(name + ' — ' + window.t('cmt_create', 'created')); return done(); }
+    window.API.post('/committees', { name, samaj: payload.samaj, purpose: payload.purpose, expectedSize: payload.expectedSize, status: payload.status, notes: payload.notes })
+      .then(function (c) {
+        const code = c && (c.code || c.id);
+        if (!code) throw new Error('no committee code returned');
+        local.code = code;
+        const chain = leaderId ? window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId }) : Promise.resolve();
+        return chain.then(function () { return cmtSyncRoster(code, id, members, leaderId); });
+      })
+      .then(function () { cmtToast(name + ' — ' + window.t('cmt_create', 'created')); return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); })
+      .then(done);
   }
-  CMT.editingCmtId = null;
-  closeModal('modalCommittee');
-  populateCmtRoleOptions();
-  renderCommittee();
+}
+
+/* POST every picked member to the committee (server dedupes on the devotee).
+   The leader is added by the /leader call, so skip it here. */
+function cmtSyncRoster(code, localCid, members, leaderId) {
+  const list = (members || []).filter(function (m) { return String(m.id) !== String(leaderId); });
+  return list.reduce(function (p, m) {
+    return p.then(function () {
+      const devId = cmtDevoteeIdFor(m.id, localCid);
+      if (!devId) return null;
+      return window.API.post('/committees/' + code + '/members', { devoteeId: devId, role: m.role || 'Member' })
+        .catch(function (e) { if (e && e.status === 409) return null; throw e; });
+    });
+  }, Promise.resolve());
+}
+/* Resolve a picker id to a real backend devotee id/code. A picker id is already
+   a DEV-### code; a phantom local id (CMM-…, MEM-…) is rejected so we never
+   create a stray person. */
+function cmtDevoteeIdFor(pickId, localCid) {
+  if (!pickId) return null;
+  if (/^DEV-/i.test(pickId) || /^\d+$/.test(String(pickId))) return pickId;
+  const m = CMT.members.find(function (x) { return x.id === pickId || (x.committeeId === localCid && x.devoteeId === pickId); });
+  if (m && m.devoteeId && /^DEV-/i.test(m.devoteeId)) return m.devoteeId;
+  return null;
 }
 function confirmDeleteCommittee(id) {
   const c = cmtById(id); if (!c || !isCmtAdmin()) return;
@@ -293,6 +323,7 @@ function confirmDeleteCommittee(id) {
     body: `<p>${window.t('cmt_delete_body', 'This deletes the committee, its members, meetings and attendance.')}<br><strong>${esc(c.name)}</strong></p>`,
     confirmLabel: window.t('cmt_delete', 'Delete Committee'),
     onConfirm: () => {
+      const code = c.code || c.id;
       const mtgIds = CMT.meetings.filter(m => m.committeeId === id).map(m => m.id);
       CMT.attendance = CMT.attendance.filter(a => mtgIds.indexOf(a.meetingId) === -1);
       CMT.meetings = CMT.meetings.filter(m => m.committeeId !== id);
@@ -305,6 +336,10 @@ function confirmDeleteCommittee(id) {
       populateCmtRoleOptions();
       cmtToast(c.name + ' ' + window.t('cmt_deleted', 'deleted'));
       renderCommittee();
+      if (window.API && window.API.online) {
+        window.API.del('/committees/' + code)
+          .catch(function (err) { cmtToast((err && err.message) || 'Delete failed to sync'); });
+      }
     }
   });
 }
@@ -366,21 +401,41 @@ function handleSaveCmtMember(e) {
     status: document.getElementById('cmmFieldStatus').value,
     notes: document.getElementById('cmmFieldNotes').value.trim()
   };
+  if (!pickedDevoteeId) { cmtToast('Pick a devotee from the register first.'); return; }
+  const online = !!(window.API && window.API.online);
+  const c = cmtById(cid);
+  const code = c && (c.code || c.id);
+  const btn = document.getElementById('cmtMemberFormSubmitBtn');
+  if (btn) btn.disabled = true;
+  const done = function () { if (btn) btn.disabled = false; CMT.editingMemberId = null; closeModal('modalCmtMember'); renderCommittee(); };
+
   if (CMT.editingMemberId) {
-    Object.assign(cmtMemberById(CMT.editingMemberId), fields, { devoteeId: pickedDevoteeId || cmtMemberById(CMT.editingMemberId).devoteeId });
+    const row = cmtMemberById(CMT.editingMemberId);
+    Object.assign(row, fields, { devoteeId: pickedDevoteeId || row.devoteeId });
     cmtToast((first + ' ' + last).trim() + ' — ' + window.t('save') + ' ✓');
+    if (!online || !/^CMM-/i.test(row.id)) { return done(); }
+    window.API.patch('/committees/' + code + '/members/' + row.id, {
+      firstName: first, lastName: last, mobile, city: fields.city, state: fields.state,
+      role: fields.role, status: fields.status, notes: fields.notes
+    })
+      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); })
+      .then(done);
   } else {
-    if (CMT.members.some(m => m.committeeId === cid && (m.devoteeId === pickedDevoteeId || (mobile && m.mobile === mobile)))) { cmtToast(window.t('cmt_already_member', 'already on this committee.')); return; }
-    const existing = CMT.members.find(m => m.devoteeId === pickedDevoteeId || (mobile && m.mobile === mobile));
-    const devoteeId = pickedDevoteeId || (existing ? existing.devoteeId : cmtNextId('DEV', CMT.members.map(m => ({ id: m.devoteeId })), 3));
+    if (CMT.members.some(m => m.committeeId === cid && (m.devoteeId === pickedDevoteeId || (mobile && m.mobile === mobile)))) { cmtToast(window.t('cmt_already_member', 'already on this committee.')); return done(); }
     const id = cmtNextId('CMM', CMT.members, 3);
-    CMT.members.push(Object.assign({ id, committeeId: cid, devoteeId, joinedDate: cmtToday() }, fields));
+    CMT.members.push(Object.assign({ id, committeeId: cid, devoteeId: pickedDevoteeId, joinedDate: cmtToday() }, fields));
     cmtLogActivity(cid, first + ' ' + last + ' ' + window.t('cmt_added_word', 'added'));
     cmtToast(first + ' ' + last + ' ' + window.t('cmt_added_word', 'added'));
+    if (!online) { return done(); }
+    window.API.post('/committees/' + code + '/members', { devoteeId: pickedDevoteeId, role: fields.role, notes: fields.notes })
+      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) {
+        if (err && err.status === 409) { cmtToast(window.t('cmt_already_member', 'already on this committee.')); return window.__rehydrate && window.__rehydrate(); }
+        cmtToast((err && err.message) || 'Saved locally — sync failed');
+      })
+      .then(done);
   }
-  CMT.editingMemberId = null;
-  closeModal('modalCmtMember');
-  renderCommittee();
 }
 function toggleCmtMemberStatus(id) {
   const x = cmtMemberById(id); if (!x) return;
@@ -400,12 +455,19 @@ function confirmRemoveCmtMember(id) {
     body: `<p>${window.t('cmt_remove_body', 'Removes the committee assignment and its attendance rows. The devotee record is kept.')}<br><strong>${esc(cmtMemberName(x))}</strong></p>`,
     confirmLabel: window.t('remove'),
     onConfirm: () => {
+      const c = cmtById(x.committeeId);
+      const code = c && (c.code || c.id);
+      const wasSynced = /^CMM-/i.test(x.id);
       CMT.meetings.forEach(m => { m.memberIds = (m.memberIds || []).filter(i => i !== id); });
       CMT.attendance = CMT.attendance.filter(a => a.memberId !== id);
       CMT.members = CMT.members.filter(m => m.id !== id);
       if (CMT.activeMemberId === id) CMT.activeMemberId = null;
       cmtToast(cmtMemberName(x) + ' ' + window.t('cmt_removed', 'removed'));
       renderCommittee();
+      if (window.API && window.API.online && wasSynced) {
+        window.API.del('/committees/' + code + '/members/' + id)
+          .catch(function (err) { cmtToast((err && err.message) || 'Remove failed to sync'); });
+      }
     }
   });
 }
@@ -514,11 +576,18 @@ function handleSaveCmtDraft(e) {
   const title = document.getElementById('cmtDraftFieldTitle').value.trim();
   const message = document.getElementById('cmtDraftFieldMsg').value.trim();
   if (!title || !message) { cmtToast(window.t('cmt_need_draft', 'Title and message are required.')); return; }
+  const online = !!(window.API && window.API.online);
+  const c = cmtById(CMT.activeCmtId);
+  const code = c && (c.code || c.id);
   if (CMT.editingDraftId) {
     const d = CMT.drafts.find(x => x.id === CMT.editingDraftId);
     d.title = title; d.message = message; d.updatedAt = cmtToday();
+    if (online) window.API.patch('/committees/' + code + '/drafts/' + d.id, { title, message }).catch(function () {});
   } else {
-    CMT.drafts.push({ id: cmtNextId('CDR', CMT.drafts, 3), committeeId: CMT.activeCmtId, title, message, updatedAt: cmtToday() });
+    const d = { id: cmtNextId('CDR', CMT.drafts, 3), committeeId: CMT.activeCmtId, title, message, updatedAt: cmtToday() };
+    CMT.drafts.push(d);
+    if (online) window.API.post('/committees/' + code + '/drafts', { title, message })
+      .then(function () { return window.__rehydrate && window.__rehydrate(); }).catch(function () {});
   }
   CMT.editingDraftId = null;
   closeModal('modalCmtDraft');
@@ -531,7 +600,15 @@ function confirmDeleteCmtDraft(id) {
     title: window.t('cmt_delete_draft', 'Delete Draft'), danger: true,
     body: `<p><strong>${esc(d.title)}</strong></p>`,
     confirmLabel: window.t('delete'),
-    onConfirm: () => { CMT.drafts = CMT.drafts.filter(x => x.id !== id); cmtToast(window.t('cmt_draft_deleted', 'Draft deleted.')); renderCommittee(); }
+    onConfirm: () => {
+      const c = cmtById(d.committeeId);
+      const code = c && (c.code || c.id);
+      const wasSynced = !/^CDR-/i.test(d.id);
+      CMT.drafts = CMT.drafts.filter(x => x.id !== id);
+      cmtToast(window.t('cmt_draft_deleted', 'Draft deleted.'));
+      renderCommittee();
+      if (window.API && window.API.online && wasSynced) window.API.del('/committees/' + code + '/drafts/' + id).catch(function () {});
+    }
   });
 }
 
@@ -545,11 +622,21 @@ function saveCmtSettings(e, cid) {
   c.status = document.getElementById('setCmtStatus').value;
   c.purpose = document.getElementById('setCmtPurpose').value.trim() || c.purpose;
   c.notes = document.getElementById('setCmtNotes').value.trim();
+  const prevLeader = c.leaderId;
   if (isCmtAdmin()) c.leaderId = document.getElementById('setCmtLead').value;
   cmtLogActivity(cid, window.t('cmt_updated_by', 'Committee updated by') + ' ' + CMT.session.userName);
   cmtToast(window.t('save') + ' ✓');
   populateCmtRoleOptions();
   renderCommittee();
+  if (window.API && window.API.online) {
+    const code = c.code || c.id;
+    window.API.patch('/committees/' + code, {
+      name: c.name, samaj: c.samaj, purpose: c.purpose, expectedSize: c.expectedSize, status: c.status, notes: c.notes
+    })
+      .then(function () { return (c.leaderId && c.leaderId !== prevLeader) ? window.API.post('/committees/' + code + '/leader', { devoteeId: c.leaderId }) : null; })
+      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); });
+  }
 }
 
 /* ============================================================

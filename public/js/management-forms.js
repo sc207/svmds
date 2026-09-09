@@ -480,47 +480,70 @@ function handleSaveManagement(e) {
   const dupe = MG.managements.find(m => m.name.toLowerCase() === name.toLowerCase() && m.id !== MG.editingMgmtId);
   if (dupe) { mgToast('A Management with this name already exists.'); return; }
 
+  const online = !!(window.API && window.API.online);
+  const btn = document.getElementById('mgFormSubmitBtn') || document.querySelector('#formManagement [type="submit"]');
+  if (btn) btn.disabled = true;
+  const finish = function () { if (btn) btn.disabled = false; MG.editingMgmtId = null; closeModal('modalManagement'); renderManagement(); };
+
   if (MG.editingMgmtId) {
     const m = mgmtById(MG.editingMgmtId);
-    const leadChanged = m.leadId !== leadId;
+    const prevLead = m.leadId;
+    const code = m.code || m.id;
     Object.assign(m, { name, leadId, expectedTeamSize: size, description: desc, status, notes, memberIds, members });
     materialiseMgRoster(m.id, members, leadId);
-    logActivity(m.id, leadChanged
+    logActivity(m.id, prevLead !== leadId
       ? `Management updated — Lead changed to ${leadName(m.id)}`
       : `Management details updated by ${MG.session.userName}`);
-    mgToast(`${name} updated.`);
+    if (!online) { mgToast(`${name} updated.`); return finish(); }
+    window.API.patch('/teams/' + code, { name, description: desc, expectedTeamSize: size, status, notes })
+      .then(function () { return (leadId && leadId !== prevLead) ? window.API.post('/teams/' + code + '/lead', { devoteeId: leadId }) : null; })
+      .then(function () { return mgSyncRoster(code, m.id, members, leadId); })
+      .then(function () { mgToast(`${name} updated.`); return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
+      .then(finish);
   } else {
     const id = nextId('MGMT', MG.managements, 3);
-    MG.managements.push({
+    const local = {
       id, name, leadId, memberIds, members, expectedTeamSize: size, description: desc, status, notes,
       color: (typeof nextCardColor === 'function' ? nextCardColor(MG.managements.length) : '#6B1F2A'),
       createdAt: MG.today
-    });
+    };
+    MG.managements.push(local);
     MG.communication.push({ managementId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
-    // materialise the picked people (+ the Lead) into the team roster
     materialiseMgRoster(id, members, leadId);
     logActivity(id, `Management created and assigned to ${leadById(leadId)?.name || 'Lead'}`);
-    mgToast(`${name} created.`);
-    if (window.API && window.API.online) {
-      window.API.post('/teams', { name, description: desc, expectedTeamSize: size }).then(function (t) {
-        var code = t && (t.code || t.id); if (!code) return;
-        if (leadId) window.API.post('/teams/' + code + '/lead', { devoteeId: leadId }).catch(function(){});
-        members.forEach(function (m) {
-          var p = (typeof personById === 'function') ? personById(m.id) : null;
-          if (!p) return;
-          var parts = String(p.name || '').trim().split(/\s+/);
-          window.API.post('/teams/' + code + '/members', {
-            firstName: parts.shift() || p.name, lastName: parts.join(' '),
-            mobile: (p.mobile || '').replace(/\D/g, ''), city: p.city || '', role: m.role || 'Volunteer'
-          }).catch(function(){});
-        });
-      }).catch(function(){});
-    }
+    if (!online) { mgToast(`${name} created.`); return finish(); }
+    window.API.post('/teams', { name, description: desc, expectedTeamSize: size, notes })
+      .then(function (t) {
+        const code = t && (t.code || t.id);
+        if (!code) throw new Error('no team code returned');
+        local.code = code;
+        const chain = leadId ? window.API.post('/teams/' + code + '/lead', { devoteeId: leadId }) : Promise.resolve();
+        return chain.then(function () { return mgSyncRoster(code, id, members, leadId); });
+      })
+      .then(function () { mgToast(`${name} created.`); return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
+      .then(finish);
   }
+}
 
-  MG.editingMgmtId = null;
-  closeModal('modalManagement');
-  renderManagement();
+function mgSyncRoster(code, localId, members, leadId) {
+  const list = (members || []).filter(function (m) { return String(m.id) !== String(leadId); });
+  return list.reduce(function (p, m) {
+    return p.then(function () {
+      const devId = mgDevoteeIdFor(m.id, localId);
+      if (!devId) return null;
+      return window.API.post('/teams/' + code + '/members', { devoteeId: devId, role: m.role || 'Volunteer' })
+        .catch(function (e) { if (e && e.status === 409) return null; throw e; });
+    });
+  }, Promise.resolve());
+}
+function mgDevoteeIdFor(pickId, localId) {
+  if (!pickId) return null;
+  if (/^DEV-/i.test(pickId) || /^\d+$/.test(String(pickId))) return pickId;
+  const m = MG.members.find(function (x) { return x.id === pickId || (x.managementId === localId && x.devoteeId === pickId); });
+  if (m && m.devoteeId && /^DEV-/i.test(m.devoteeId)) return m.devoteeId;
+  return null;
 }
 
 function confirmDeleteManagement(id) {
@@ -551,6 +574,9 @@ function confirmDeleteManagement(id) {
       if (MG.activeMgmtId === id) { MG.activeMgmtId = null; MG.view = 'directory'; }
       mgToast(`${m.name} deleted.`);
       renderManagement();
+      if (window.API && window.API.online) {
+        window.API.del('/teams/' + (m.code || m.id)).catch(function (err) { mgToast((err && err.message) || 'Delete failed to sync'); });
+      }
     }
   });
 }
@@ -634,32 +660,42 @@ function handleSaveMember(e) {
   if (!firstName) { mgToast('The chosen devotee has no name on record.'); return; }
   if (mobile && !/^[0-9]{10}$/.test(mobile)) { mgToast('That devotee’s mobile is not 10 digits — fix it in the register.'); return; }
 
+  if (!pickedDevoteeId) { mgToast('Pick a devotee from the register first.'); return; }
+  const online = !!(window.API && window.API.online);
+  const code = m.code || m.id;
+  const btn = document.getElementById('memFormSubmitBtn') || document.querySelector('#formMember [type="submit"]');
+  if (btn) btn.disabled = true;
+  const finish = function () { if (btn) btn.disabled = false; MG.editingMemberId = null; closeModal('modalMember'); renderManagement(); };
+
   if (MG.editingMemberId) {
     const x = memberById(MG.editingMemberId);
     Object.assign(x, { devoteeId: pickedDevoteeId || x.devoteeId, firstName, lastName, mobile, city, state, role, status, notes });
     logActivity(mgmtId, `Volunteer ${memberName(x)} details updated`);
     mgToast(`${memberName(x)} updated.`);
+    if (!online || !/^MEM-/i.test(x.id)) return finish();
+    window.API.patch('/teams/' + code + '/members/' + x.id, { firstName, lastName, mobile, city, state, role, status, notes })
+      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
+      .then(finish);
   } else {
     const dupe = MG.members.find(x => x.managementId === mgmtId &&
       (x.devoteeId === pickedDevoteeId || (mobile && x.mobile === mobile)));
-    if (dupe) { mgToast(`${memberName(dupe)} is already in this Management.`); return; }
-
-    const existing = MG.members.find(x => x.devoteeId === pickedDevoteeId || (mobile && x.mobile === mobile));
-    const devoteeId = pickedDevoteeId || (existing ? existing.devoteeId : nextId('DEV', MG.members.map(x => ({ id:x.devoteeId })), 3));
+    if (dupe) { mgToast(`${memberName(dupe)} is already in this Management.`); return finish(); }
 
     const id = nextId('MEM', MG.members, 3);
-    MG.members.push({ id, managementId: mgmtId, devoteeId, firstName, lastName, mobile,
+    MG.members.push({ id, managementId: mgmtId, devoteeId: pickedDevoteeId, firstName, lastName, mobile,
       city, state, role, status, notes, joinedDate: MG.today });
-
-    logActivity(mgmtId, existing
-      ? `${firstName} ${lastName} (${devoteeId}) added — also serves in other Managements`
-      : `New volunteer ${firstName} ${lastName} added to the team`);
+    logActivity(mgmtId, `New volunteer ${firstName} ${lastName} added to the team`);
     mgToast(`${firstName} ${lastName} added to ${m.name}.`);
+    if (!online) return finish();
+    window.API.post('/teams/' + code + '/members', { devoteeId: pickedDevoteeId, role, notes })
+      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) {
+        if (err && err.status === 409) { mgToast('Already in this Management.'); return window.__rehydrate && window.__rehydrate(); }
+        mgToast((err && err.message) || 'Saved locally — sync failed');
+      })
+      .then(finish);
   }
-
-  MG.editingMemberId = null;
-  closeModal('modalMember');
-  renderManagement();
 }
 
 function toggleMemberStatus(id) {
@@ -704,6 +740,7 @@ function confirmRemoveMember(id) {
            <p class="mg-mt-sm">Prefer <strong>Deactivate</strong> if you want to keep the history.</p>`,
     confirmLabel: 'Remove from Team',
     onConfirm: () => {
+      const wasSynced = /^MEM-/i.test(x.id);
       MG.volunteering.forEach(v => { v.memberIds = v.memberIds.filter(i => i !== id); });
       MG.attendance = MG.attendance.filter(a => a.memberId !== id);
       MG.members = MG.members.filter(mm => mm.id !== id);
@@ -711,6 +748,9 @@ function confirmRemoveMember(id) {
       logActivity(m.id, `${memberName(x)} removed from the team`);
       mgToast(`${memberName(x)} removed from ${m.name}.`);
       renderManagement();
+      if (window.API && window.API.online && wasSynced) {
+        window.API.del('/teams/' + (m.code || m.id) + '/members/' + id).catch(function (err) { mgToast((err && err.message) || 'Remove failed to sync'); });
+      }
     }
   });
 }
@@ -895,16 +935,21 @@ function handleSaveDraft(e) {
   if (!title) { mgToast('Draft Title is required.'); return; }
   if (!message) { mgToast('Message text is required.'); return; }
 
+  const online = !!(window.API && window.API.online);
+  const teamCode = function (mid) { const m = mgmtById(mid); return m && (m.code || m.id); };
   if (MG.editingDraftId) {
     const d = MG.drafts.find(x => x.id === MG.editingDraftId);
     d.title = title; d.message = message; d.updatedAt = MG.today;
     logActivity(d.managementId, `Message draft "${title}" updated`);
     mgToast('Draft saved.');
+    if (online && !/^DRF-/i.test(d.id)) window.API.patch('/teams/' + teamCode(d.managementId) + '/drafts/' + d.id, { title, message }).catch(function () {});
   } else {
     const id = nextId('DRF', MG.drafts, 3);
     MG.drafts.push({ id, managementId: MG.activeMgmtId, title, message, updatedAt: MG.today });
     logActivity(MG.activeMgmtId, `Message draft "${title}" created`);
     mgToast('Draft created.');
+    if (online) window.API.post('/teams/' + teamCode(MG.activeMgmtId) + '/drafts', { title, message })
+      .then(function () { return window.__rehydrate && window.__rehydrate(); }).catch(function () {});
   }
   MG.editingDraftId = null;
   closeModal('modalDraft');
@@ -930,10 +975,13 @@ function confirmDeleteDraft(id) {
     body: `<p>Delete the draft <strong>${esc(d.title)}</strong>?</p>`,
     confirmLabel: 'Delete Draft',
     onConfirm: () => {
+      const wasSynced = !/^DRF-/i.test(d.id);
+      const m = mgmtById(d.managementId);
       MG.drafts = MG.drafts.filter(x => x.id !== id);
       logActivity(d.managementId, `Message draft "${d.title}" deleted`);
       mgToast('Draft deleted.');
       renderManagement();
+      if (window.API && window.API.online && wasSynced && m) window.API.del('/teams/' + (m.code || m.id) + '/drafts/' + id).catch(function () {});
     }
   });
 }

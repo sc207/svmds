@@ -561,6 +561,14 @@ function saveCmtComm(e, cid, which) {
   if (which === 'group') { comm.groupName = document.getElementById('cmtGroupName').value.trim(); comm.groupLink = document.getElementById('cmtGroupLink').value.trim(); }
   else { comm.broadcastName = document.getElementById('cmtBroadcastName').value.trim(); comm.broadcastLink = document.getElementById('cmtBroadcastLink').value.trim(); }
   cmtToast(window.t('save') + ' ✓'); renderCommittee();
+  if (window.API && window.API.online) {
+    const c = cmtById(cid);
+    const code = c && (c.code || c.id);
+    if (code) window.API.put('/committees/' + code + '/communication', {
+      groupName: comm.groupName, groupLink: comm.groupLink,
+      broadcastName: comm.broadcastName, broadcastLink: comm.broadcastLink
+    }).catch(function () {});
+  }
 }
 function openWaLink(link) { if (!link) { cmtToast(window.t('cmt_no_link', 'No link saved yet.')); return; } window.open(link, '_blank', 'noopener'); }
 function sendCmtDraft(id) {

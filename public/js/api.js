@@ -37,12 +37,54 @@ window.API = (function () {
     return data;
   }
 
+  /* In-flight de-dupe: a double-submit (or a re-render firing the same save
+     twice) collapses to ONE network call while the first is pending. Keyed on
+     method + path + body. GETs are not de-duped here (cheap, and callers may
+     want a fresh read). */
+  var inflight = {};
+  function keyed(method, path, body) {
+    return method + ' ' + path + ' ' + (body === undefined ? '' : JSON.stringify(body));
+  }
+  function dedup(method, path, body) {
+    var k = keyed(method, path, body);
+    if (inflight[k]) return inflight[k];
+    var p = req(method, path, body).then(
+      function (v) { delete inflight[k]; return v; },
+      function (e) { delete inflight[k]; throw e; }
+    );
+    inflight[k] = p;
+    return p;
+  }
+
   return {
     get:   function (p) { return req('GET', p); },
-    post:  function (p, b) { return req('POST', p, b === undefined ? {} : b); },
-    put:   function (p, b) { return req('PUT', p, b === undefined ? {} : b); },
-    patch: function (p, b) { return req('PATCH', p, b === undefined ? {} : b); },
-    del:   function (p) { return req('DELETE', p); },
+    post:  function (p, b) { return dedup('POST', p, b === undefined ? {} : b); },
+    put:   function (p, b) { return dedup('PUT', p, b === undefined ? {} : b); },
+    patch: function (p, b) { return dedup('PATCH', p, b === undefined ? {} : b); },
+    del:   function (p) { return dedup('DELETE', p); },
+
+    /* Fire a create, then copy the server's authoritative fields back onto the
+       optimistic local row. `pick` names the fields to copy (server DTO key →
+       local key, or a plain string when they match). Returns the server DTO.
+       On failure the local row is marked `_syncFailed` and the error re-thrown
+       so the caller can toast + offer a retry. */
+    postReconcile: function (path, body, localRow, pick) {
+      return dedup('POST', path, body === undefined ? {} : body).then(function (dto) {
+        if (localRow && dto) {
+          localRow.id = dto.code || dto.id || localRow.id;
+          localRow._syncFailed = false;
+          (pick || []).forEach(function (f) {
+            var from = f, to = f;
+            if (f && typeof f === 'object') { from = f.from; to = f.to; }
+            if (dto[from] !== undefined && dto[from] !== null) localRow[to] = dto[from];
+          });
+        }
+        return dto;
+      }, function (err) {
+        if (localRow) localRow._syncFailed = true;
+        throw err;
+      });
+    },
 
     /* Populated by the inline auth gate in index.html (may be null in demo mode). */
     session: (typeof window !== 'undefined' && window.__SESSION) || null,

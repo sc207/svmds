@@ -122,6 +122,8 @@ router.delete('/:id', adminTier, async (req, res, next) => {
     const row = await committeeByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Committee not found' });
     await run(`UPDATE committees SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [row.id]);
+    await run(`UPDATE committee_members SET is_deleted = 1, updated_at = datetime('now') WHERE committee_id = ? AND is_deleted = 0`, [row.id]);
+    await run(`UPDATE meetings SET is_deleted = 1 WHERE committee_id = ? AND is_deleted = 0`, [row.id]);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',
       action: 'DELETE', entityType: 'committee', entityId: row.code });
     res.json({ ok: true });

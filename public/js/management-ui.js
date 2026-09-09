@@ -1565,6 +1565,13 @@ function saveCommunication(e, mgmtId, which) {
     mgToast('Broadcast saved.');
   }
   renderManagement();
+  if (window.API && window.API.online) {
+    const m = mgmtById(mgmtId);
+    const code = m && (m.code || m.id);
+    if (code) window.API.put('/teams/' + code + '/communication', {
+      groupName: c.groupName, groupLink: c.groupLink, broadcastName: c.broadcastName, broadcastLink: c.broadcastLink
+    }).catch(function () {});
+  }
 }
 
 function openWhatsAppLink(link) {
@@ -1687,11 +1694,19 @@ function saveManagementSettings(e, mgmtId) {
   m.description = desc;
   m.status = document.getElementById('setMgStatus').value;
   m.notes = document.getElementById('setMgNotes').value.trim();
+  const prevLead = m.leadId;
   if (isAdmin()) m.leadId = document.getElementById('setMgLead').value;
 
   logActivity(m.id, `Management settings updated by ${MG.session.userName}`);
   mgToast('Management settings saved.');
   renderManagement();
+  if (window.API && window.API.online) {
+    const code = m.code || m.id;
+    window.API.patch('/teams/' + code, { name: m.name, description: m.description, expectedTeamSize: m.expectedTeamSize, status: m.status, notes: m.notes })
+      .then(function () { return (m.leadId && m.leadId !== prevLead) ? window.API.post('/teams/' + code + '/lead', { devoteeId: m.leadId }) : null; })
+      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); });
+  }
 }
 
 /* ------------------------------------------------------------
