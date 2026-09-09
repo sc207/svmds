@@ -192,7 +192,13 @@ function cmtAddMemberPerson() {
   const keep = checkedPeople('cmtMemberPicker', 'cmt-mem-check');
   openDevoteeSheet({
     title: 'Add a new Member (devotee)',
-    onSaved: function (dev) { keep.push({ id: dev.id, role: 'Member' }); cmtRenderMemberPicker(keep); }
+    extraFields: [
+      { name: 'role', label: 'Role in this committee', type: 'select', options: CMT_MEMBER_ROLES, value: 'Member' }
+    ],
+    onSaved: function (dev, extras) {
+      keep.push({ id: dev.id, role: (extras && extras.role) || 'Member' });
+      cmtRenderMemberPicker(keep);
+    }
   });
 }
 

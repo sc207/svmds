@@ -70,10 +70,32 @@
     });
   };
 
-  /* The reusable "Add a new devotee" sheet. opts:
-       { title?, prefillName?, roleHint?, onSaved(devotee) }
-     Dedupes by mobile against the register; persists to /api/devotees when
-     online, else pushes into state.devotees so it is immediately selectable. */
+  /* One field of markup for an optional extra input.
+     f = { name, label, type:'text'|'textarea'|'select', options?, placeholder?, value? } */
+  function extraFieldHTML(fld) {
+    var nm = 'x_' + fld.name, lbl = esc(fld.label || fld.name), val = esc(fld.value || '');
+    if (fld.type === 'select') {
+      return '<div class="form-group" style="grid-column:1/-1"><label class="form-label">' + lbl + '</label>' +
+        '<select class="form-select" name="' + nm + '">' + (fld.options || []).map(function (o) {
+          return '<option value="' + esc(o) + '"' + (o === fld.value ? ' selected' : '') + '>' + esc(o) + '</option>';
+        }).join('') + '</select></div>';
+    }
+    if (fld.type === 'textarea') {
+      return '<div class="form-group" style="grid-column:1/-1"><label class="form-label">' + lbl + '</label>' +
+        '<textarea class="form-input mg-textarea" name="' + nm + '" rows="2" placeholder="' + esc(fld.placeholder || '') + '">' + val + '</textarea></div>';
+    }
+    return '<div class="form-group"><label class="form-label">' + lbl + '</label>' +
+      '<input class="form-input" name="' + nm + '" value="' + val + '" placeholder="' + esc(fld.placeholder || '') + '"></div>';
+  }
+
+  /* The reusable "Add a new devotee" sheet.
+       opts = { title?, prefillName?,
+                extraFields?: [ {name,label,type,options,placeholder,value} ],
+                onSaved(devotee, extras) }
+     Identity fields (name / contact / city / state / samaj) go to the shared
+     devotees record; extraFields are role/context inputs the caller attaches
+     to the link (committee-member role, sevarthi notes, guest title, …).
+     Dedupes by mobile; persists to /api/devotees when online. */
   window.openDevoteeSheet = function (opts) {
     opts = opts || {};
     if (typeof openSheet !== 'function') { if (typeof showToast === 'function') showToast('UI not ready'); return; }
@@ -82,6 +104,8 @@
     var pl = nameParts.join(' ');
     var commOpts = (typeof committeeNames === 'function' ? committeeNames() : [])
       .map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join('');
+    window.__dpExtra = Array.isArray(opts.extraFields) ? opts.extraFields : [];
+    var extraHTML = window.__dpExtra.map(extraFieldHTML).join('');
 
     openSheet({
       title: opts.title || 'Add a new person (devotee)',
@@ -99,6 +123,7 @@
           '<div class="form-group"><label class="form-label">Committee / Samaj</label>' +
             '<input class="form-input" name="samaj" list="dpCommList" placeholder="which committee">' +
             '<datalist id="dpCommList">' + commOpts + '</datalist></div>' +
+          extraHTML +
         '</form>',
       footer:
         '<button class="btn btn-outline" onclick="closeSheet()">Cancel</button>' +
@@ -134,6 +159,11 @@
     var city = f.city.value.trim();
     var st = f.state.value.trim() || 'Gujarat';   // NOT `state` — that's the global store
     var samaj = f.samaj.value.trim();
+    var extras = {};
+    (window.__dpExtra || []).forEach(function (fld) {
+      var el = f.elements['x_' + fld.name];
+      if (el) extras[fld.name] = (el.value || '').trim();
+    });
 
     // dedupe against the register
     var existing = window.allPeople().filter(function (p) { return digits(p.mobile) === mobile; })[0];
@@ -166,7 +196,7 @@
       try { if (typeof syncEntitySelects === 'function') syncEntitySelects(); } catch (e) {}
       if (typeof closeSheet === 'function') closeSheet();
       toast(dev.name + ' saved.');
-      try { (window.__dpOnSaved || function () {})(dev); } catch (e) {}
+      try { (window.__dpOnSaved || function () {})(dev, extras); } catch (e) {}
     }
     function toast(m) { if (typeof showToast === 'function') showToast(m); else if (typeof pjToast === 'function') pjToast(m); }
   };

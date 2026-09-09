@@ -442,7 +442,13 @@ function mgAddMemberPerson() {
   const keep = checkedPeople('mgMemberPicker', 'mg-mem-check');
   openDevoteeSheet({
     title: 'Add a new Team member (devotee)',
-    onSaved: function (dev) { keep.push({ id: dev.id, role: 'Volunteer' }); mgRenderMemberPicker(keep); }
+    extraFields: [
+      { name: 'role', label: 'Role in this team', type: 'select', options: MG_MEMBER_ROLES, value: 'Volunteer' }
+    ],
+    onSaved: function (dev, extras) {
+      keep.push({ id: dev.id, role: (extras && extras.role) || 'Volunteer' });
+      mgRenderMemberPicker(keep);
+    }
   });
 }
 
