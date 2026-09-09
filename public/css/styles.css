@@ -3600,6 +3600,11 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
    ============================================================ */
 body.annc-open { overflow: hidden; }
 
+/* the overlay defaults to hidden in the markup; `el.hidden` is the only
+   show/hide switch. A bare `.annc-overlay { display: grid }` would out-rank the
+   UA `[hidden]` rule, so pin it back down. */
+.annc-overlay[hidden] { display: none !important; }
+
 .annc-overlay {
   position: fixed; inset: 0; z-index: 100000;
   display: grid; place-items: center;

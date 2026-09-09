@@ -63,28 +63,13 @@
     }
   }
 
-  // put the dim veil up immediately (empty) so the dashboard never flashes while
-  // /api/reminders is still in flight; fill or drop it when the answer arrives.
-  function preveil() {
-    overlay = document.getElementById('openingAnnounce');
-    listEl = document.getElementById('anncList');
-    if (!overlay || !listEl) return false;
-    listEl.innerHTML = '<div class="annc-loading" aria-hidden="true"></div>';
-    document.body.classList.add('annc-open');
-    overlay.hidden = false;
-    return true;
-  }
-  function dropveil() {
-    if (overlay && !shownKeys.length) { overlay.hidden = true; document.body.classList.remove('annc-open'); }
-  }
-
   function open(data) {
     overlay = document.getElementById('openingAnnounce');
     listEl = document.getElementById('anncList');
     if (!overlay || !listEl) return;
 
     var items = (data.items || []).filter(function (it) { return !it.seenToday; });
-    if (!items.length) { dropveil(); return; }
+    if (!items.length) return;                 // nothing to announce → never show the overlay
     shownKeys = items.map(function (it) { return it.key; });
 
     var kicker = document.getElementById('anncKicker');
@@ -116,27 +101,35 @@
     try { localStorage.setItem(LS_KEY, data.today); } catch (e) {}
   }
 
-  // fire the request straight away — while the splash is still up, so the
-  // splash → announcement transition is seamless and the dashboard never flashes.
-  var pending = window.API.get('/reminders').catch(function () { return null; });
+  // Ask the server what (if anything) to announce today. Fire it early so the
+  // answer is usually ready by the time the app has painted — but NOTHING is
+  // shown on screen until we KNOW there is a real, unseen item. A slow, failed
+  // or empty response simply means no announcement: the overlay stays hidden and
+  // the user goes straight to the dashboard.
+  var pending = Promise.race([
+    window.API.get('/reminders').catch(function () { return null; }),
+    new Promise(function (res) { setTimeout(function () { res(null); }, 8000); }),
+  ]);
 
-  function run() {
-    var veiled = false;
-    // don't pre-veil if this device already did the announcement today
-    var already = false;
-    try { already = localStorage.getItem(LS_KEY) === (window.MG && window.MG.today); } catch (e) {}
-    if (!already) veiled = preveil();
+  function maybeShow() {
+    // this device already did today's announcement → nothing to do
+    try {
+      if (localStorage.getItem(LS_KEY) === (window.MG && window.MG.today)) return;
+    } catch (e) {}
 
     pending.then(function (data) {
-      if (!data || !data.showOpening) { if (veiled) dropveil(); return; }
-      var seenHere = false;
-      try { seenHere = localStorage.getItem(LS_KEY) === data.today; } catch (e) {}
-      if (seenHere) { if (veiled) dropveil(); return; }   // same device already did it today
-      if (!veiled && !preveil()) return;
-      open(data);
-    }, function () { if (veiled) dropveil(); });
+      if (!data || !data.showOpening) return;                     // nothing to announce
+      try { if (localStorage.getItem(LS_KEY) === data.today) return; } catch (e) {}
+      var unseen = (data.items || []).filter(function (it) { return !it.seenToday; });
+      if (!unseen.length) return;                                 // nothing unseen → stay hidden
+      open(data);                                                 // real content → show it over the dashboard
+    }).catch(function () { /* never block the dashboard */ });
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
+  // Only after the app has fully loaded and painted the dashboard. Then, if
+  // there is an announcement, it appears on top; closing it returns to the
+  // dashboard that is already there.
+  function boot() { setTimeout(maybeShow, 150); }
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
 })();
