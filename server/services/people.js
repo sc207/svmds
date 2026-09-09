@@ -48,8 +48,20 @@ async function ensureDevotee({ firstName, lastName, name, mobile, city, state, s
   if (hit) return backfill(hit);
   if (!nm && !mob) return null;   // nothing to identify the person by
 
-  // create — if a partial UNIQUE index (added by repair.js) rejects a race, the
-  // row it collided with now exists, so re-select and reuse it.
+  // a person that was soft-deleted (only possible once nothing referenced them)
+  // and is now being re-added → revive the SAME devotee id, don't mint a new one.
+  const dead = mob
+    ? await queryOne('SELECT * FROM devotees WHERE mobile = ? AND is_deleted = 1 LIMIT 1', [mob])
+    : (nm && cty
+        ? await queryOne('SELECT * FROM devotees WHERE lower(trim(name)) = lower(trim(?)) AND lower(trim(city)) = lower(trim(?)) AND is_deleted = 1 LIMIT 1', [nm, cty])
+        : null);
+  if (dead) {
+    await run(`UPDATE devotees SET is_deleted = 0, status = 'active', updated_at = datetime('now') WHERE id = ?`, [dead.id]);
+    return backfill({ ...dead, is_deleted: 0 });
+  }
+
+  // create — if a partial UNIQUE index rejects a race, the row it collided with
+  // now exists, so re-select and reuse it.
   try {
     const code = await nextCode('devotee');
     const r = await run(

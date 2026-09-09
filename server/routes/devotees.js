@@ -92,6 +92,20 @@ router.post('/', async (req, res, next) => {
       return res.status(200).json({ ...mapDevotee(row), _deduped: true });
     }
 
+    // a person soft-deleted earlier (only possible once nothing referenced them)
+    // and re-added → revive the SAME id, never mint a new devotee.
+    const dead = mobile
+      ? await queryOne('SELECT * FROM devotees WHERE mobile = ? AND is_deleted = 1 LIMIT 1', [mobile])
+      : (name && city
+          ? await queryOne(`SELECT * FROM devotees WHERE lower(trim(name)) = lower(trim(?)) AND lower(trim(city)) = lower(trim(?)) AND is_deleted = 1 LIMIT 1`, [name, city])
+          : null);
+    if (dead) {
+      await run(`UPDATE devotees SET is_deleted = 0, status = ?, updated_at = datetime('now') WHERE id = ?`,
+        [normStatus(req.body.status), dead.id]);
+      const row = await findByIdOrCode(dead.id);
+      return res.status(200).json({ ...mapDevotee(row), _revived: true });
+    }
+
     const code = await nextCode('devotee');
     let newId;
     try {
@@ -144,7 +158,12 @@ router.patch('/:id', async (req, res, next) => {
 
     sets.push(`updated_at = datetime('now')`);
     args.push(row.id);
-    await run(`UPDATE devotees SET ${sets.join(', ')} WHERE id = ?`, args);
+    try {
+      await run(`UPDATE devotees SET ${sets.join(', ')} WHERE id = ?`, args);
+    } catch (e) {
+      // ux_devotees_mobile — a concurrent edit already claimed that number
+      return res.status(409).json({ error: 'Another devotee already has that mobile' });
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Devotees',
       action: 'UPDATE', entityType: 'devotee', entityId: row.code, details: req.body });
 

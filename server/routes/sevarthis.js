@@ -63,7 +63,11 @@ router.patch('/:id', async (req, res, next) => {
     if (row.devotee_id) {
       if (newMobile && newMobile.length === 10) {
         const other = await queryOne('SELECT id FROM devotees WHERE mobile = ? AND is_deleted = 0', [newMobile]);
-        if (other && other.id !== row.devotee_id) { sets.push('devotee_id = ?'); args.push(other.id); }
+        // only repoint if that devotee isn't already the person behind another sevarthi
+        if (other && other.id !== row.devotee_id) {
+          const taken = await queryOne('SELECT id FROM sevarthis WHERE devotee_id = ? AND is_deleted = 0 AND id != ?', [other.id, row.id]);
+          if (!taken) { sets.push('devotee_id = ?'); args.push(other.id); }
+        }
       }
       const nm = `${req.body.firstName != null ? req.body.firstName : row.first_name} ${req.body.lastName != null ? req.body.lastName : row.last_name}`.trim();
       const ds = [], da = [];
@@ -85,7 +89,13 @@ router.patch('/:id', async (req, res, next) => {
     }
 
     args.push(row.id);
-    await run(`UPDATE sevarthis SET ${sets.join(', ')} WHERE id = ?`, args);
+    try {
+      await run(`UPDATE sevarthis SET ${sets.join(', ')} WHERE id = ?`, args);
+    } catch (e) {
+      // a UNIQUE index (mobile / devotee) rejected the edit — another sevarthi
+      // already represents this person / number. Report it rather than 500.
+      return res.status(409).json({ error: 'Another sevarthi record already has that mobile / devotee' });
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
       action: 'UPDATE', entityType: 'sevarthi', entityId: row.code });
     res.json(mapSevarthi(await queryOne('SELECT * FROM sevarthis WHERE id = ?', [row.id])));

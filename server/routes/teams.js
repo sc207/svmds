@@ -125,9 +125,11 @@ router.delete('/:id', adminTier, async (req, res, next) => {
   try {
     const row = await teamByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Team not found' });
+    const sess = await queryAll('SELECT id FROM volunteering_sessions WHERE team_id = ?', [row.id]);
     await run(`UPDATE teams SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [row.id]);
     await run(`UPDATE team_members SET is_deleted = 1, updated_at = datetime('now') WHERE team_id = ? AND is_deleted = 0`, [row.id]);
     await run(`UPDATE volunteering_sessions SET is_deleted = 1 WHERE team_id = ? AND is_deleted = 0`, [row.id]);
+    for (const s of sess) await run(`DELETE FROM attendance WHERE context_type = 'volunteering' AND context_id = ?`, [String(s.id)]);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
       action: 'DELETE', entityType: 'team', entityId: row.code });
     res.json({ ok: true });
@@ -296,8 +298,18 @@ router.delete('/:id/members/:mid', async (req, res, next) => {
     const row = await teamByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Team not found' });
     if (!leadCanManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    await run(`UPDATE team_members SET is_deleted = 1, updated_at = datetime('now') WHERE (id = ? OR code = ?) AND team_id = ?`,
+    const m = await queryOne('SELECT id FROM team_members WHERE (id = ? OR code = ?) AND team_id = ?',
       [parseInt(req.params.mid, 10) || -1, req.params.mid, row.id]);
+    if (m) {
+      await run(`UPDATE team_members SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [m.id]);
+      const sess = await queryAll('SELECT id, member_ids_json FROM volunteering_sessions WHERE team_id = ?', [row.id]);
+      for (const s of sess) {
+        let ids; try { ids = JSON.parse(s.member_ids_json || '[]'); } catch (_) { ids = []; }
+        const kept = ids.filter(x => String(x) !== String(m.id));
+        if (kept.length !== ids.length) await run('UPDATE volunteering_sessions SET member_ids_json = ? WHERE id = ?', [JSON.stringify(kept), s.id]);
+        await run(`DELETE FROM attendance WHERE context_type = 'volunteering' AND context_id = ? AND member_id = ?`, [String(s.id), m.id]);
+      }
+    }
     res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });
@@ -360,8 +372,11 @@ router.delete('/:id/sessions/:sid', async (req, res, next) => {
     const row = await teamByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Team not found' });
     if (!leadCanManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    await run('UPDATE volunteering_sessions SET is_deleted = 1 WHERE (id = ? OR code = ?) AND team_id = ?',
-      [req.params.sid, req.params.sid, row.id]);
+    const s = await queryOne('SELECT id FROM volunteering_sessions WHERE (id = ? OR code = ?) AND team_id = ?', [req.params.sid, req.params.sid, row.id]);
+    if (s) {
+      await run('UPDATE volunteering_sessions SET is_deleted = 1 WHERE id = ?', [s.id]);
+      await run(`DELETE FROM attendance WHERE context_type = 'volunteering' AND context_id = ?`, [String(s.id)]);
+    }
     res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });

@@ -121,9 +121,11 @@ router.delete('/:id', adminTier, async (req, res, next) => {
   try {
     const row = await committeeByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Committee not found' });
+    const meets = await queryAll('SELECT id FROM meetings WHERE committee_id = ?', [row.id]);
     await run(`UPDATE committees SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [row.id]);
     await run(`UPDATE committee_members SET is_deleted = 1, updated_at = datetime('now') WHERE committee_id = ? AND is_deleted = 0`, [row.id]);
     await run(`UPDATE meetings SET is_deleted = 1 WHERE committee_id = ? AND is_deleted = 0`, [row.id]);
+    for (const mt of meets) await run(`DELETE FROM attendance WHERE context_type = 'meeting' AND context_id = ?`, [String(mt.id)]);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',
       action: 'DELETE', entityType: 'committee', entityId: row.code });
     res.json({ ok: true });
@@ -300,8 +302,19 @@ router.delete('/:id/members/:mid', async (req, res, next) => {
     const row = await committeeByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Committee not found' });
     if (!leaderCanManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    await run(`UPDATE committee_members SET is_deleted = 1, updated_at = datetime('now') WHERE (id = ? OR code = ?) AND committee_id = ?`,
+    const m = await queryOne('SELECT id FROM committee_members WHERE (id = ? OR code = ?) AND committee_id = ?',
       [parseInt(req.params.mid, 10) || -1, req.params.mid, row.id]);
+    if (m) {
+      await run(`UPDATE committee_members SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [m.id]);
+      // no orphan attendance / stale meeting rosters for a removed member
+      const meets = await queryAll('SELECT id, member_ids_json FROM meetings WHERE committee_id = ?', [row.id]);
+      for (const mt of meets) {
+        let ids; try { ids = JSON.parse(mt.member_ids_json || '[]'); } catch (_) { ids = []; }
+        const kept = ids.filter(x => String(x) !== String(m.id));
+        if (kept.length !== ids.length) await run('UPDATE meetings SET member_ids_json = ? WHERE id = ?', [JSON.stringify(kept), mt.id]);
+        await run(`DELETE FROM attendance WHERE context_type = 'meeting' AND context_id = ? AND member_id = ?`, [String(mt.id), m.id]);
+      }
+    }
     res.json(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });
@@ -363,8 +376,11 @@ router.delete('/:id/meetings/:mid', async (req, res, next) => {
     const row = await committeeByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Committee not found' });
     if (!leaderCanManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    await run('UPDATE meetings SET is_deleted = 1 WHERE (id = ? OR code = ?) AND committee_id = ?',
-      [req.params.mid, req.params.mid, row.id]);
+    const mt = await queryOne('SELECT id FROM meetings WHERE (id = ? OR code = ?) AND committee_id = ?', [req.params.mid, req.params.mid, row.id]);
+    if (mt) {
+      await run('UPDATE meetings SET is_deleted = 1 WHERE id = ?', [mt.id]);
+      await run(`DELETE FROM attendance WHERE context_type = 'meeting' AND context_id = ?`, [String(mt.id)]);
+    }
     res.json(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });
