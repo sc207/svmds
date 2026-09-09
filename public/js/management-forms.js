@@ -429,6 +429,32 @@ function mgAddMemberPerson() {
   });
 }
 
+/* Turn the create-form's picked people (+ the Lead) into real MG.members
+   rows so the workspace Volunteers tab and team counts are correct. Idempotent. */
+function materialiseMgRoster(mgmtId, members, leadId) {
+  const roster = (members || []).slice();
+  if (leadId && !roster.some(function (x) { return String(x.id) === String(leadId); })) {
+    roster.unshift({ id: leadId, role: 'Lead' });
+  }
+  roster.forEach(function (mm) {
+    const p = (typeof personById === 'function') ? personById(mm.id) : null;
+    const nm = p ? p.name : String(mm.id);
+    const parts = String(nm).trim().split(/\s+/);
+    const mobile = (p && p.mobile) ? String(p.mobile).replace(/\D/g, '') : '';
+    const exists = MG.members.some(function (x) {
+      return x.managementId === mgmtId && (x.devoteeId === mm.id || (mobile && x.mobile === mobile));
+    });
+    if (exists) return;
+    MG.members.push({
+      id: nextId('MEM', MG.members, 3),
+      managementId: mgmtId, devoteeId: mm.id,
+      firstName: parts.shift() || nm, lastName: parts.join(' '),
+      mobile: mobile, city: (p && p.city) || '', state: (p && p.state) || 'Gujarat',
+      role: mm.role || 'Volunteer', status: 'active', notes: '', joinedDate: MG.today
+    });
+  });
+}
+
 function handleSaveManagement(e) {
   e.preventDefault();
 
@@ -452,7 +478,8 @@ function handleSaveManagement(e) {
   if (MG.editingMgmtId) {
     const m = mgmtById(MG.editingMgmtId);
     const leadChanged = m.leadId !== leadId;
-    Object.assign(m, { name, leadId, expectedTeamSize: size, description: desc, status, notes });
+    Object.assign(m, { name, leadId, expectedTeamSize: size, description: desc, status, notes, memberIds, members });
+    materialiseMgRoster(m.id, members, leadId);
     logActivity(m.id, leadChanged
       ? `Management updated — Lead changed to ${leadName(m.id)}`
       : `Management details updated by ${MG.session.userName}`);
@@ -465,6 +492,8 @@ function handleSaveManagement(e) {
       createdAt: MG.today
     });
     MG.communication.push({ managementId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
+    // materialise the picked people (+ the Lead) into the team roster
+    materialiseMgRoster(id, members, leadId);
     logActivity(id, `Management created and assigned to ${leadById(leadId)?.name || 'Lead'}`);
     mgToast(`${name} created.`);
     if (window.API && window.API.online) {

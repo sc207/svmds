@@ -198,6 +198,32 @@ function cmtAddMemberPerson() {
   });
 }
 
+/* Turn the create-form's picked people (+ the leader) into real CMT.members
+   rows so the workspace Members tab and counts are correct. Idempotent. */
+function materialiseCmtRoster(committeeId, members, leaderId) {
+  const roster = (members || []).slice();
+  if (leaderId && !roster.some(function (x) { return String(x.id) === String(leaderId); })) {
+    roster.unshift({ id: leaderId, role: 'Leader' });
+  }
+  roster.forEach(function (mm) {
+    const p = (typeof personById === 'function') ? personById(mm.id) : null;
+    const nm = p ? p.name : String(mm.id);
+    const parts = String(nm).trim().split(/\s+/);
+    const mobile = (p && p.mobile) ? String(p.mobile).replace(/\D/g, '') : '';
+    const exists = CMT.members.some(function (x) {
+      return x.committeeId === committeeId && (x.devoteeId === mm.id || (mobile && x.mobile === mobile));
+    });
+    if (exists) return;
+    CMT.members.push({
+      id: cmtNextId('CMM', CMT.members, 3),
+      committeeId: committeeId, devoteeId: mm.id,
+      firstName: parts.shift() || nm, lastName: parts.join(' '),
+      mobile: mobile, city: (p && p.city) || '', state: (p && p.state) || 'Gujarat',
+      role: mm.role || 'Member', status: 'active', notes: '', joinedDate: cmtToday()
+    });
+  });
+}
+
 function handleSaveCommittee(e) {
   e.preventDefault();
   const name = document.getElementById('cmtFieldName').value.trim();
@@ -218,13 +244,16 @@ function handleSaveCommittee(e) {
   // card colour is auto-assigned in creation order — never picked by the user
   if (!CMT.editingCmtId) payload.color = nextCardColor((CMT.committees || []).length);
   if (CMT.editingCmtId) {
-    Object.assign(cmtById(CMT.editingCmtId), payload);
+    Object.assign(cmtById(CMT.editingCmtId), payload, { memberIds, members });
+    materialiseCmtRoster(CMT.editingCmtId, members, leaderId);
     cmtLogActivity(CMT.editingCmtId, window.t('cmt_updated_by', 'Committee updated by') + ' ' + CMT.session.userName);
     cmtToast(name + ' — ' + window.t('save') + ' ✓');
   } else {
     const id = cmtNextId('CMT', CMT.committees, 3);
     CMT.committees.push(Object.assign({ id, createdDate: cmtToday(), memberIds, members }, payload));
     CMT.communication.push({ committeeId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
+    // materialise the picked people (+ the leader) into the committee's roster
+    materialiseCmtRoster(id, members, leaderId);
     cmtLogActivity(id, window.t('cmt_created', 'Committee created') + ' — ' + cmtLeadName(id));
     cmtToast(name + ' — ' + window.t('cmt_create', 'created'));
     // best-effort DB persist: committee + leader + each member

@@ -680,7 +680,7 @@ function openAddGuest(returnTo) {
   openModal('modalGuest');
 }
 function openEditGuest(id, returnTo) {
-  const x = personById(id);
+  const x = pjGuestById(id);
   if (!x) return;
   _guestReturnTo = returnTo || null;
   POOJA.editingGuestId = id;
@@ -712,7 +712,7 @@ function handleSaveGuest(e) {
   const wasEditing = !!POOJA.editingGuestId;
   let savedId;
   if (wasEditing) {
-    const x = personById(POOJA.editingGuestId);
+    const x = pjGuestById(POOJA.editingGuestId);
     Object.assign(x, { devoteeId: pickedDevoteeId || x.devoteeId, firstName: first, lastName: last, role, mobile, city, state, notes });
     savedId = x.id;
     pjToast(`${personName(x)} updated.`);
@@ -736,7 +736,7 @@ function handleSaveGuest(e) {
   }
 }
 function confirmDeleteGuest(id) {
-  const x = personById(id);
+  const x = pjGuestById(id);
   if (!x) return;
   const used = POOJA.poojas.filter(p => (p.guestIds || []).indexOf(id) !== -1);
   openConfirm({

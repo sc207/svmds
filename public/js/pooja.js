@@ -87,7 +87,7 @@ function pjToast(msg) { if (typeof showToast === 'function') showToast(msg); }
 const poojaById    = id => POOJA.poojas.find(p => p.id === id);
 const typeById     = id => POOJA.poojaTypes.find(t => t.id === id);
 const sevarthiById = id => POOJA.sevarthis.find(s => s.id === id);
-const personById   = id => POOJA.people.find(x => x.id === id);
+const pjGuestById   = id => POOJA.people.find(x => x.id === id);
 
 function sevarthisOf(p) {
   if (!p) return [];
@@ -97,7 +97,7 @@ function sevarthisOf(p) {
 /** Guests attached to a pooja (from the shared registry). */
 function peopleOf(p) {
   if (!p) return [];
-  return (p.guestIds || []).map(personById).filter(Boolean);
+  return (p.guestIds || []).map(pjGuestById).filter(Boolean);
 }
 function personName(x) { return x ? (x.firstName + ' ' + (x.lastName || '')).trim() : 'Unknown'; }
 
