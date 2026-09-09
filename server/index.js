@@ -188,7 +188,7 @@ async function start() {
       const s = await repairDatabase({ dryRun: mode === 'dry' });
       const drift = s.devoteesMerged + s.rosterRowsMerged + s.usersDevoteeBackfilled
         + s.leadersLinkedForward + s.leadersLinkedReverse + s.guestsBackfilled
-        + s.donorsBackfilled + s.coordinatorDevoteeBackfilled;
+        + s.donorsBackfilled + s.sevarthisBackfilled + s.coordinatorDevoteeBackfilled;
       console.log(`▶ DB_REPAIR_ON_BOOT=${mode}: ${mode === 'dry' ? 'drift' : 'changed'} ${drift} row(s)` +
         (s.indexesSkipped.length ? `, ${s.indexesSkipped.length} index(es) blocked` : ''));
     } catch (e) {

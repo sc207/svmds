@@ -23,7 +23,7 @@ async function go() {
   console.log('\n' + JSON.stringify(summary, null, 2));
   const drift = summary.devoteesMerged + summary.rosterRowsMerged + summary.usersDevoteeBackfilled
     + summary.leadersLinkedForward + summary.leadersLinkedReverse + summary.guestsBackfilled
-    + summary.donorsBackfilled + summary.coordinatorDevoteeBackfilled;
+    + summary.donorsBackfilled + summary.sevarthisBackfilled + summary.coordinatorDevoteeBackfilled;
   if (dryRun) {
     console.log(`\n${drift === 0 ? '✔ no drift' : '⚠ ' + drift + ' rows would change'}` +
       (summary.indexesSkipped.length ? `  ·  ${summary.indexesSkipped.length} index(es) blocked` : ''));

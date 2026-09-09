@@ -207,7 +207,7 @@ router.post('/:id/incharge', adminTier, async (req, res, next) => {
 
     const uid = u ? u.id : null;
     if (!devId && u) {
-      devId = await ensureDevotee({ name: u.name, mobile: u.mobile, city: u.city });
+      devId = await ensureDevotee({ name: u.name || String(u.email || '').split('@')[0], mobile: u.mobile, city: u.city });
       if (devId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, uid]);
     }
 

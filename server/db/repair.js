@@ -52,6 +52,7 @@ async function repairDatabase({ dryRun = false } = {}) {
     leadersLinkedReverse: 0,        // *_id set -> *_devotee_id
     guestsBackfilled: 0,
     donorsBackfilled: 0,
+    sevarthisBackfilled: 0,
     coordinatorDevoteeBackfilled: 0,
     indexesCreated: [],
     indexesSkipped: [],            // { index, dupes }
@@ -211,6 +212,42 @@ async function repairDatabase({ dryRun = false } = {}) {
     }
   }
 
+  // ---------- Step 2b: merge duplicate sevarthi rows for one devotee ----------
+  // sevarthis is a per-person registry; pooja_sevarthi_links is the join, so two
+  // sevarthi rows sharing a devotee_id are a true duplicate.
+  {
+    const dupes = await queryAll(
+      `SELECT devotee_id AS did, MIN(id) AS keep, COUNT(*) AS n
+       FROM sevarthis WHERE is_deleted = 0 AND devotee_id IS NOT NULL
+       GROUP BY devotee_id HAVING COUNT(*) > 1`
+    );
+    for (const g of dupes) {
+      const rows = await queryAll(
+        `SELECT id FROM sevarthis WHERE devotee_id = ? AND is_deleted = 0 ORDER BY id`, [g.did]
+      );
+      for (const r of rows) {
+        if (r.id === g.keep) continue;
+        // repoint the pooja links, de-duping against links the keeper already has
+        const links = await queryAll(`SELECT pooja_id FROM pooja_sevarthi_links WHERE sevarthi_id = ?`, [r.id]);
+        for (const l of links) {
+          const has = await queryOne(
+            `SELECT 1 x FROM pooja_sevarthi_links WHERE pooja_id = ? AND sevarthi_id = ?`, [l.pooja_id, g.keep]
+          );
+          if (has) await W(`DELETE FROM pooja_sevarthi_links WHERE pooja_id = ? AND sevarthi_id = ?`, [l.pooja_id, r.id]);
+          else await W(`UPDATE pooja_sevarthi_links SET sevarthi_id = ? WHERE pooja_id = ? AND sevarthi_id = ?`, [g.keep, l.pooja_id, r.id]);
+        }
+        await W(
+          `UPDATE sevarthis SET is_deleted = 1,
+             notes = TRIM(notes || ' [merged into id ${g.keep} on ${today()}]')
+           WHERE id = ?`,
+          [r.id]
+        );
+        summary.rosterRowsMerged++;
+        log('merged sevarthi row', r.id, '->', g.keep);
+      }
+    }
+  }
+
   // ---------- Step 3: backfill users.devotee_id where NULL ----------
   {
     const { ensureDevotee } = require('../services/people');
@@ -275,7 +312,7 @@ async function repairDatabase({ dryRun = false } = {}) {
     }
   }
 
-  // ---------- Step 5: backfill guests + individual donors ----------
+  // ---------- Step 5: backfill guests + individual donors + sevarthis ----------
   {
     const { ensureDevotee } = require('../services/people');
     const g = await queryAll(
@@ -301,7 +338,22 @@ async function repairDatabase({ dryRun = false } = {}) {
       });
       if (devId) { await run(`UPDATE donors SET devotee_id = ? WHERE id = ? AND devotee_id IS NULL`, [devId, row.id]); summary.donorsBackfilled++; }
     }
-    log('guests backfilled', summary.guestsBackfilled, '| donors backfilled', summary.donorsBackfilled);
+    // a sevarthi is a devotee who sponsors a pooja — backfill when identifiable
+    const sv = await queryAll(
+      `SELECT id, first_name, last_name, mobile, city, state, committee FROM sevarthis
+       WHERE devotee_id IS NULL AND is_deleted = 0
+         AND (mobile GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+              OR (TRIM(first_name || ' ' || last_name) <> '' AND city <> ''))`
+    );
+    for (const row of sv) {
+      if (dryRun) { summary.sevarthisBackfilled++; continue; }
+      const devId = await ensureDevotee({
+        firstName: row.first_name, lastName: row.last_name, mobile: row.mobile,
+        city: row.city, state: row.state, samaj: row.committee,
+      });
+      if (devId) { await run(`UPDATE sevarthis SET devotee_id = ? WHERE id = ? AND devotee_id IS NULL`, [devId, row.id]); summary.sevarthisBackfilled++; }
+    }
+    log('guests backfilled', summary.guestsBackfilled, '| donors', summary.donorsBackfilled, '| sevarthis', summary.sevarthisBackfilled);
   }
 
   // ---------- Step 6: pooja_coordinator_links.devotee_id from the linked user ----------
