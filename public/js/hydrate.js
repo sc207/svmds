@@ -386,14 +386,18 @@
     var camps = [];
     try { camps = await window.API.get('/dhaja/campaigns'); } catch (e) {}
     if (Array.isArray(camps)) {
-      swap(DHAJA.campaigns, camps.map(function (c) {
+      var mapped = camps.map(function (c) {
         return { id: c.id, uuid: c.uuid, code: c.code, name: c.name, nameGu: c.nameGu || '',
                  targetCount: c.targetCount || 0, startDate: c.startDate || '', endDate: c.endDate || '',
                  annualEventId: c.annualEventId || null, annualEventCode: c.annualEventCode || null,
                  status: c.status || 'open', notes: c.notes || '',
                  sponsoredCount: c.sponsoredCount || 0, raisedAmount: c.raisedAmount || 0,
                  remaining: c.remaining != null ? c.remaining : null };
-      }));
+      });
+      // General Dhaja Pooja (the all-occasions bucket) always sorts first
+      var isGen = function (c) { return (typeof dhajaIsGeneral === 'function') && dhajaIsGeneral(c); };
+      mapped.sort(function (a, b) { return (isGen(b) ? 1 : 0) - (isGen(a) ? 1 : 0); });
+      swap(DHAJA.campaigns, mapped);
     }
     var rows = await window.API.get('/dhaja');
     if (!Array.isArray(rows)) return;
