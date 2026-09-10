@@ -248,6 +248,34 @@ async function repairDatabase({ dryRun = false } = {}) {
     }
   }
 
+  // ---------- Step 2c: merge duplicate donor rows for one devotee ----------
+  // donors is a per-person store (individuals); two live donor rows sharing a
+  // devotee_id are a true duplicate. Repoint donations, then soft-delete losers.
+  {
+    const dupes = await queryAll(
+      `SELECT devotee_id AS did, MIN(id) AS keep, COUNT(*) AS n
+       FROM donors WHERE is_deleted = 0 AND devotee_id IS NOT NULL
+       GROUP BY devotee_id HAVING COUNT(*) > 1`
+    );
+    for (const g of dupes) {
+      const rows = await queryAll(
+        `SELECT id FROM donors WHERE devotee_id = ? AND is_deleted = 0 ORDER BY id`, [g.did]
+      );
+      for (const r of rows) {
+        if (r.id === g.keep) continue;
+        await W(`UPDATE donations SET donor_id = ? WHERE donor_id = ?`, [g.keep, r.id]);
+        await W(
+          `UPDATE donors SET is_deleted = 1, updated_at = datetime('now'),
+             notes = TRIM(COALESCE(notes, '') || ' [merged into donor id ${g.keep} on ${today()}]')
+           WHERE id = ?`,
+          [r.id]
+        );
+        summary.rosterRowsMerged++;
+        log('merged donor row', r.id, '->', g.keep);
+      }
+    }
+  }
+
   // ---------- Step 3: backfill users.devotee_id where NULL ----------
   {
     const { ensureDevotee } = require('../services/people');
@@ -317,7 +345,9 @@ async function repairDatabase({ dryRun = false } = {}) {
     const { ensureDevotee } = require('../services/people');
     const g = await queryAll(
       `SELECT id, first_name, last_name, mobile, city, state FROM guests
-       WHERE devotee_id IS NULL AND is_deleted = 0 AND mobile GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'`
+       WHERE devotee_id IS NULL AND is_deleted = 0
+         AND (mobile GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+              OR (TRIM(first_name || ' ' || last_name) <> '' AND city <> ''))`
     );
     for (const row of g) {
       if (dryRun) { summary.guestsBackfilled++; continue; }
@@ -385,6 +415,8 @@ async function repairDatabase({ dryRun = false } = {}) {
      `SELECT lower(email) k FROM users WHERE is_deleted = 0 GROUP BY lower(email) HAVING COUNT(*) > 1`],
     ['ux_donors_mobile', `CREATE UNIQUE INDEX IF NOT EXISTS ux_donors_mobile ON donors(mobile) WHERE mobile <> '' AND is_deleted = 0`,
      `SELECT mobile k FROM donors WHERE mobile <> '' AND is_deleted = 0 GROUP BY mobile HAVING COUNT(*) > 1`],
+    ['ux_donors_devotee', `CREATE UNIQUE INDEX IF NOT EXISTS ux_donors_devotee ON donors(devotee_id) WHERE devotee_id IS NOT NULL AND is_deleted = 0`,
+     `SELECT devotee_id k FROM donors WHERE devotee_id IS NOT NULL AND is_deleted = 0 GROUP BY devotee_id HAVING COUNT(*) > 1`],
     ['ux_sevarthis_mobile', `CREATE UNIQUE INDEX IF NOT EXISTS ux_sevarthis_mobile ON sevarthis(mobile) WHERE mobile <> '' AND is_deleted = 0`,
      `SELECT mobile k FROM sevarthis WHERE mobile <> '' AND is_deleted = 0 GROUP BY mobile HAVING COUNT(*) > 1`],
     ['ux_sevarthis_devotee', `CREATE UNIQUE INDEX IF NOT EXISTS ux_sevarthis_devotee ON sevarthis(devotee_id) WHERE devotee_id IS NOT NULL AND is_deleted = 0`,
