@@ -345,8 +345,16 @@ function devoteeCommitteeChecklist(devId, checkedCodes) {
       (cur[code] ? ' checked' : '') + '> <span>' + esc(nm) + '</span></label>';
   }).join('');
   return '<div class="form-group" style="grid-column:1/-1">' +
-    '<label class="form-label">' + window.t('dv_committees_pick', 'Committees — tick to add this devotee as a member') + '</label>' +
+    '<label class="form-label">' + window.t('dv_committees_pick', 'Samaj / Committee — tick the ones this person belongs to') + '</label>' +
     '<div class="dv-cmt-list">' + rows + '</div></div>';
+}
+
+/** The samaj label that goes with a committee ("Marvadi Samaj" for the
+    Marvadi Samaj Committee) so devotees.samaj stays in step with membership. */
+function samajFromCommitteeCode(code) {
+  if (!code || typeof CMT === 'undefined' || !Array.isArray(CMT.committees)) return '';
+  const c = CMT.committees.find(x => (x.code || x.id) === code);
+  return c ? (c.samaj || c.name || '') : '';
 }
 
 /** Read the ticked committee codes out of an open devotee form. */
@@ -373,6 +381,24 @@ function syncDevoteeCommittees(devId, wantCodes, addOnly) {
   const toAdd = Object.keys(want).filter(c => !curByCode[c]);
   const toRemove = addOnly ? [] : Object.keys(curByCode).filter(c => !want[c]);
   if (!toAdd.length && !toRemove.length) return Promise.resolve();
+
+  /* keep the devotee's samaj label in step — the register column / filter
+     read devotees.samaj, and for this temple the samaj IS the samaj committee. */
+  try {
+    const dRec = (typeof devoteeById === 'function') ? devoteeById(devId) : null;
+    if (dRec) {
+      const firstCode = (addOnly ? Object.keys(want) : Object.keys(want).concat(Object.keys(curByCode)))
+        .filter(c => want[c])[0] || '';
+      const label = samajFromCommitteeCode(firstCode);
+      const nextSamaj = firstCode ? label : (addOnly ? dRec.samaj : '');
+      if (nextSamaj !== dRec.samaj) {
+        dRec.samaj = nextSamaj;
+        if (window.API && window.API.online && typeof window.API.patch === 'function') {
+          window.API.patch('/devotees/' + devId, { samaj: nextSamaj }).catch(function () {});
+        }
+      }
+    }
+  } catch (e) {}
 
   const online = !!(window.API && window.API.online);
   if (!online) {
@@ -726,8 +752,6 @@ function openDevoteeEdit(id) {
   const d = devoteeById(id);
   if (!d) return;
   if (typeof openSheet !== 'function') { devoToast('UI not ready'); return; }
-  const samajOpts = devoteeSamajOptions()
-    .map(n => '<option value="' + esc(n) + '"></option>').join('');
   openSheet({
     title: window.t('dv_edit', 'Edit devotee'),
     body:
@@ -738,9 +762,6 @@ function openDevoteeEdit(id) {
           '<input class="form-input" id="dvE_mobile" maxlength="10" inputmode="numeric" value="' + esc(d.mobile || d.phone || '') + '"></div>' +
         '<div class="form-group"><label class="form-label">' + window.t('city', 'City') + '</label>' +
           '<input class="form-input" id="dvE_city" value="' + esc(d.city || '') + '"></div>' +
-        '<div class="form-group"><label class="form-label">' + window.t('dv_samaj', 'Samaj / Category') + '</label>' +
-          '<input class="form-input" id="dvE_samaj" list="dvE_samajList" placeholder="' + esc(window.t('dv_samaj_ph', 'community label, e.g. Rabari Samaj')) + '" value="' + esc(d.samaj || '') + '">' +
-          '<datalist id="dvE_samajList">' + samajOpts + '</datalist></div>' +
         '<div class="form-group"><label class="form-label">' + window.t('status', 'Status') + '</label>' +
           '<select class="form-select" id="dvE_status">' +
             '<option value="active"' + ((d.status || 'active').toLowerCase() !== 'inactive' ? ' selected' : '') + '>Active</option>' +
@@ -764,13 +785,14 @@ function saveDevoteeEdit(id) {
   const wantCommittees = devoteeCommitteePicked('dvEditForm');
   Object.assign(d, {
     name: name, mobile: mob, phone: mob,     // keep BOTH — templePeople() reads d.phone || d.mobile
-    city: g('dvE_city').trim(), samaj: g('dvE_samaj').trim(), status: g('dvE_status')
+    city: g('dvE_city').trim(), status: g('dvE_status')
   });
   try {
     if (window.API && window.API.online && typeof window.API.patch === 'function') {
-      window.API.patch('/devotees/' + id, { name: d.name, mobile: mob, city: d.city, samaj: d.samaj, status: d.status }).catch(function () {});
+      window.API.patch('/devotees/' + id, { name: d.name, mobile: mob, city: d.city, status: d.status }).catch(function () {});
     }
   } catch (e) {}
+  // committee membership + the derived samaj label are owned by the checklist
   try { syncDevoteeCommittees(id, wantCommittees); } catch (e) {}
   try { if (typeof syncEntitySelects === 'function') syncEntitySelects(); } catch (e) {}
   if (typeof closeSheet === 'function') closeSheet();

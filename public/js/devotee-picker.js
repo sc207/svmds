@@ -222,14 +222,12 @@
   window.openDevoteeSheet = function (opts) {
     opts = opts || {};
     var pf = String(opts.prefillName || '').trim();
-    var samajSeen = {};
-    (typeof state !== 'undefined' && Array.isArray(state.devotees) ? state.devotees : [])
-      .forEach(function (d) { if (d && d.samaj) samajSeen[d.samaj] = 1; });
-    var commOpts = Object.keys(samajSeen).sort()
-      .map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join('');
-    var cmtPickerHTML = (opts.committeePicker && typeof devoteeCommitteeChecklist === 'function')
-      ? devoteeCommitteeChecklist(null, []) : '';
-    window.__dpCommitteePicker = !!opts.committeePicker;
+    // The "Samaj / Committee" checklist is the ONE place a person is tied to a
+    // committee (and, for this temple, their samaj). Shown by default on every
+    // "add a person" surface; a caller can pass committeePicker:false to hide it.
+    var showCmtPicker = (opts.committeePicker !== false) && typeof devoteeCommitteeChecklist === 'function';
+    var cmtPickerHTML = showCmtPicker ? devoteeCommitteeChecklist(null, []) : '';
+    window.__dpCommitteePicker = showCmtPicker;
     window.__dpExtra = Array.isArray(opts.extraFields) ? opts.extraFields : [];
     var extraHTML = window.__dpExtra.length
       ? '<hr class="dp-extra-divider"><div class="dp-form-caption">' +
@@ -249,9 +247,6 @@
             '<div id="dpHint" class="mg-muted-xs" style="margin-top:.3rem"></div></div>' +
           '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city"></div>' +
           '<div class="form-group"><label class="form-label">State</label><input class="form-input" name="state" value="Gujarat"></div>' +
-          '<div class="form-group"><label class="form-label">Samaj / community</label>' +
-            '<input class="form-input" name="samaj" list="dpCommList" placeholder="community label, e.g. Rabari Samaj">' +
-            '<datalist id="dpCommList">' + commOpts + '</datalist></div>' +
           cmtPickerHTML +
           extraHTML +
         '</form>',
@@ -286,7 +281,6 @@
     if (mobile.length !== 10) { toast('Contact number must be 10 digits'); return; }
     var city = f.city.value.trim();
     var st = f.state.value.trim() || 'Gujarat';   // NOT `state` — that's the global store
-    var samaj = f.samaj.value.trim();
     var extras = {};
     (window.__dpExtra || []).forEach(function (fld) {
       var el = f.elements['x_' + fld.name];
@@ -294,6 +288,9 @@
     });
     var pickedCmt = (window.__dpCommitteePicker && typeof devoteeCommitteePicked === 'function')
       ? devoteeCommitteePicked('dpForm') : null;
+    // samaj label follows the first ticked committee (samaj == samaj committee here)
+    var samaj = (pickedCmt && pickedCmt.length && typeof samajFromCommitteeCode === 'function')
+      ? samajFromCommitteeCode(pickedCmt[0]) : '';
 
     // dedupe against the register
     var existing = window.allPeople().filter(function (p) { return digits(p.mobile) === mobile; })[0];
