@@ -159,8 +159,144 @@
     toast((filename.replace(/\.xls$/i, '')) + '.xls exported.');
   }
 
-  /* ---- Certificate-grade PDF report (print window) ---- */
-  function printReportPDF(opt) {
+  /* ---- Certificate-grade PDF report ----------------------------------------
+     Rendered device-independently: the report HTML is laid out in a FIXED-WIDTH
+     off-screen node (never the device viewport), rasterised with html2canvas,
+     and each page's image is placed into a real pdfMake PDF that .download()s
+     the same on desktop and mobile. Rows are paginated at the row level so a
+     row is never cut and the header repeats on every page. Falls back to the
+     browser print window if the PDF engine can't load. ---------------------- */
+  function reportCss(wide, tblFont) {
+    var pageW = wide ? '297mm' : '210mm';
+    return "@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Cormorant+Garamond:ital@0;1&family=Inter:wght@400;600;700&family=Noto+Serif+Gujarati:wght@400;600;700&family=Noto+Sans+Gujarati:wght@400;600;700&display=swap');" +
+      '*{box-sizing:border-box}' +
+      '.rptdoc{margin:0;padding:0;background:#fff;font-family:"Inter","Noto Sans Gujarati",sans-serif}' +
+      '.rpt{position:relative;width:' + pageW + ';min-height:190mm;background:#fff;overflow:hidden}' +
+      '.rc{position:absolute;width:54px;height:54px;pointer-events:none;background:linear-gradient(#b8892f,#b8892f) left top/100% 3px no-repeat,linear-gradient(#b8892f,#b8892f) left top/3px 100% no-repeat}' +
+      '.rc.tl{top:14px;left:14px}.rc.tr{top:14px;right:14px;transform:scaleX(-1)}.rc.bl{bottom:14px;left:14px;transform:scaleY(-1)}.rc.br{bottom:14px;right:14px;transform:scale(-1)}' +
+      '.rpt-hero{position:absolute;right:-24px;bottom:-20px;width:40%;opacity:.06;pointer-events:none}' +
+      '.rpt-in{position:relative;padding:14mm 15mm 12mm}' +
+      '.rpt-head{text-align:center;border-bottom:2px solid #6B1F2A;padding-bottom:10px}' +
+      '.rpt-emblem{width:50px;height:50px;border-radius:50%;object-fit:cover;border:2px solid #C9A24A}' +
+      '.rpt-temple{font-family:"Cinzel",serif;font-weight:800;font-size:16px;color:#6B1F2A;letter-spacing:.5px;margin-top:6px}' +
+      '.rpt-loc{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#8a7a5c;margin-top:2px}' +
+      '.rpt-dign{font-size:8.5px;color:#8a7a5c;margin-top:4px;font-style:italic}' +
+      '.rpt-ribbon{text-align:center;font-family:"Cinzel","Noto Serif Gujarati",serif;letter-spacing:2.5px;text-transform:uppercase;font-size:12.5px;color:#6B1F2A;margin:12px 0 2px;font-weight:700}' +
+      '.rpt-ribbon i{color:#C9A24A;font-style:normal;margin:0 10px;font-size:9px;vertical-align:middle}' +
+      '.rpt-sub{text-align:center;font-family:"Cormorant Garamond","Noto Serif Gujarati",serif;font-style:italic;color:#5b4a37;font-size:12.5px;margin-bottom:10px}' +
+      '.rpt-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 16px;font-size:9px;color:#8a7a5c;margin-bottom:12px}' +
+      '.rpt-meta strong{color:#3B2418}' +
+      'table.rpt-t{width:100%;border-collapse:collapse;font-family:"Inter","Noto Sans Gujarati",sans-serif;font-size:' + tblFont + ';table-layout:fixed}' +
+      '.rpt-t th,.rpt-t td{overflow-wrap:anywhere;word-break:break-word;white-space:normal}' +
+      '.rpt-t thead th{background:#6B1F2A;color:#fff;text-align:left;padding:6px 8px;font-weight:700;font-size:8px;letter-spacing:.4px;text-transform:uppercase}' +
+      '.rpt-t tbody td{padding:5px 8px;border-bottom:1px solid #e5d5c0;color:#3B2418;vertical-align:top}' +
+      '.rpt-t tbody tr:nth-child(even) td{background:#faf6ec}' +
+      '.rpt-foot{margin-top:14px;border-top:1px solid #C9A24A;padding-top:8px;display:flex;justify-content:space-between;align-items:flex-end;font-size:8px;color:#8a7a5c}' +
+      '.rpt-sign{text-align:center}.rpt-sign span{display:block;width:150px;border-top:1px solid #3B2418;margin-bottom:3px}' +
+      '.rpt-pg{font-size:8px;color:#8a7a5c}';
+  }
+
+  function reportPageHtml(opt, chunk, pageIx, pageCount, wide) {
+    var tpl = templeInfo();
+    var cols = opt.columns || [];
+    var metaBits = ['Generated <strong>' + xesc(stamp()) + '</strong>',
+      'Records <strong>' + (opt.rows || []).length + '</strong>'].concat((opt.meta || []).map(xesc));
+    return '<div class="rpt">' +
+      '<span class="rc tl"></span><span class="rc tr"></span><span class="rc bl"></span><span class="rc br"></span>' +
+      '<img class="rpt-hero" src="' + assetURL('assets/temple.png') + '" alt="" crossorigin="anonymous" onerror="this.style.display=\'none\'">' +
+      '<div class="rpt-in">' +
+      '<div class="rpt-head"><img class="rpt-emblem" src="' + assetURL('assets/icon.png') + '" alt="" crossorigin="anonymous" onerror="this.style.display=\'none\'">' +
+      '<div class="rpt-temple">' + xesc(tpl.name) + '</div><div class="rpt-loc">' + xesc(tpl.loc) + '</div>' +
+      '<div class="rpt-dign">Founder: ' + xesc(tpl.founder) + ' &nbsp;·&nbsp; Head: ' + xesc(tpl.head) + '</div></div>' +
+      '<div class="rpt-ribbon"><i>&#9670;</i>' + xesc(opt.title || 'Report') + '<i>&#9670;</i></div>' +
+      (opt.subtitle ? '<div class="rpt-sub">' + xesc(opt.subtitle) + '</div>' : '') +
+      '<div class="rpt-meta">' + metaBits.map(function (m) { return '<span>' + m + '</span>'; }).join('') + '</div>' +
+      '<table class="rpt-t"><thead><tr>' + cols.map(function (c) { return '<th>' + xesc(c) + '</th>'; }).join('') + '</tr></thead>' +
+      '<tbody>' + (chunk.length
+        ? chunk.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + xesc(c) + '</td>'; }).join('') + '</tr>'; }).join('')
+        : '<tr><td colspan="' + Math.max(cols.length, 1) + '" style="text-align:center;color:#8a7a5c;padding:18px">No records.</td></tr>') +
+      '</tbody></table>' +
+      '<div class="rpt-foot"><div>System-generated report &middot; ' + xesc(tpl.name) + '<br>' +
+      xesc(String(location.href).split('#')[0]) + '</div>' +
+      (pageCount > 1 ? '<div class="rpt-pg">Page ' + (pageIx + 1) + ' / ' + pageCount + '</div>' : '') +
+      '<div class="rpt-sign"><span></span>Authorised Signatory / Trustee</div></div>' +
+      '</div></div>';
+  }
+
+  function fontsSettled() {
+    return new Promise(function (res) {
+      var done = false, n = 0;
+      function fin() { if (!done) { done = true; res(); } }
+      try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(fin, fin); } catch (e) {}
+      (function poll() { n++; if (n > 30) return fin(); setTimeout(poll, 60); })();
+      setTimeout(fin, 2500);
+    });
+  }
+
+  function chunk(arr, n) {
+    var out = [];
+    for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+    return out.length ? out : [[]];
+  }
+
+  async function printReportPDF(opt) {
+    opt = opt || {};
+    var cols = opt.columns || [];
+    var rows = opt.rows || [];
+    var wide = cols.length >= 8;                                   // many cols -> A4 landscape
+    var tblFont = cols.length >= 11 ? '8px' : (wide ? '8.6px' : '10px');
+    var perPage = wide ? 12 : 18;
+
+    var libs;
+    try { libs = await ensurePdfLibs(); }
+    catch (e) { return legacyPrintReportPDF(opt); }               // engine unavailable -> print window
+
+    try {
+      toast('Preparing PDF…');
+      var groups = chunk(rows, perPage);
+      var host = document.createElement('div');
+      host.className = 'rptdoc';
+      host.style.cssText = 'position:fixed;left:-99999px;top:0;z-index:-1;background:#fff';
+      var st = document.createElement('style');
+      st.textContent = reportCss(wide, tblFont);
+      host.appendChild(st);
+      var page = document.createElement('div');
+      host.appendChild(page);
+      document.body.appendChild(host);
+
+      var images = [];
+      for (var i = 0; i < groups.length; i++) {
+        page.innerHTML = reportPageHtml(opt, groups[i], i, groups.length, wide);
+        var rptEl = page.querySelector('.rpt');
+        await fontsSettled();
+        var canvas = await libs.html2canvas(rptEl, {
+          scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, imageTimeout: 5000,
+          windowWidth: (rptEl && rptEl.offsetWidth) || (wide ? 1123 : 794),
+        });
+        images.push({ data: canvas.toDataURL('image/jpeg', 0.92), w: canvas.width, h: canvas.height });
+      }
+      document.body.removeChild(host);
+
+      var M = 22;                                                  // pt margin
+      var pageWpt = (wide ? 841.89 : 595.28) - 2 * M;
+      var pageHpt = (wide ? 595.28 : 841.89) - 2 * M;
+      var content = images.map(function (im, i) {
+        var w = pageWpt, h = w * im.h / im.w;
+        if (h > pageHpt) { h = pageHpt; w = h * im.w / im.h; }     // never overflow the page
+        return { image: im.data, width: w, alignment: 'center', pageBreak: i ? 'before' : undefined };
+      });
+      libs.pdfMake.createPdf({
+        pageSize: 'A4', pageOrientation: wide ? 'landscape' : 'portrait',
+        pageMargins: [M, M, M, M], content: content,
+      }).download((opt.filename || 'report') + '.pdf');
+    } catch (e) {
+      try { document.querySelectorAll('.rptdoc').forEach(function (n) { n.remove(); }); } catch (_) {}
+      legacyPrintReportPDF(opt);                                   // any failure -> print window
+    }
+  }
+
+  /* ---- fallback: browser print window (kept for when the PDF engine fails) ---- */
+  function legacyPrintReportPDF(opt) {
     opt = opt || {};
     var cols = opt.columns || [];
     var rows = opt.rows || [];
