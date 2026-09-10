@@ -118,23 +118,13 @@
       <form id="formSevarthi" onsubmit="handleSaveSevarthi(event)">
         <div id="sevPersonMount"></div>
         <div id="sevExistingHint"></div>
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="sevFieldCommittee">Committee / Samaj</label>
-            <input type="text" class="form-input" id="sevFieldCommittee" list="sevCommitteeList" placeholder="e.g. Rabari Samaj">
-            <datalist id="sevCommitteeList">
-              <option value="Rabari Samaj"></option>
-              <option value="Marvadi Samaj"></option>
-              <option value="General Committee"></option>
-            </datalist>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="sevFieldStatus">Status</label>
-            <select class="form-select" id="sevFieldStatus">
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
+        <div id="sevCmtMount"></div>
+        <div class="form-group">
+          <label class="form-label" for="sevFieldStatus">Status</label>
+          <select class="form-select" id="sevFieldStatus">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label" for="sevFieldNotes">Notes</label>
@@ -913,6 +903,8 @@ function openAddSevarthi(poojaId) {
   });
   document.getElementById('sevFieldStatus').value = 'active';
   document.getElementById('sevExistingHint').innerHTML = '';
+  document.getElementById('sevCmtMount').innerHTML =
+    (typeof devoteeCommitteeChecklist === 'function') ? devoteeCommitteeChecklist(null, []) : '';
   openModal('modalSevarthi');
 }
 
@@ -931,10 +923,11 @@ function openEditSevarthi(id) {
     selectedId: s.devoteeId,
     selectedLabel: (s.firstName + ' ' + s.lastName).trim() + (s.mobile ? ' · ' + s.mobile : '') + (s.city ? ' · ' + s.city : '')
   });
-  document.getElementById('sevFieldCommittee').value = s.committee || '';
   document.getElementById('sevFieldStatus').value = s.status || 'active';
   document.getElementById('sevFieldNotes').value = s.notes || '';
   document.getElementById('sevExistingHint').innerHTML = '';
+  document.getElementById('sevCmtMount').innerHTML =
+    (typeof devoteeCommitteeChecklist === 'function') ? devoteeCommitteeChecklist(s.devoteeId) : '';
   openModal('modalSevarthi');
 }
 
@@ -956,7 +949,12 @@ function handleSaveSevarthi(e) {
   const city = person.city || '';
   const state = person.state || 'Gujarat';
   const pickedDevoteeId = person.id;
-  const committee = document.getElementById('sevFieldCommittee').value.trim();
+  // community label is a devotee attribute now (set on the devotee record),
+  // not a field on this form — carry the devotee's current samaj forward so
+  // the sevarthi row's denormalised copy stays meaningful.
+  const _dev = (typeof state !== 'undefined' && Array.isArray(state.devotees))
+    ? state.devotees.find(d => d.id === pickedDevoteeId) : null;
+  const committee = (person && person.samaj) || (_dev && _dev.samaj) || '';
   const status = document.getElementById('sevFieldStatus').value;
   const notes = document.getElementById('sevFieldNotes').value.trim();
 
@@ -966,6 +964,14 @@ function handleSaveSevarthi(e) {
   if (!pickedDevoteeId) { pjToast('Pick a devotee from the register first.'); return; }
   const online = !!(window.API && window.API.online);
   const code = p.code || p.id;
+
+  /* "Committees" checklist — a real committee_members relationship on the
+     shared person record, not a text label. Add-only when adding a sevarthi
+     (the picker can't show prior links yet); full diff when editing. */
+  if (typeof syncDevoteeCommittees === 'function') {
+    const wantCmt = (typeof devoteeCommitteePicked === 'function') ? devoteeCommitteePicked('formSevarthi') : null;
+    try { syncDevoteeCommittees(pickedDevoteeId, wantCmt, !POOJA.editingSevarthiId); } catch (e) {}
+  }
 
   if (POOJA.editingSevarthiId) {
     const s = sevarthiById(POOJA.editingSevarthiId);

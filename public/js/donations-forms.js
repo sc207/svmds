@@ -79,13 +79,9 @@
 
         <div class="grid mg-2col-form">
           <div class="form-group">
-            <label class="form-label" for="donFieldCommittee">Committee / Samaj</label>
+            <label class="form-label" for="donFieldCommittee">Samaj / community</label>
             <input type="text" class="form-input" id="donFieldCommittee" list="donCommitteeList" placeholder="Auto-filled from donor">
-            <datalist id="donCommitteeList">
-              <option value="Rabari Samaj"></option>
-              <option value="Marvadi Samaj"></option>
-              <option value="General Committee"></option>
-            </datalist>
+            <datalist id="donCommitteeList"></datalist>
           </div>
           <div class="form-group">
             <label class="form-label" for="donFieldPurpose">Purpose / Earmark</label>
@@ -166,8 +162,8 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="donorFieldCommittee">Committee / Samaj</label>
-          <input type="text" class="form-input" id="donorFieldCommittee" list="donCommitteeList" placeholder="e.g. Rabari Samaj">
+          <label class="form-label" for="donorFieldCommittee">Samaj / community</label>
+          <input type="text" class="form-input" id="donorFieldCommittee" list="donCommitteeList" placeholder="community label, e.g. Rabari Samaj">
         </div>
 
         <div class="form-group">
