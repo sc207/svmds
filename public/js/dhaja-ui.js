@@ -32,7 +32,9 @@ function viewDhaja() {
     </div>
     <div class="flex gap-2">
       ${typeof exportBar === 'function' ? exportBar('mod-dhaja') : ''}
-      ${admin ? `<button class="btn btn-outline" onclick="openDhajaCampaignForm()">+ ${window.t('dhaja_new_campaign', 'New Campaign')}</button>` : ''}
+      ${admin ? `<button class="btn dhaja-newcamp-btn" onclick="openDhajaCampaignForm()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        ${window.t('dhaja_new_campaign', 'New Campaign')}</button>` : ''}
       ${admin ? `<button class="btn btn-primary" onclick="openSponsorDhaja()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         ${window.t('dhaja_sponsor_btn', 'Sponsor a Dhaja')}</button>` : ''}
@@ -46,13 +48,16 @@ function viewDhaja() {
     ${feb && typeof kpiCard === 'function' ? kpiCard(window.t('dhaja_remaining', 'Remaining (108)'), (dhajaProgress(feb).remaining != null ? dhajaProgress(feb).remaining : '—'), window.t('dhaja_remaining_meta', 'To reach 108'), '📿') : ''}
   </div>
 
-  <div class="dhaja-boards">${DHAJA.campaigns.length
-    ? DHAJA.campaigns.map(dhajaCampaignCard).join('')
-    : `<div class="card mg-mt"><div class="card-body" style="text-align:center;padding:2rem 1rem">
-        <div style="font-size:1.8rem">🚩</div>
-        <p class="mg-page-sub">${window.t('dhaja_empty', 'No dhaja campaigns yet — use “New Campaign” to add one.')}</p>
-        ${dhajaIsAdmin() ? `<button class="btn btn-primary mg-btn-xs mg-mt" onclick="openDhajaCampaignForm()">+ ${window.t('dhaja_new_campaign', 'New Campaign')}</button>` : ''}
-      </div></div>`}</div>
+  <div class="section-title mg-mt"><span>🚩 ${window.t('dhaja_campaigns', 'Campaigns')}</span></div>
+  <div class="dhaja-boards">
+    ${DHAJA.campaigns.map(dhajaCampaignCard).join('')}
+    ${admin ? `<button type="button" class="dhaja-add-tile" onclick="openDhajaCampaignForm()">
+      <span class="dhaja-add-plus">＋</span>
+      <span>${window.t('dhaja_new_campaign', 'New Campaign')}</span>
+      <span class="mg-muted-xs">${window.t('dhaja_add_tile_hint', 'February mahotsav, a special day, or any occasion')}</span>
+    </button>` : ''}
+    ${(!DHAJA.campaigns.length && !admin) ? `<div class="card"><div class="card-body mg-pad-note">${window.t('dhaja_empty', 'No dhaja campaigns yet.')}</div></div>` : ''}
+  </div>
 
   <div class="section-title mg-mt"><span>🧾 ${window.t('dhaja_register', 'Sponsorship register')}</span></div>
   <div class="card">

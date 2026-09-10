@@ -66,6 +66,7 @@
       dhaja_general_all:'Every dhaja pooja — all occasions',
       dhaja_start_campaign:'Start a campaign', dhaja_tithi_ref:'Temple tithis this year',
       dhaja_tithi_hint:'A date reference. “Start a campaign” pre-fills a new dhaja campaign for that day — it does not change the temple calendar.',
+      dhaja_add_tile_hint:'February mahotsav, a special day, or any occasion', dhaja_camp_form_missing:'Reload the page and try again.',
 
       temple_name:'Shri Vihat Meldi Mata Mandir',
       temple_loc:'Sanand, Gujarat',
@@ -263,6 +264,7 @@
       dhaja_general_all:'हर ध्वजा पूजा — सभी अवसर',
       dhaja_start_campaign:'अभियान शुरू करें', dhaja_tithi_ref:'इस वर्ष की मंदिर तिथियाँ',
       dhaja_tithi_hint:'केवल तारीख संदर्भ। “अभियान शुरू करें” उस दिन के लिए नया ध्वजा अभियान भर देता है — मंदिर कैलेंडर नहीं बदलता।',
+      dhaja_add_tile_hint:'फरवरी महोत्सव, कोई विशेष दिन, या कोई भी अवसर', dhaja_camp_form_missing:'पेज रीलोड करके फिर से प्रयास करें।',
 
       temple_name:'श्री विहत मेलडी माता मंदिर',
       temple_loc:'साणंद, गुजरात',
@@ -458,6 +460,7 @@
       dhaja_general_all:'દરેક ધજા પૂજા — બધા પ્રસંગો',
       dhaja_start_campaign:'અભિયાન શરૂ કરો', dhaja_tithi_ref:'આ વર્ષની મંદિર તિથિઓ',
       dhaja_tithi_hint:'ફક્ત તારીખ સંદર્ભ. “અભિયાન શરૂ કરો” તે દિવસ માટે નવું ધજા અભિયાન ભરી આપે છે — મંદિર કેલેન્ડર બદલાતું નથી.',
+      dhaja_add_tile_hint:'ફેબ્રુઆરી મહોત્સવ, કોઈ વિશેષ દિવસ, અથવા કોઈ પણ પ્રસંગ', dhaja_camp_form_missing:'પેજ રીલોડ કરીને ફરી પ્રયાસ કરો.',
 
       temple_name:'શ્રી વિહત મેલડી માતા મંદિર',
       temple_loc:'સાણંદ, ગુજરાત',

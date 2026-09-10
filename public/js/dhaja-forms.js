@@ -78,6 +78,10 @@
    to nothing else. `prefill` (name/nameGu/startDate) just seeds a NEW form —
    e.g. from the "temple tithis" shortcut — it never creates any other record. */
 function openDhajaCampaignForm(code, prefill) {
+  if (!document.getElementById('modalDhajaCamp')) {
+    dhajaToast(window.t('dhaja_camp_form_missing', 'Reload the page and try again.'));
+    return;
+  }
   const c = code ? dhajaCampaignById(code) : null;
   const pf = (!c && prefill) ? prefill : {};
   document.getElementById('dhajaCampTitle').textContent = c

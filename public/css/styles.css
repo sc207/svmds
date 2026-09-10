@@ -3712,3 +3712,19 @@ body.annc-open { overflow: hidden; }
   transition: width .4s ease;
 }
 .dhaja-camp--general { border-color: var(--antique-gold); background: linear-gradient(180deg, var(--gold-bg) 0%, var(--ivory-card) 40%); }
+
+/* Dhaja — make "New Campaign" unmistakably a button + an add-tile in the grid */
+.dhaja-newcamp-btn {
+  background: var(--saffron); color: #fff; border: 1px solid var(--saffron);
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 600;
+}
+.dhaja-newcamp-btn:hover { background: var(--saffron-light); border-color: var(--saffron-light); }
+.dhaja-add-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; text-align: center; min-height: 150px; padding: 1.2rem;
+  border: 2px dashed var(--antique-gold); border-radius: var(--radius-md);
+  background: var(--gold-bg); color: var(--primary-maroon);
+  font: inherit; font-weight: 700; cursor: pointer; transition: background var(--transition-fast);
+}
+.dhaja-add-tile:hover { background: var(--saffron-bg); border-color: var(--saffron); }
+.dhaja-add-plus { font-size: 2rem; line-height: 1; color: var(--saffron); }
