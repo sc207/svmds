@@ -82,26 +82,12 @@
   };
 
   /* Repopulate every entity-backed <select> / <datalist> from live data so a
-     dropdown never carries a hard-coded name list. Safe to call any time. */
-  /* Distinct community ("samaj") labels already in use, for the "Samaj /
-     community" text fields. This is a plain label — NOT committee membership
-     (that is a real committee_members relationship, set from a committee's
-     Members tab or the devotee form's Committees checklist). */
-  window.samajValues = function () {
-    var seen = {};
-    ['Rabari Samaj', 'Marvadi Samaj', 'General'].forEach(function (s) { seen[s] = 1; });
-    (typeof state !== 'undefined' && Array.isArray(state.devotees) ? state.devotees : [])
-      .forEach(function (d) { if (d && d.samaj) seen[d.samaj] = 1; });
-    if (typeof CMT !== 'undefined' && Array.isArray(CMT.members)) {
-      CMT.members.forEach(function (m) { if (m && m.committee) seen[m.committee] = 1; });
-    }
-    return Object.keys(seen).sort();
-  };
-
+     dropdown never carries a hard-coded name list. Safe to call any time.
+     NOTE: there is no "samaj" text field any more — a devotee's samaj is their
+     Samaj-type committee membership (committee_members), edited via the
+     Committees checklist. So no donCommitteeList / sevCommitteeList fill. */
   window.syncEntitySelects = function () {
-    var comm = window.committeeNames();
     var teams = window.teamNames();
-    var samaj = window.samajValues();
 
     var fillSelect = function (id, items, opts) {
       var el = document.getElementById(id);
@@ -120,11 +106,7 @@
       el.innerHTML = items.map(function (x) { return '<option value="' + esc(x) + '"></option>'; }).join('');
     };
 
-    fillSelect('inputDevoteeSamaj', samaj);
-    fillSelect('devoteeSamajFilter', samaj, { head: { v: 'all', t: (window.t ? window.t('all_samaj', 'All Samaj / community') : 'All Samaj / community') } });
     fillSelect('inputVolunteerTeam', teams);
-    fillDatalist('donCommitteeList', samaj);
-    fillDatalist('sevCommitteeList', samaj);
     // guest role suggestions — Pandit removed on request
     fillDatalist('gstRoleList', ['Chief Guest', 'Guest of Honour', 'Trust President', 'Trustee', 'Yagna Acharya', 'Path Acharya', 'Mahila Mandal Head']);
   };

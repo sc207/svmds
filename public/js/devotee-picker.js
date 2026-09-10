@@ -124,70 +124,147 @@
 
   /* ============================================================
      devoteeLinkField — the ONE "person = devotee" field for any form.
-     A <select> of the register + "+ Add new devotee" (opens the shared
-     sheet on top). The host form supplies only its context-specific
-     extras (role, status, PAN, title, notes …). Read it back with
-     devoteeLinkValue(selId).
-       opts = { selId, label?, hint?, required?, selectedId?, onChange? }
+     A SEARCHABLE combobox over the register (type a name / 10-digit
+     mobile / DEV-### code, ↑↓ + Enter) + "+ Add new devotee". Read it
+     back with devoteeLinkValue(selId). The value lives in a hidden
+     <input id="selId"> so devoteeLinkValue / change events are unchanged.
+       opts = { selId, label?, hint?, required?, selectedId?, selectedLabel?, onChange? }
      ============================================================ */
+  function personLabel(p) {
+    return (p.name || '') + (p.mobile ? ' · ' + p.mobile : '') + (p.city ? ' · ' + p.city : '');
+  }
+  function findPerson(id) {
+    if (id == null || id === '') return null;
+    var people = (typeof window.allPeople === 'function') ? window.allPeople() : [];
+    return people.filter(function (x) { return String(x.id) === String(id); })[0] || null;
+  }
+
   window.devoteeLinkField = function (opts) {
     opts = opts || {};
     var selId = opts.selId || 'devLinkSel';
     var label = opts.label || 'Person (devotee)';
     var sel = opts.selectedId != null ? String(opts.selectedId) : '';
-    var people = (typeof window.allPeople === 'function') ? window.allPeople() : [];
-    var matched = false;
-    var options = '<option value="">— pick a devotee —</option>' + people.map(function (p) {
-      var on = sel && String(p.id) === sel;
-      if (on) matched = true;
-      return '<option value="' + esc(p.id) + '"' + (on ? ' selected' : '') + '>' + esc(p.name) +
-        (p.mobile ? ' · ' + esc(p.mobile) : '') + (p.city ? ' · ' + esc(p.city) : '') + '</option>';
-    }).join('');
-    if (sel && !matched && opts.selectedLabel) {
-      options += '<option value="' + esc(sel) + '" selected>' + esc(opts.selectedLabel) + '</option>';
-    }
-    var onCh = opts.onChange ? (' onchange="' + esc(opts.onChange) + '"') : '';
+    var selP = sel ? findPerson(sel) : null;
+    var selText = selP ? personLabel(selP) : (opts.selectedLabel || '');
+    if (opts.onChange) window['__dpOnChange_' + selId] = opts.onChange;
     return '<div class="link-section">' +
       '<div class="link-section-head">' +
         '<p class="ls-title">' + esc(label) + (opts.required ? ' <span class="ls-req">*</span>' : '') + '</p>' +
         '<button type="button" class="btn-add-devotee" onclick="devLinkAdd(\'' + selId + '\')">Add new devotee</button>' +
       '</div>' +
       (opts.hint ? '<div class="link-section-hint">' + esc(opts.hint) + '</div>' : '') +
-      '<div class="link-field"><select class="form-select" id="' + selId + '"' + onCh + '>' + options + '</select></div>' +
+      '<div class="link-field dp-combo" id="' + selId + '__combo">' +
+        '<input type="hidden" id="' + selId + '" value="' + esc(sel) + '">' +
+        '<input type="text" class="form-input dp-combo-input" id="' + selId + '__q" autocomplete="off" spellcheck="false" ' +
+          'placeholder="Search name, mobile or DEV-###" value="' + esc(selText) + '" ' +
+          'oninput="dpComboFilter(\'' + selId + '\')" onkeydown="dpComboKey(event,\'' + selId + '\')" ' +
+          'onfocus="dpComboOpen(\'' + selId + '\')" onblur="dpComboBlur(\'' + selId + '\')">' +
+        '<div class="dp-combo-list" id="' + selId + '__list" hidden></div>' +
+      '</div>' +
     '</div>';
   };
+
+  function comboRender(selId, q) {
+    var list = document.getElementById(selId + '__list');
+    if (!list) return;
+    var people = (typeof window.allPeople === 'function') ? window.allPeople() : [];
+    var ql = String(q || '').trim().toLowerCase();
+    var qd = digits(q);
+    var hits = !ql ? people.slice(0, 50) : people.filter(function (p) {
+      if (String(p.name || '').toLowerCase().indexOf(ql) !== -1) return true;
+      if (qd.length >= 3 && digits(p.mobile).indexOf(qd) !== -1) return true;
+      if (String(p.id || '').toLowerCase().indexOf(ql) !== -1) return true;
+      return false;
+    }).slice(0, 50);
+    if (!hits.length) {
+      list.innerHTML = '<div class="dp-combo-empty">No devotee matches — use “Add new devotee”.</div>';
+    } else {
+      list.innerHTML = hits.map(function (p, i) {
+        return '<div class="dp-combo-opt' + (i === 0 ? ' active' : '') + '" data-id="' + esc(p.id) + '" ' +
+          'data-label="' + esc(personLabel(p)) + '" onmousedown="dpComboPick(event,\'' + selId + '\')">' +
+          '<strong>' + esc(p.name || '') + '</strong>' +
+          '<small>' + [p.id, p.mobile, p.city].filter(Boolean).map(esc).join(' · ') + '</small></div>';
+      }).join('');
+    }
+    list.hidden = false;
+  }
+  window.dpComboOpen = function (selId) { comboRender(selId, (document.getElementById(selId + '__q') || {}).value || ''); };
+  window.dpComboFilter = function (selId) {
+    var hid = document.getElementById(selId);
+    if (hid && hid.value) { hid.value = ''; try { hid.dispatchEvent(new Event('change')); } catch (e) {} }
+    comboRender(selId, (document.getElementById(selId + '__q') || {}).value || '');
+  };
+  window.dpComboBlur = function (selId) {
+    // delay so an onmousedown pick on a list row runs before we close
+    setTimeout(function () {
+      var list = document.getElementById(selId + '__list');
+      if (list) list.hidden = true;
+      var hid = document.getElementById(selId), q = document.getElementById(selId + '__q');
+      // committed selection → show its canonical label; otherwise keep whatever
+      // was typed (so "Add new devotee" can prefill it)
+      if (hid && q && hid.value) {
+        var p = findPerson(hid.value);
+        if (p) q.value = personLabel(p);
+      }
+    }, 150);
+  };
+  window.dpComboKey = function (e, selId) {
+    var list = document.getElementById(selId + '__list');
+    if (!list) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (list.hidden) return dpComboOpen(selId);
+      var opts = Array.prototype.slice.call(list.querySelectorAll('.dp-combo-opt'));
+      if (!opts.length) return;
+      var i = opts.findIndex(function (o) { return o.classList.contains('active'); });
+      opts.forEach(function (o) { o.classList.remove('active'); });
+      i = e.key === 'ArrowDown' ? Math.min(opts.length - 1, i + 1) : Math.max(0, i - 1);
+      opts[i].classList.add('active');
+      opts[i].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      var act = list.querySelector('.dp-combo-opt.active') || list.querySelector('.dp-combo-opt');
+      if (act && !list.hidden) { e.preventDefault(); commitPick(selId, act.dataset.id, act.dataset.label); }
+    } else if (e.key === 'Escape') {
+      list.hidden = true;
+    }
+  };
+  function commitPick(selId, id, label) {
+    var hid = document.getElementById(selId), q = document.getElementById(selId + '__q'), list = document.getElementById(selId + '__list');
+    if (hid) { hid.value = id || ''; try { hid.dispatchEvent(new Event('change')); } catch (e) {} }
+    if (q) q.value = label || '';
+    if (list) list.hidden = true;
+    var extra = window['__dpOnChange_' + selId];
+    if (extra) { try { /* eslint-disable no-new-func */ (new Function(extra))(); } catch (e) {} }
+  }
+  window.dpComboPick = function (e, selId) {
+    e.preventDefault();               // fire before blur closes the list
+    var el = e.currentTarget;
+    commitPick(selId, el.dataset.id, el.dataset.label);
+  };
+
   window.devLinkAdd = function (selId) {
     if (typeof window.openDevoteeSheet !== 'function') {
       if (typeof showToast === 'function') showToast('Devotee form unavailable');
       return;
     }
+    var typed = (document.getElementById(selId + '__q') || {}).value || '';
     window.openDevoteeSheet({
       title: 'Add a new devotee',
+      prefillName: typed && !findPerson((document.getElementById(selId) || {}).value) ? typed : '',
       onSaved: function (dev) {
-        var sel = document.getElementById(selId);
-        if (!sel) return;
-        var o = Array.prototype.slice.call(sel.options).filter(function (x) { return String(x.value) === String(dev.id); })[0];
-        if (!o) {
-          o = document.createElement('option');
-          o.value = dev.id;
-          o.textContent = dev.name + (dev.mobile ? ' · ' + dev.mobile : '') + (dev.city ? ' · ' + dev.city : '');
-          sel.appendChild(o);
-        }
-        sel.value = dev.id;
-        try { sel.dispatchEvent(new Event('change')); } catch (e) {}
+        commitPick(selId, dev.id, dev.name + (dev.mobile ? ' · ' + dev.mobile : '') + (dev.city ? ' · ' + dev.city : ''));
       }
     });
   };
   /** { id, name, firstName, lastName, mobile, city, state } for the chosen person, or null. */
   window.devoteeLinkValue = function (selId) {
-    var sel = document.getElementById(selId);
-    if (!sel || !sel.value) return null;
-    var people = (typeof window.allPeople === 'function') ? window.allPeople() : [];
-    var p = people.filter(function (x) { return String(x.id) === String(sel.value); })[0];
-    var name = p ? p.name : ((sel.options[sel.selectedIndex] || {}).textContent || '').split(' · ')[0];
+    var hid = document.getElementById(selId);
+    if (!hid || !hid.value) return null;
+    var p = findPerson(hid.value);
+    var name = p ? p.name : (((document.getElementById(selId + '__q') || {}).value || '').split(' · ')[0]);
     var parts = String(name || '').trim().split(/\s+/);
     return {
-      id: sel.value, name: name,
+      id: hid.value, name: name,
       firstName: parts.shift() || '', lastName: parts.join(' '),
       mobile: (p && p.mobile) || '', city: (p && p.city) || '', state: (p && p.state) || 'Gujarat'
     };
@@ -288,9 +365,8 @@
     });
     var pickedCmt = (window.__dpCommitteePicker && typeof devoteeCommitteePicked === 'function')
       ? devoteeCommitteePicked('dpForm') : null;
-    // samaj label follows the first ticked committee (samaj == samaj committee here)
-    var samaj = (pickedCmt && pickedCmt.length && typeof samajFromCommitteeCode === 'function')
-      ? samajFromCommitteeCode(pickedCmt[0]) : '';
+    // NOTE: devotees.samaj is deprecated — samaj membership is a committee_members
+    // relationship (the checklist), never a column. Nothing samaj-related is sent.
 
     // dedupe against the register
     var existing = window.allPeople().filter(function (p) { return digits(p.mobile) === mobile; })[0];
@@ -301,7 +377,7 @@
 
     var online = !!(window.API && window.API.online);
     if (online) {
-      window.API.post('/devotees', { name: name, mobile: mobile, city: city, state: st, samaj: samaj })
+      window.API.post('/devotees', { name: name, mobile: mobile, city: city, state: st })
         .then(function (d) {
           pushLocal(d.id || d.code, name, mobile, city);
           finish({ id: d.id || d.code, name: name, mobile: mobile, city: city });
@@ -316,7 +392,7 @@
     function pushLocal(id, nm, mob, ct) {
       if (typeof state === 'undefined' || !Array.isArray(state.devotees)) return;
       if (!state.devotees.some(function (x) { return digits(x.phone || x.mobile) === digits(mob); })) {
-        state.devotees.unshift({ id: id, name: nm, phone: mob, mobile: mob, city: ct, samaj: samaj, status: 'active', visits: 0 });
+        state.devotees.unshift({ id: id, name: nm, phone: mob, mobile: mob, city: ct, status: 'active', visits: 0 });
       }
     }
     function finish(dev) {

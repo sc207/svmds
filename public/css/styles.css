@@ -2386,6 +2386,25 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 .link-field > select { flex: 1 1 200px; min-width: 0; }
 .link-field > .btn-add-devotee { flex: 0 0 auto; }
 
+/* searchable devotee combobox (devoteeLinkField) */
+.dp-combo { position: relative; display: block; }
+.dp-combo-input { width: 100%; }
+.dp-combo-list {
+  position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 3px);
+  max-height: 260px; overflow-y: auto;
+  background: #fff; border: 1px solid var(--warm-border); border-radius: var(--radius-md);
+  box-shadow: 0 10px 28px rgba(74, 43, 40, 0.16);
+}
+.dp-combo-opt {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 0.42rem 0.6rem; cursor: pointer; border-bottom: 1px solid var(--warm-ivory);
+}
+.dp-combo-opt:last-child { border-bottom: 0; }
+.dp-combo-opt strong { font-size: 0.86rem; color: var(--text-brown, #4a3728); }
+.dp-combo-opt small { font-size: 0.72rem; color: var(--muted-brown); }
+.dp-combo-opt.active, .dp-combo-opt:hover { background: var(--warm-ivory); }
+.dp-combo-empty { padding: 0.6rem; font-size: 0.8rem; color: var(--muted-brown); }
+
 /* checkbox roster */
 .people-check-list {
   max-height: 264px; overflow-y: auto;

@@ -50,7 +50,7 @@ function devoteeProfile(devoteeId) {
   const name = dev.name || (per && per.name) || id;
   const mobile = devoDigits(dev.mobile || dev.phone || (per && per.mobile));
   const city = dev.city || (per && per.city) || '';
-  const samaj = dev.samaj || '';
+  const samaj = devoteeSamajLabel(id);   // derived from the Samaj-type committee
   const status = (dev.status || 'active').toLowerCase() === 'inactive' ? 'inactive' : 'active';
   const now = devoToday();
 
@@ -312,9 +312,23 @@ function backToDevotees() {
 /* ============================================================
    LIST VIEW
    ============================================================ */
+/* A devotee's "Samaj" is DERIVED — it is the samaj label of the Samaj-type
+   committee they belong to (`committees.samaj` via committee_members).
+   `devotees.samaj` is deprecated / dead (migration 011). */
+function devoteeSamajLabel(devId) {
+  if (typeof committeesOfDevotee !== 'function') return '';
+  const links = committeesOfDevotee(devId) || [];
+  for (const x of links) {
+    const c = x.committee;
+    if (c && c.samaj) return c.samaj;
+  }
+  return '';
+}
 function devoteeSamajOptions() {
   const set = {};
-  (state.devotees || []).forEach(d => { if (d.samaj) set[d.samaj] = 1; });
+  if (typeof CMT !== 'undefined' && Array.isArray(CMT.committees)) {
+    CMT.committees.forEach(c => { if (c && c.samaj) set[c.samaj] = 1; });
+  }
   return Object.keys(set).sort();
 }
 
@@ -345,16 +359,8 @@ function devoteeCommitteeChecklist(devId, checkedCodes) {
       (cur[code] ? ' checked' : '') + '> <span>' + esc(nm) + '</span></label>';
   }).join('');
   return '<div class="form-group" style="grid-column:1/-1">' +
-    '<label class="form-label">' + window.t('dv_committees_pick', 'Samaj / Committee — tick the ones this person belongs to') + '</label>' +
+    '<label class="form-label">' + window.t('dv_committees_pick', 'Committees') + '</label>' +
     '<div class="dv-cmt-list">' + rows + '</div></div>';
-}
-
-/** The samaj label that goes with a committee ("Marvadi Samaj" for the
-    Marvadi Samaj Committee) so devotees.samaj stays in step with membership. */
-function samajFromCommitteeCode(code) {
-  if (!code || typeof CMT === 'undefined' || !Array.isArray(CMT.committees)) return '';
-  const c = CMT.committees.find(x => (x.code || x.id) === code);
-  return c ? (c.samaj || c.name || '') : '';
 }
 
 /** Read the ticked committee codes out of an open devotee form. */
@@ -381,24 +387,6 @@ function syncDevoteeCommittees(devId, wantCodes, addOnly) {
   const toAdd = Object.keys(want).filter(c => !curByCode[c]);
   const toRemove = addOnly ? [] : Object.keys(curByCode).filter(c => !want[c]);
   if (!toAdd.length && !toRemove.length) return Promise.resolve();
-
-  /* keep the devotee's samaj label in step — the register column / filter
-     read devotees.samaj, and for this temple the samaj IS the samaj committee. */
-  try {
-    const dRec = (typeof devoteeById === 'function') ? devoteeById(devId) : null;
-    if (dRec) {
-      const firstCode = (addOnly ? Object.keys(want) : Object.keys(want).concat(Object.keys(curByCode)))
-        .filter(c => want[c])[0] || '';
-      const label = samajFromCommitteeCode(firstCode);
-      const nextSamaj = firstCode ? label : (addOnly ? dRec.samaj : '');
-      if (nextSamaj !== dRec.samaj) {
-        dRec.samaj = nextSamaj;
-        if (window.API && window.API.online && typeof window.API.patch === 'function') {
-          window.API.patch('/devotees/' + devId, { samaj: nextSamaj }).catch(function () {});
-        }
-      }
-    }
-  } catch (e) {}
 
   const online = !!(window.API && window.API.online);
   if (!online) {
@@ -444,9 +432,10 @@ function devoteeListView() {
   const q = (DEVO.search || '').toLowerCase().trim();
   const all = (typeof state !== 'undefined' && Array.isArray(state.devotees)) ? state.devotees.slice() : [];
   const list = all.filter(function (d) {
-    if (DEVO.samaj !== 'all' && (d.samaj || '') !== DEVO.samaj) return false;
+    const samaj = devoteeSamajLabel(d.id);
+    if (DEVO.samaj !== 'all' && samaj !== DEVO.samaj) return false;
     if (!q) return true;
-    return [d.name, d.mobile, d.phone, d.city, d.samaj].join(' ').toLowerCase().indexOf(q) !== -1;
+    return [d.name, d.mobile, d.phone, d.city, samaj].join(' ').toLowerCase().indexOf(q) !== -1;
   });
 
   const profiles = list.map(d => devoteeProfile(d.id));
@@ -472,7 +461,7 @@ function devoteeListView() {
         '<div><strong>' + esc(d.name || '—') + '</strong><div class="mg-muted-xs">' + esc(d.id) + '</div></div></div></td>' +
       '<td>' + esc(d.mobile || d.phone || '—') + '</td>' +
       '<td>' + esc(d.city || '—') + '</td>' +
-      '<td>' + (d.samaj ? '<span class="badge badge-maroon">' + esc(devoData(d.samaj)) + '</span>' : '<span class="mg-muted-xs">—</span>') + '</td>' +
+      '<td>' + (function () { const s = devoteeSamajLabel(d.id); return s ? '<span class="badge badge-maroon">' + esc(devoData(s)) + '</span>' : '<span class="mg-muted-xs">—</span>'; })() + '</td>' +
       '<td>' + seq(p.counts.committees) + '</td>' +
       '<td>' + seq(p.counts.teams) + '</td>' +
       '<td>' + split(p.counts.sevaUpcoming, p.counts.sevaPast) + '</td>' +
@@ -807,7 +796,7 @@ function devoteesExport() {
   const rows = ((typeof state !== 'undefined' && Array.isArray(state.devotees)) ? state.devotees : []).map(function (d) {
     const p = devoteeProfile(d.id);
     return [
-      d.name || '', d.mobile || d.phone || '', d.city || '', d.samaj || '',
+      d.name || '', d.mobile || d.phone || '', d.city || '', p.samaj || '',
       p.counts.committees, p.counts.teams, p.sevaPoojas.total, p.coordPoojas.total,
       p.volunteerTeams.count, p.guestAppearances.total, p.visits.total,
       p.donations.totalReceived, p.donations.totalPledged, (d.status || 'active')
@@ -843,7 +832,7 @@ function printDevoteeLedger(id) {
     subtitle: window.t('dv_ledger_sub', 'Chronological record of every temple engagement'),
     columns: ['#', window.t('date', 'Date'), window.t('dv_col_type', 'Type'), window.t('dv_col_detail', 'Detail'), window.t('status', 'Status'), window.t('dv_col_amount', 'Amount (₹)')],
     rows: rows,
-    meta: ['Devotee: ' + (dev.name || id), 'Samaj: ' + (dev.samaj || '—'), 'As of ' + devoToday()]
+    meta: ['Devotee: ' + (dev.name || id), 'Samaj: ' + (devoteeSamajLabel(id) || '—'), 'As of ' + devoToday()]
   });
 }
 
