@@ -14,21 +14,36 @@ const adminTier = requireRole('superadmin', 'admin');
 const PURPOSE = ['home_inauguration', 'shop_opening', 'wedding_blessing', 'health_blessing', 'business_puja', 'festival_padhramani', 'other'];
 const STATUS = ['requested', 'scheduled', 'confirmed', 'completed', 'cancelled'];
 
-const byIdOrCode = v => queryOne('SELECT * FROM visits WHERE (id = ? OR code = ?) AND is_deleted = 0', [v, v]);
+/* current requester identity from the JOINed devotees row; escort team name from teams */
+const VISIT_SELECT = `SELECT v.*, dv.code AS devotee_code, dv.name AS dev_name, dv.mobile AS dev_mobile,
+  dv.city AS dev_city, dv.state AS dev_state, tm.name AS escort_team_name
+  FROM visits v
+  LEFT JOIN devotees dv ON dv.id = v.devotee_id
+  LEFT JOIN teams tm ON tm.id = v.escort_team_id`;
+
+const byIdOrCode = v => queryOne(`${VISIT_SELECT} WHERE (v.id = ? OR v.code = ?) AND v.is_deleted = 0`, [v, v]);
+
+/* resolve an escortTeamId (numeric id or MGMT-### code) to teams.id, else null */
+async function resolveTeam(v) {
+  if (v == null || String(v).trim() === '') return null;
+  const t = await queryOne('SELECT id FROM teams WHERE (id = ? OR code = ?) AND is_deleted = 0',
+    [parseInt(v, 10) || -1, String(v)]);
+  return t ? t.id : null;
+}
 
 router.get('/', async (req, res, next) => {
   try {
-    const where = ['is_deleted = 0'];
+    const where = ['v.is_deleted = 0'];
     const args = [];
-    if (req.query.status) { where.push('status = ?'); args.push(req.query.status); }
-    if (req.query.from) { where.push('date >= ?'); args.push(req.query.from); }
-    if (req.query.to) { where.push('date <= ?'); args.push(req.query.to); }
+    if (req.query.status) { where.push('v.status = ?'); args.push(req.query.status); }
+    if (req.query.from) { where.push('v.date >= ?'); args.push(req.query.from); }
+    if (req.query.to) { where.push('v.date <= ?'); args.push(req.query.to); }
     if (req.query.q) {
-      where.push('(devotee_name LIKE ? OR mobile LIKE ? OR city LIKE ? OR code LIKE ?)');
+      where.push('(v.devotee_name LIKE ? OR dv.name LIKE ? OR v.mobile LIKE ? OR v.city LIKE ? OR v.code LIKE ?)');
       const like = `%${req.query.q}%`;
-      args.push(like, like, like, like);
+      args.push(like, like, like, like, like);
     }
-    const rows = await queryAll(`SELECT * FROM visits WHERE ${where.join(' AND ')} ORDER BY date DESC, time`, args);
+    const rows = await queryAll(`${VISIT_SELECT} WHERE ${where.join(' AND ')} ORDER BY v.date DESC, v.time`, args);
     res.json(rows.map(mapVisit));
   } catch (e) { next(e); }
 });
@@ -67,13 +82,14 @@ router.post('/', async (req, res, next) => {
     } else if ((mobile && mobile.length === 10) || city) {
       devoteeId = await ensureDevotee({ name, mobile, city, state: b.state });
     }
+    const escortTeamId = await resolveTeam(b.escortTeamId);
     const id = crypto.randomUUID();
     const code = await nextCode('visit');
     await run(
-      `INSERT INTO visits (id, code, devotee_name, devotee_id, mobile, purpose, address, city, state, date, time, escort_team, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO visits (id, code, devotee_name, devotee_id, mobile, purpose, address, city, state, date, time, escort_team, escort_team_id, status, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, code, name, devoteeId, mobile, purpose, b.address || '', city, b.state || 'Gujarat',
-       b.date, b.time || '', b.escortTeam || '', status, b.notes || '']
+       b.date, b.time || '', b.escortTeam || '', escortTeamId, status, b.notes || '']
     );
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Visits',
       action: 'CREATE', entityType: 'visit', entityId: code, details: { name, purpose } });
@@ -120,6 +136,9 @@ router.patch('/:id', async (req, res, next) => {
     if (b.status !== undefined) {
       if (!STATUS.includes(b.status)) return res.status(400).json({ error: 'bad status' });
       sets.push('status = ?'); args.push(b.status);
+    }
+    if (b.escortTeamId !== undefined) {
+      sets.push('escort_team_id = ?'); args.push(await resolveTeam(b.escortTeamId));
     }
     if (!sets.length) return res.json(mapVisit(row));
     sets.push(`updated_at = datetime('now')`);

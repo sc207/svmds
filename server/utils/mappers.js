@@ -1,6 +1,35 @@
 /* snake_case DB row → camelCase DTO. One mapX per table the API returns.
    Keep these pure — no db calls, no req/res. (BACKEND_PLAN.md §4.1) */
 
+/* Person identity for a relationship row (committee_members / team_members /
+   sevarthis / donors / guests / visits).
+
+   CURRENT identity is resolved from the JOINed canonical devotees row — the
+   route SELECT aliases it as devotee_code / dev_name / dev_mobile / dev_city /
+   dev_state. The row's own first_name / last_name / mobile / city / state are a
+   FROZEN "as recorded" snapshot, surfaced (as asRecorded*) only for history and
+   used as the value ONLY when the row has no devotee link (legacy rows).
+   No PATCH /devotees fan-out — nothing is copied, so an edit is reflected
+   everywhere automatically. See .claude/plans/pooja-module-...refactor. */
+function personIdentity(row) {
+  const linked = row && row.devotee_id != null &&
+    (row.dev_name != null || row.dev_mobile != null || row.devotee_code != null);
+  const snapFull = `${(row && row.first_name) || ''} ${(row && row.last_name) || ''}`.trim();
+  const curFull = linked ? String(row.dev_name || '').trim() : snapFull;
+  const parts = curFull.split(/\s+/).filter(Boolean);
+  return {
+    devoteeCode: (row && row.devotee_code) || null,
+    firstName: linked ? (parts.shift() || '') : ((row && row.first_name) || ''),
+    lastName: linked ? parts.join(' ') : ((row && row.last_name) || ''),
+    name: curFull,
+    mobile: linked ? (row.dev_mobile || '') : ((row && row.mobile) || ''),
+    city: linked ? (row.dev_city || '') : ((row && row.city) || ''),
+    state: linked ? (row.dev_state || 'Gujarat') : ((row && row.state) || 'Gujarat'),
+    asRecordedName: snapFull,
+    asRecordedMobile: (row && row.mobile) || '',
+  };
+}
+
 function mapUser(row) {
   if (!row) return null;
   return {
@@ -54,23 +83,28 @@ function mapDonationCategory(row) {
 
 function mapDonor(row) {
   if (!row) return null;
-  const name = (row.org_name && row.org_name.trim())
-    ? row.org_name
+  // individual + linked → current name from the devotee; org/trust → org_name
+  const linkedIndiv = row.type === 'individual' && row.devotee_id != null && row.dev_name != null;
+  const personName = linkedIndiv ? String(row.dev_name || '').trim()
     : `${row.first_name || ''} ${row.last_name || ''}`.trim();
+  const pParts = personName.split(/\s+/).filter(Boolean);
+  const name = (row.org_name && row.org_name.trim()) ? row.org_name : personName;
   return {
     id: row.code || String(row.id),
     rowId: row.id,
     code: row.code || '',
     type: row.type,                    // individual | organization | trust
-    firstName: row.first_name || '',
-    lastName: row.last_name || '',
+    firstName: linkedIndiv ? (pParts.shift() || '') : (row.first_name || ''),
+    lastName: linkedIndiv ? pParts.join(' ') : (row.last_name || ''),
     orgName: row.org_name || '',
     contactPerson: row.contact_person || '',
     name,
+    asRecordedName: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
     devoteeId: row.devotee_id || null,
-    mobile: row.mobile || '',
-    city: row.city || '',
-    state: row.state || 'Gujarat',
+    devoteeCode: row.devotee_code || null,
+    mobile: (row.devotee_id != null && row.dev_mobile != null) ? row.dev_mobile : (row.mobile || ''),
+    city: (row.devotee_id != null && row.dev_city != null) ? row.dev_city : (row.city || ''),
+    state: (row.devotee_id != null && row.dev_state != null) ? row.dev_state : (row.state || 'Gujarat'),
     committee: row.committee || '',
     pan: row.pan || '',
     notes: row.notes || '',
@@ -103,6 +137,8 @@ function mapDonation(row) {
     certificateIssued: !!row.certificate_issued,
     notes: row.notes || '',
     recordedBy: row.recorded_by || '',
+    recordedByUserId: row.recorded_by_user_id || null,
+    recordedByName: row.recorded_by_name || row.recorded_by || '',
     donorName: row.donor_name || '',
     categoryName: row.category_name || '',
     createdAt: row.created_at,
@@ -140,17 +176,20 @@ function mapPoojaSession(row) {
 
 function mapSevarthi(row) {
   if (!row) return null;
+  const p = personIdentity(row);
   return {
     id: row.code || String(row.id),
     rowId: row.id,
     code: row.code || '',
     devoteeId: row.devotee_id || null,
-    firstName: row.first_name || '',
-    lastName: row.last_name || '',
-    name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
-    mobile: row.mobile || '',
-    city: row.city || '',
-    state: row.state || 'Gujarat',
+    devoteeCode: p.devoteeCode,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    name: p.name,
+    mobile: p.mobile,
+    city: p.city,
+    state: p.state,
+    asRecordedName: p.asRecordedName,
     committee: row.committee || '',
     status: row.status === 'inactive' ? 'inactive' : 'active',
     notes: row.notes || '',
@@ -160,18 +199,22 @@ function mapSevarthi(row) {
 
 function mapGuest(row) {
   if (!row) return null;
+  const p = personIdentity(row);
   return {
     id: row.code || String(row.id),
     rowId: row.id,
     code: row.code || '',
-    firstName: row.first_name || '',
-    lastName: row.last_name || '',
-    name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+    devoteeId: row.devotee_id || null,
+    devoteeCode: p.devoteeCode,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    name: p.name,
     role: row.role || '',
     title: row.role || '',
-    mobile: row.mobile || '',
-    city: row.city || '',
-    state: row.state || 'Gujarat',
+    mobile: p.mobile,
+    city: p.city,
+    state: p.state,
+    asRecordedName: p.asRecordedName,
     notes: row.notes || '',
   };
 }
@@ -235,18 +278,21 @@ function mapCommittee(row, extra = {}) {
 
 function mapCommitteeMember(row) {
   if (!row) return null;
+  const p = personIdentity(row);
   return {
     id: row.code || String(row.id),
     rowId: row.id,
     code: row.code || '',
     committeeId: row.committee_id,
     devoteeId: row.devotee_id || null,
-    firstName: row.first_name || '',
-    lastName: row.last_name || '',
-    name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
-    mobile: row.mobile || '',
-    city: row.city || '',
-    state: row.state || 'Gujarat',
+    devoteeCode: p.devoteeCode,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    name: p.name,
+    mobile: p.mobile,
+    city: p.city,
+    state: p.state,
+    asRecordedName: p.asRecordedName,
     role: row.role || 'Member',
     status: row.status === 'inactive' ? 'inactive' : 'active',
     notes: row.notes || '',
@@ -341,18 +387,21 @@ function mapTeam(row, extra = {}) {
 
 function mapTeamMember(row) {
   if (!row) return null;
+  const p = personIdentity(row);
   return {
     id: row.code || String(row.id),
     rowId: row.id,
     code: row.code || '',
     teamId: row.team_id,
     devoteeId: row.devotee_id || null,
-    firstName: row.first_name || '',
-    lastName: row.last_name || '',
-    name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
-    mobile: row.mobile || '',
-    city: row.city || '',
-    state: row.state || 'Gujarat',
+    devoteeCode: p.devoteeCode,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    name: p.name,
+    mobile: p.mobile,
+    city: p.city,
+    state: p.state,
+    asRecordedName: p.asRecordedName,
     role: row.role || 'Volunteer',
     status: row.status === 'inactive' ? 'inactive' : 'active',
     notes: row.notes || '',
@@ -449,20 +498,25 @@ function mapEvent(row, days = []) {
 
 function mapVisit(row) {
   if (!row) return null;
+  const linked = row.devotee_id != null && row.dev_name != null;
   return {
     id: row.code || row.id,
     uuid: row.id,
     code: row.code || '',
-    devoteeName: row.devotee_name,
+    devoteeName: linked ? String(row.dev_name || '').trim() : (row.devotee_name || ''),
+    asRecordedName: row.devotee_name || '',
     devoteeId: row.devotee_id || null,
-    mobile: row.mobile || '',
+    devoteeCode: row.devotee_code || null,
+    mobile: linked && row.dev_mobile != null ? row.dev_mobile : (row.mobile || ''),
     purpose: row.purpose || 'other',
     address: row.address || '',
-    city: row.city || '',
-    state: row.state || 'Gujarat',
+    city: linked && row.dev_city != null ? row.dev_city : (row.city || ''),
+    state: linked && row.dev_state != null ? row.dev_state : (row.state || 'Gujarat'),
     date: row.date,
     time: row.time || '',
     escortTeam: row.escort_team || '',
+    escortTeamId: row.escort_team_id || null,
+    escortTeamName: row.escort_team_name || row.escort_team || '',
     status: row.status || 'requested',
     notes: row.notes || '',
     createdAt: row.created_at,

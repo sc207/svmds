@@ -17,11 +17,14 @@ const adminTier = requireRole('superadmin', 'admin');
 const SELECT = `
   SELECT dn.*,
          dr.code AS donor_code, dc.code AS category_code,
-         COALESCE(NULLIF(dr.org_name,''), TRIM(dr.first_name || ' ' || dr.last_name)) AS donor_name,
-         dc.name AS category_name, dc.kind AS category_kind
+         COALESCE(NULLIF(dr.org_name,''), NULLIF(TRIM(ddv.name),''), TRIM(dr.first_name || ' ' || dr.last_name)) AS donor_name,
+         dc.name AS category_name, dc.kind AS category_kind,
+         ru.name AS recorded_by_name
   FROM donations dn
   JOIN donors dr             ON dr.id = dn.donor_id
   JOIN donation_categories dc ON dc.id = dn.category_id
+  LEFT JOIN devotees ddv     ON ddv.id = dr.devotee_id
+  LEFT JOIN users ru         ON ru.id = dn.recorded_by_user_id
   WHERE dn.is_deleted = 0`;
 
 /* GET /   ?status=received|pledged &donorId= &categoryId= &from= &to= &q= */
@@ -93,7 +96,8 @@ router.post('/', async (req, res, next) => {
 
     const id = crypto.randomUUID();
     const code = await nextCode('donation');
-    const recordedBy = req.user.email || String(req.user.id);
+    const recordedBy = req.user.email || String(req.user.id);   // as-recorded label
+    const recordedByUserId = req.user.id || null;               // the real account link
 
     // nextReceiptNo() is a max()+1 scan, so two donations on the same date can
     // compute the same number. ux_donations_receipt is the hard stop — on a
@@ -105,10 +109,10 @@ router.post('/', async (req, res, next) => {
         await run(
           `INSERT INTO donations
              (id, code, receipt_no, donor_id, category_id, mode, amount, item, qty, valuation,
-              date, purpose, committee, status, notes, recorded_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              date, purpose, committee, status, notes, recorded_by, recorded_by_user_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [id, code, receiptNo, donor.id, cat.id, mode, amount, item, qty, valuation,
-           b.date, b.purpose || '', b.committee || donor.committee || '', status, b.notes || '', recordedBy]
+           b.date, b.purpose || '', b.committee || donor.committee || '', status, b.notes || '', recordedBy, recordedByUserId]
         );
         break;
       } catch (e) {

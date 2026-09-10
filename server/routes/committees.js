@@ -28,7 +28,10 @@ async function committeeByIdOrCode(v) {
 async function hydrate(row) {
   if (!row) return null;
   const [members, meetingRows, communication, drafts] = await Promise.all([
-    queryAll('SELECT * FROM committee_members WHERE committee_id = ? AND is_deleted = 0 ORDER BY first_name', [row.id]),
+    queryAll(`SELECT cm.*, dv.code AS devotee_code, dv.name AS dev_name, dv.mobile AS dev_mobile,
+                dv.city AS dev_city, dv.state AS dev_state
+              FROM committee_members cm LEFT JOIN devotees dv ON dv.id = cm.devotee_id
+              WHERE cm.committee_id = ? AND cm.is_deleted = 0 ORDER BY dv.name, cm.first_name`, [row.id]),
     queryAll('SELECT * FROM meetings WHERE committee_id = ? AND is_deleted = 0 ORDER BY date DESC', [row.id]),
     shared.getCommunication('committee', row.id),
     shared.listDrafts('committee', row.id),

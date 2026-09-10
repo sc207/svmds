@@ -21,12 +21,18 @@ async function hydrate(poojaRow) {
   if (!poojaRow) return null;
   const [sessRows, sevRows, coordRows, guestRows] = await Promise.all([
     queryAll('SELECT * FROM pooja_sessions WHERE pooja_id = ? AND is_deleted = 0 ORDER BY date, start_time', [poojaRow.id]),
-    queryAll(`SELECT s.* FROM sevarthis s JOIN pooja_sevarthi_links l ON l.sevarthi_id = s.id
+    queryAll(`SELECT s.*, dv.code AS devotee_code, dv.name AS dev_name, dv.mobile AS dev_mobile,
+                dv.city AS dev_city, dv.state AS dev_state
+              FROM sevarthis s JOIN pooja_sevarthi_links l ON l.sevarthi_id = s.id
+              LEFT JOIN devotees dv ON dv.id = s.devotee_id
               WHERE l.pooja_id = ? AND s.is_deleted = 0`, [poojaRow.id]),
     queryAll(`SELECT l.user_id, l.devotee_id, d.code AS devotee_code
               FROM pooja_coordinator_links l LEFT JOIN devotees d ON d.id = l.devotee_id
               WHERE l.pooja_id = ?`, [poojaRow.id]),
-    queryAll(`SELECT g.* FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
+    queryAll(`SELECT g.*, dv.code AS devotee_code, dv.name AS dev_name, dv.mobile AS dev_mobile,
+                dv.city AS dev_city, dv.state AS dev_state
+              FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
+              LEFT JOIN devotees dv ON dv.id = g.devotee_id
               WHERE l.pooja_id = ? AND g.is_deleted = 0`, [poojaRow.id]),
   ]);
   // coordinatorIds = the person identity (devotee code) so the client links the
@@ -422,36 +428,32 @@ router.delete('/:id/coordinators/:ref', adminTier, async (req, res, next) => {
 });
 
 /* ---------- guests ---------- */
+/* Returns { ok, guestId?, code?, reason? }. A guest is always a devotee (a real
+   person invited to a pooja), so we require enough to resolve one — a 10-digit
+   mobile OR a name+city — and never create an unlinked / un-dedupable row. */
 async function addGuest(poojaId, g) {
-  const raw = String(g.firstName || g.name || '').trim();
-  if (!raw) return;
-  const parts = raw.split(/\s+/);
-  const first = g.firstName ? String(g.firstName).trim() : (parts.shift() || raw);
-  const last = g.lastName != null ? String(g.lastName) : parts.join(' ');
   const mobile = digits(g.mobile);
   const city = String(g.city || '').trim();
-
-  // link the guest to a devotee when we can identify the person (10-digit mobile,
-  // or a name + city) so "guest at N poojas" rolls up on the devotee 360 tab.
-  let devoteeId = null;
-  if ((mobile && mobile.length === 10) || (raw && city)) {
-    devoteeId = await ensureDevotee({
-      firstName: first, lastName: last, name: raw, mobile, city, state: g.state,
-    });
+  const rawName = String(g.name || '').trim();
+  const parts = rawName.split(/\s+/).filter(Boolean);
+  const first = g.firstName ? String(g.firstName).trim() : (parts.shift() || '');
+  const last = g.lastName != null ? String(g.lastName).trim() : parts.join(' ');
+  const fullName = `${first} ${last}`.trim() || rawName;
+  if (!fullName) return { ok: false, reason: 'guest name is required' };
+  if (!(mobile.length === 10 || city)) {
+    return { ok: false, reason: 'a 10-digit mobile or a city is required to add a guest' };
   }
 
-  // dedupe within this pooja by devotee, else by mobile
-  if (devoteeId) {
-    const dup = await queryOne(
-      `SELECT g.id FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
-       WHERE l.pooja_id = ? AND g.devotee_id = ? AND g.is_deleted = 0 LIMIT 1`, [poojaId, devoteeId]);
-    if (dup) return;
-  } else if (mobile) {
-    const dup = await queryOne(
-      `SELECT g.id FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
-       WHERE l.pooja_id = ? AND g.mobile = ? AND g.is_deleted = 0 LIMIT 1`, [poojaId, mobile]);
-    if (dup) return;
-  }
+  const devoteeId = await ensureDevotee({
+    firstName: first, lastName: last, name: fullName, mobile, city, state: g.state,
+  });
+  if (!devoteeId) return { ok: false, reason: 'could not resolve the guest to a person' };
+
+  // dedupe within this pooja by the resolved devotee
+  const dup = await queryOne(
+    `SELECT g.id, g.code FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
+     WHERE l.pooja_id = ? AND g.devotee_id = ? AND g.is_deleted = 0 LIMIT 1`, [poojaId, devoteeId]);
+  if (dup) return { ok: true, guestId: dup.id, code: dup.code, deduped: true };
 
   const code = await nextCode('guest');
   const r = await run(
@@ -465,17 +467,16 @@ async function addGuest(poojaId, g) {
     const linked = await queryOne('SELECT 1 AS x FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, r.lastInsertRowid]);
     if (!linked) throw e;
   }
-  // person identity is deduped by ensureDevotee above; if a concurrent call still
-  // produced a second guest row for the same (pooja, devotee), keep the earliest.
-  if (devoteeId) {
-    const rows = await queryAll(
-      `SELECT g.id FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
-       WHERE l.pooja_id = ? AND g.devotee_id = ? AND g.is_deleted = 0 ORDER BY g.id`, [poojaId, devoteeId]);
-    for (let i = 1; i < rows.length; i++) {
-      await run('DELETE FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, rows[i].id]);
-      await run('UPDATE guests SET is_deleted = 1 WHERE id = ?', [rows[i].id]);
-    }
+  // if a concurrent call still produced a second guest row for the same
+  // (pooja, devotee), keep the earliest.
+  const rows = await queryAll(
+    `SELECT g.id FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
+     WHERE l.pooja_id = ? AND g.devotee_id = ? AND g.is_deleted = 0 ORDER BY g.id`, [poojaId, devoteeId]);
+  for (let i = 1; i < rows.length; i++) {
+    await run('DELETE FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, rows[i].id]);
+    await run('UPDATE guests SET is_deleted = 1 WHERE id = ?', [rows[i].id]);
   }
+  return { ok: true, guestId: r.lastInsertRowid, code };
 }
 
 router.post('/:id/guests', async (req, res, next) => {
@@ -483,8 +484,12 @@ router.post('/:id/guests', async (req, res, next) => {
     const row = await poojaByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Pooja not found' });
     if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    if (!String(req.body.firstName || req.body.name || '').trim()) return res.status(400).json({ error: 'firstName is required' });
-    await addGuest(row.id, req.body);
+    const g = await addGuest(row.id, req.body);
+    if (!g.ok) return res.status(400).json({ error: g.reason });
+    if (!g.deduped) {
+      await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
+        action: 'CREATE', entityType: 'guest', entityId: g.code, scopeId: row.code });
+    }
     res.status(201).json(await hydrate(await poojaByIdOrCode(row.id)));
   } catch (e) { next(e); }
 });

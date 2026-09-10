@@ -11,23 +11,28 @@ const { mapSevarthi } = require('../utils/mappers');
 const router = express.Router();
 const adminTier = requireRole('superadmin', 'admin');
 
+/* current person identity comes from the JOINed devotees row — mappers.personIdentity() */
+const SEV_SELECT = `SELECT s.*, dv.code AS devotee_code, dv.name AS dev_name,
+  dv.mobile AS dev_mobile, dv.city AS dev_city, dv.state AS dev_state
+  FROM sevarthis s LEFT JOIN devotees dv ON dv.id = s.devotee_id`;
+
 router.get('/', async (req, res, next) => {
   try {
-    const where = ['is_deleted = 0'];
+    const where = ['s.is_deleted = 0'];
     const args = [];
     if (req.query.q) {
-      where.push('(first_name LIKE ? OR last_name LIKE ? OR mobile LIKE ? OR code LIKE ?)');
+      where.push('(s.first_name LIKE ? OR s.last_name LIKE ? OR s.mobile LIKE ? OR s.code LIKE ?)');
       const like = `%${req.query.q}%`;
       args.push(like, like, like, like);
     }
-    if (req.query.status) { where.push('status = ?'); args.push(req.query.status); }
-    const rows = await queryAll(`SELECT * FROM sevarthis WHERE ${where.join(' AND ')} ORDER BY first_name`, args);
+    if (req.query.status) { where.push('s.status = ?'); args.push(req.query.status); }
+    const rows = await queryAll(`${SEV_SELECT} WHERE ${where.join(' AND ')} ORDER BY s.first_name`, args);
     res.json(rows.map(mapSevarthi));
   } catch (e) { next(e); }
 });
 
 const byIdOrCode = v =>
-  queryOne('SELECT * FROM sevarthis WHERE (id = ? OR code = ?) AND is_deleted = 0', [parseInt(v, 10) || -1, v]);
+  queryOne(`${SEV_SELECT} WHERE (s.id = ? OR s.code = ?) AND s.is_deleted = 0`, [parseInt(v, 10) || -1, v]);
 
 router.get('/:id', async (req, res, next) => {
   try {
@@ -98,7 +103,7 @@ router.patch('/:id', async (req, res, next) => {
     }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
       action: 'UPDATE', entityType: 'sevarthi', entityId: row.code });
-    res.json(mapSevarthi(await queryOne('SELECT * FROM sevarthis WHERE id = ?', [row.id])));
+    res.json(mapSevarthi(await queryOne(`${SEV_SELECT} WHERE s.id = ?`, [row.id])));
   } catch (e) { next(e); }
 });
 

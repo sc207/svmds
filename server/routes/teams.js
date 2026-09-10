@@ -26,7 +26,10 @@ const teamByIdOrCode = v =>
 async function hydrate(row) {
   if (!row) return null;
   const [members, sessRows, ppRow, communication, drafts, pending] = await Promise.all([
-    queryAll('SELECT * FROM team_members WHERE team_id = ? AND is_deleted = 0 ORDER BY first_name', [row.id]),
+    queryAll(`SELECT tm.*, dv.code AS devotee_code, dv.name AS dev_name, dv.mobile AS dev_mobile,
+                dv.city AS dev_city, dv.state AS dev_state
+              FROM team_members tm LEFT JOIN devotees dv ON dv.id = tm.devotee_id
+              WHERE tm.team_id = ? AND tm.is_deleted = 0 ORDER BY dv.name, tm.first_name`, [row.id]),
     queryAll('SELECT * FROM volunteering_sessions WHERE team_id = ? AND is_deleted = 0 ORDER BY date DESC', [row.id]),
     queryOne('SELECT * FROM public_pages WHERE team_id = ?', [row.id]),
     shared.getCommunication('team', row.id),

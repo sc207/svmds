@@ -12,24 +12,29 @@ const router = express.Router();
 const adminTier = requireRole('superadmin', 'admin');
 const TYPES = ['individual', 'organization', 'trust'];
 
+/* current identity of an individual donor comes from the JOINed devotees row */
+const DONOR_SELECT = `SELECT d.*, dv.code AS devotee_code, dv.name AS dev_name,
+  dv.mobile AS dev_mobile, dv.city AS dev_city, dv.state AS dev_state
+  FROM donors d LEFT JOIN devotees dv ON dv.id = d.devotee_id`;
+
 router.get('/', async (req, res, next) => {
   try {
-    const where = ['is_deleted = 0'];
+    const where = ['d.is_deleted = 0'];
     const args = [];
     if (req.query.q) {
-      where.push('(first_name LIKE ? OR last_name LIKE ? OR org_name LIKE ? OR mobile LIKE ? OR code LIKE ?)');
+      where.push('(d.first_name LIKE ? OR d.last_name LIKE ? OR d.org_name LIKE ? OR d.mobile LIKE ? OR d.code LIKE ? OR dv.name LIKE ?)');
       const like = `%${req.query.q}%`;
-      args.push(like, like, like, like, like);
+      args.push(like, like, like, like, like, like);
     }
-    if (req.query.type) { where.push('type = ?'); args.push(req.query.type); }
+    if (req.query.type) { where.push('d.type = ?'); args.push(req.query.type); }
     const rows = await queryAll(
-      `SELECT * FROM donors WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(org_name,''), first_name)`, args);
+      `${DONOR_SELECT} WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(d.org_name,''), dv.name, d.first_name)`, args);
     res.json(rows.map(mapDonor));
   } catch (e) { next(e); }
 });
 
 async function byIdOrCode(v) {
-  return queryOne('SELECT * FROM donors WHERE (id = ? OR code = ?) AND is_deleted = 0', [parseInt(v, 10) || -1, v]);
+  return queryOne(`${DONOR_SELECT} WHERE (d.id = ? OR d.code = ?) AND d.is_deleted = 0`, [parseInt(v, 10) || -1, v]);
 }
 
 router.get('/:id', async (req, res, next) => {
@@ -119,7 +124,7 @@ router.post('/', async (req, res, next) => {
       if (won) return res.status(200).json({ ...mapDonor(won), _deduped: true });
       throw e;
     }
-    res.status(201).json(mapDonor(await queryOne('SELECT * FROM donors WHERE id = ?', [newId])));
+    res.status(201).json(mapDonor(await queryOne(`${DONOR_SELECT} WHERE d.id = ?`, [newId])));
   } catch (e) { next(e); }
 });
 
@@ -172,7 +177,7 @@ router.patch('/:id', async (req, res, next) => {
     await run(`UPDATE donors SET ${sets.join(', ')} WHERE id = ?`, args);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Donations',
       action: 'UPDATE', entityType: 'donor', entityId: row.code });
-    res.json(mapDonor(await queryOne('SELECT * FROM donors WHERE id = ?', [row.id])));
+    res.json(mapDonor(await queryOne(`${DONOR_SELECT} WHERE d.id = ?`, [row.id])));
   } catch (e) { next(e); }
 });
 

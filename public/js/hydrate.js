@@ -278,7 +278,9 @@
     rows.forEach(function (p) {
       (p.guests || []).forEach(function (g) {
         if (!guests[g.id]) guests[g.id] = {
-          id: g.id, code: g.code, devoteeId: '', firstName: g.firstName || '', lastName: g.lastName || '',
+          id: g.id, code: g.code,
+          devoteeId: g.devoteeCode || devCode(g.devoteeId) || '',
+          firstName: g.firstName || '', lastName: g.lastName || '',
           role: g.role || g.title || '', mobile: g.mobile || '', city: g.city || '', state: g.state || 'Gujarat',
           notes: g.notes || ''
         };
