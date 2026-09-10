@@ -248,6 +248,38 @@ async function repairDatabase({ dryRun = false } = {}) {
     }
   }
 
+  // ---------- Step 2d: merge duplicate guest rows for one devotee ----------
+  // guests is a per-person registry (012); the per-pooja role is on
+  // pooja_guest_links. Two live guest rows sharing a devotee_id are a dup.
+  {
+    const dupes = await queryAll(
+      `SELECT devotee_id AS did, MIN(id) AS keep, COUNT(*) AS n
+       FROM guests WHERE is_deleted = 0 AND devotee_id IS NOT NULL
+       GROUP BY devotee_id HAVING COUNT(*) > 1`
+    );
+    for (const g of dupes) {
+      const rows = await queryAll(
+        `SELECT id FROM guests WHERE devotee_id = ? AND is_deleted = 0 ORDER BY id`, [g.did]
+      );
+      for (const r of rows) {
+        if (r.id === g.keep) continue;
+        const links = await queryAll(`SELECT pooja_id FROM pooja_guest_links WHERE guest_id = ?`, [r.id]);
+        for (const l of links) {
+          const has = await queryOne(
+            `SELECT 1 x FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?`, [l.pooja_id, g.keep]);
+          if (has) await W(`DELETE FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?`, [l.pooja_id, r.id]);
+          else await W(`UPDATE pooja_guest_links SET guest_id = ? WHERE pooja_id = ? AND guest_id = ?`, [g.keep, l.pooja_id, r.id]);
+        }
+        await W(
+          `UPDATE guests SET is_deleted = 1,
+             notes = TRIM(COALESCE(notes, '') || ' [merged into guest id ${g.keep} on ${today()}]')
+           WHERE id = ?`, [r.id]);
+        summary.rosterRowsMerged++;
+        log('merged guest row', r.id, '->', g.keep);
+      }
+    }
+  }
+
   // ---------- Step 2c: merge duplicate donor rows for one devotee ----------
   // donors is a per-person store (individuals); two live donor rows sharing a
   // devotee_id are a true duplicate. Repoint donations, then soft-delete losers.
@@ -417,6 +449,8 @@ async function repairDatabase({ dryRun = false } = {}) {
      `SELECT mobile k FROM donors WHERE mobile <> '' AND is_deleted = 0 GROUP BY mobile HAVING COUNT(*) > 1`],
     ['ux_donors_devotee', `CREATE UNIQUE INDEX IF NOT EXISTS ux_donors_devotee ON donors(devotee_id) WHERE devotee_id IS NOT NULL AND is_deleted = 0`,
      `SELECT devotee_id k FROM donors WHERE devotee_id IS NOT NULL AND is_deleted = 0 GROUP BY devotee_id HAVING COUNT(*) > 1`],
+    ['ux_guests_devotee', `CREATE UNIQUE INDEX IF NOT EXISTS ux_guests_devotee ON guests(devotee_id) WHERE devotee_id IS NOT NULL AND is_deleted = 0`,
+     `SELECT devotee_id k FROM guests WHERE devotee_id IS NOT NULL AND is_deleted = 0 GROUP BY devotee_id HAVING COUNT(*) > 1`],
     ['ux_sevarthis_mobile', `CREATE UNIQUE INDEX IF NOT EXISTS ux_sevarthis_mobile ON sevarthis(mobile) WHERE mobile <> '' AND is_deleted = 0`,
      `SELECT mobile k FROM sevarthis WHERE mobile <> '' AND is_deleted = 0 GROUP BY mobile HAVING COUNT(*) > 1`],
     ['ux_sevarthis_devotee', `CREATE UNIQUE INDEX IF NOT EXISTS ux_sevarthis_devotee ON sevarthis(devotee_id) WHERE devotee_id IS NOT NULL AND is_deleted = 0`,

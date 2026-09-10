@@ -29,8 +29,8 @@ async function hydrate(poojaRow) {
     queryAll(`SELECT l.user_id, l.devotee_id, d.code AS devotee_code
               FROM pooja_coordinator_links l LEFT JOIN devotees d ON d.id = l.devotee_id
               WHERE l.pooja_id = ?`, [poojaRow.id]),
-    queryAll(`SELECT g.*, dv.code AS devotee_code, dv.name AS dev_name, dv.mobile AS dev_mobile,
-                dv.city AS dev_city, dv.state AS dev_state
+    queryAll(`SELECT g.*, l.role AS link_role, dv.code AS devotee_code, dv.name AS dev_name,
+                dv.mobile AS dev_mobile, dv.city AS dev_city, dv.state AS dev_state
               FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
               LEFT JOIN devotees dv ON dv.id = g.devotee_id
               WHERE l.pooja_id = ? AND g.is_deleted = 0`, [poojaRow.id]),
@@ -449,34 +449,33 @@ async function addGuest(poojaId, g) {
   });
   if (!devoteeId) return { ok: false, reason: 'could not resolve the guest to a person' };
 
-  // dedupe within this pooja by the resolved devotee
-  const dup = await queryOne(
-    `SELECT g.id, g.code FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
-     WHERE l.pooja_id = ? AND g.devotee_id = ? AND g.is_deleted = 0 LIMIT 1`, [poojaId, devoteeId]);
-  if (dup) return { ok: true, guestId: dup.id, code: dup.code, deduped: true };
+  // ONE registry guest row per person (ux_guests_devotee) — reuse or create it
+  let guest = await queryOne(
+    'SELECT id, code FROM guests WHERE devotee_id = ? AND is_deleted = 0 LIMIT 1', [devoteeId]);
+  if (!guest) {
+    const code = await nextCode('guest');
+    try {
+      const r = await run(
+        `INSERT INTO guests (code, devotee_id, first_name, last_name, mobile, city, state, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [code, devoteeId, first, last, mobile, city, g.state || 'Gujarat', g.notes || '']);
+      guest = { id: r.lastInsertRowid, code };
+    } catch (e) {
+      guest = await queryOne('SELECT id, code FROM guests WHERE devotee_id = ? AND is_deleted = 0 LIMIT 1', [devoteeId]);
+      if (!guest) throw e;
+    }
+  }
 
-  const code = await nextCode('guest');
-  const r = await run(
-    `INSERT INTO guests (code, devotee_id, first_name, last_name, role, mobile, city, state, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [code, devoteeId, first, last, g.role || g.title || '', mobile, city, g.state || 'Gujarat', g.notes || '']
-  );
-  try {
-    await run('INSERT INTO pooja_guest_links (pooja_id, guest_id) VALUES (?, ?)', [poojaId, r.lastInsertRowid]);
-  } catch (e) {
-    const linked = await queryOne('SELECT 1 AS x FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, r.lastInsertRowid]);
-    if (!linked) throw e;
+  // the per-pooja role lives on the link, not the registry row
+  const role = g.role || g.title || '';
+  const linked = await queryOne(
+    'SELECT 1 AS x FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, guest.id]);
+  if (linked) {
+    await run('UPDATE pooja_guest_links SET role = ? WHERE pooja_id = ? AND guest_id = ?', [role, poojaId, guest.id]);
+    return { ok: true, guestId: guest.id, code: guest.code, deduped: true };
   }
-  // if a concurrent call still produced a second guest row for the same
-  // (pooja, devotee), keep the earliest.
-  const rows = await queryAll(
-    `SELECT g.id FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
-     WHERE l.pooja_id = ? AND g.devotee_id = ? AND g.is_deleted = 0 ORDER BY g.id`, [poojaId, devoteeId]);
-  for (let i = 1; i < rows.length; i++) {
-    await run('DELETE FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, rows[i].id]);
-    await run('UPDATE guests SET is_deleted = 1 WHERE id = ?', [rows[i].id]);
-  }
-  return { ok: true, guestId: r.lastInsertRowid, code };
+  await run('INSERT INTO pooja_guest_links (pooja_id, guest_id, role) VALUES (?, ?, ?)', [poojaId, guest.id, role]);
+  return { ok: true, guestId: guest.id, code: guest.code };
 }
 
 router.post('/:id/guests', async (req, res, next) => {

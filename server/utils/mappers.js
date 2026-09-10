@@ -200,6 +200,9 @@ function mapSevarthi(row) {
 function mapGuest(row) {
   if (!row) return null;
   const p = personIdentity(row);
+  // the per-pooja role comes from the pooja_guest_links row (link_role); fall
+  // back to the legacy guests.role column for un-migrated / registry-level reads
+  const role = row.link_role != null ? row.link_role : (row.role || '');
   return {
     id: row.code || String(row.id),
     rowId: row.id,
@@ -209,8 +212,8 @@ function mapGuest(row) {
     firstName: p.firstName,
     lastName: p.lastName,
     name: p.name,
-    role: row.role || '',
-    title: row.role || '',
+    role: role,
+    title: role,
     mobile: p.mobile,
     city: p.city,
     state: p.state,
