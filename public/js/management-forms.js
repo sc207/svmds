@@ -17,14 +17,7 @@
           <span class="mg-muted-xs">Any operational team — the platform is not limited to a fixed set of management types.</span>
         </div>
 
-        <div class="link-section">
-          <div class="link-section-head">
-            <p class="ls-title">Management Lead <span class="ls-req">*</span></p>
-            <button class="btn-add-devotee" type="button" onclick="mgAddLead()">Add new devotee</button>
-          </div>
-          <div class="link-section-hint">Pick a devotee from the register, or add a new one — no login account needed.</div>
-          <div class="link-field"><select class="form-select" id="mgLeadSelect" required></select></div>
-        </div>
+        <div id="mgLeadMount"></div>
 
         <div class="link-section">
           <div class="link-section-head">
@@ -327,7 +320,7 @@ function openAddManagement() {
 
   const f = document.getElementById('formManagement');
   f.reset();
-  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML('');
+  mgMountLead('');
   mgRenderMemberPicker([]);
   document.getElementById('mgFieldName').value = '';
   document.getElementById('mgFieldSize').value = 15;
@@ -345,7 +338,7 @@ function openEditManagement(id) {
   document.getElementById('mgFormTitle').textContent = 'Edit Management';
   document.getElementById('mgFormSubmitBtn').textContent = 'Save Changes';
 
-  document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(m.leadId);
+  mgMountLead(m.leadId, leadById(m.leadId) && leadById(m.leadId).name);
   // the Lead has its own picker — exclude it from the team-members roster below
   mgRenderMemberPicker(
     (membersOf(m.id) || [])
@@ -361,20 +354,15 @@ function openEditManagement(id) {
     `Current team members: ${membersOf(m.id).length} (calculated from actual volunteers)`;  openModal('modalManagement');
 }
 
-function leadOptionsHTML(selected) {
-  if (typeof personOptions === 'function') return personOptions(selected, '— ' + (window.t ? window.t('mg_select_lead', 'Select Management Lead') : 'Select Management Lead') + ' —', { peopleOnly: true });
-  return `<option value="">— Select Management Lead —</option>` +
-    MG.leads.map(l => {
-      const owns = MG.managements.filter(m => m.leadId === l.id).length;
-      return `<option value="${l.id}" ${l.id === selected ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}${owns ? ` (leads ${owns})` : ''}</option>`;
-    }).join('');
-}
-
-/* lead "+ New devotee" + team-member picker — same shared devotee sheet */
-function mgAddLead() {
-  openDevoteeSheet({
-    title: 'Add a new Management Lead (devotee)',
-    onSaved: function (dev) { document.getElementById('mgLeadSelect').innerHTML = leadOptionsHTML(dev.id); }
+/* the Management Lead = the ONE shared searchable devotee picker (id in the
+   hidden #mgLeadSelect input, so handleSaveManagement reads .value unchanged). */
+function mgMountLead(selectedId, selectedLabel) {
+  const mount = document.getElementById('mgLeadMount');
+  if (!mount || typeof devoteeLinkField !== 'function') return;
+  mount.innerHTML = devoteeLinkField({
+    selId: 'mgLeadSelect', label: window.t ? window.t('mg_select_lead', 'Management Lead') : 'Management Lead',
+    required: true, selectedId: selectedId || '', selectedLabel: selectedLabel || '',
+    hint: 'Pick a devotee from the register, or add a new one — no login account needed.'
   });
 }
 const MG_MEMBER_ROLES = ['Volunteer', 'Coordinator', 'In-charge'];

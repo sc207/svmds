@@ -223,34 +223,16 @@
     return Array.prototype.slice.call(form.querySelectorAll('input[type=checkbox]:checked')).map(function (c) { return c.value; });
   }
 
-  /* <option> list of every devotee, disabling any that already hold an account */
-  function accDevoteeOptions() {
-    var withAcct = devWithAccount();
-    return DEVOTEES.map(function (d) {
-      var busy = withAcct[String(d.id)];
-      return '<option value="' + esc(d.id) + '"' + (busy ? ' disabled' : '') + '>' +
-        esc(d.name) + (d.mobile ? ' · ' + esc(d.mobile) : '') + (d.city ? ' · ' + esc(d.city) : '') +
-        (busy ? '  — already has an account' : '') + '</option>';
-    }).join('');
-  }
-
   window.accAddAccount = function () {
     if (typeof openSheet !== 'function') { toast('UI not ready'); return; }
+    var picker = (typeof devoteeLinkField === 'function')
+      ? devoteeLinkField({ selId: 'accDevoteeSel', label: 'Person (devotee)', required: true, onChange: 'accDevoteePicked()' })
+      : '<input class="form-input" id="accDevoteeSel" placeholder="DEV-###">';
     openSheet({
       title: 'Add account',
       body: '<form id="accAddForm">' +
-        /* PERSON — always a devotee: pick an existing one or add a new devotee record */
-        '<div class="link-section">' +
-          '<div class="link-section-head">' +
-            '<p class="ls-title">Person (devotee) <span class="ls-req">*</span></p>' +
-            '<button type="button" class="btn-add-devotee" onclick="accAddDevotee()">Add new devotee</button>' +
-          '</div>' +
-          '<div class="link-field"><select class="form-select" name="devoteeId" id="accDevoteeSel" onchange="accDevoteePicked()">' +
-            '<option value="">— pick a devotee —</option>' + accDevoteeOptions() + '</select></div>' +
-          '<div id="accPersonHint" class="link-section-hint" style="margin:.4rem 0 0">' +
-            (DEVOTEES.length ? DEVOTEES.length + ' devotees in the register — pick one, or add a new devotee'
-                             : 'The register is empty — use “Add new devotee” to create the first person') +
-          '</div></div>' +
+        picker +
+        '<div id="accPersonHint" class="link-section-hint" style="margin:.2rem 0 .6rem"></div>' +
         /* EXTRA — what belongs to the account, not the person */
         '<div class="form-group"><label class="form-label">Google email *</label>' +
           '<input class="form-input" name="email" type="email" placeholder="person@gmail.com" required></div>' +
@@ -260,46 +242,25 @@
     });
   };
 
-  /* the shared devotee sheet, on top of the account sheet — then link the new person */
-  window.accAddDevotee = function () {
-    if (typeof openDevoteeSheet !== 'function') { toast('Devotee form unavailable'); return; }
-    openDevoteeSheet({
-      title: 'Add a new devotee',
-      onSaved: function (dev) {
-        if (!DEVOTEES.some(function (x) { return String(x.id) === String(dev.id); })) DEVOTEES.push(dev);
-        var sel = document.getElementById('accDevoteeSel');
-        if (sel) {
-          sel.innerHTML = '<option value="">— pick a devotee —</option>' + accDevoteeOptions();
-          sel.value = dev.id;
-          accDevoteePicked();
-        }
-      }
-    });
-  };
-
   window.accDevoteePicked = function () {
-    var f = document.getElementById('accAddForm'); if (!f) return;
     var hint = document.getElementById('accPersonHint');
-    var d = DEVOTEES.filter(function (x) { return String(x.id) === String(f.devoteeId.value); })[0];
-    if (!d) {
-      hint.textContent = DEVOTEES.length + ' devotees in the register — pick one, or add a new devotee';
-      return;
-    }
-    var busy = devWithAccount()[String(d.id)];
+    var sel = document.getElementById('accDevoteeSel');
+    if (!hint || !sel) return;
+    var d = DEVOTEES.filter(function (x) { return String(x.id) === String(sel.value); })[0];
+    if (!sel.value) { hint.textContent = ''; return; }
+    var busy = devWithAccount()[String(sel.value)];
     if (busy) {
-      hint.innerHTML = '<span style="color:var(--primary-maroon)">⚠ ' + esc(d.name) + ' already has an account (' + esc(busy) + ')</span>';
+      hint.innerHTML = '<span style="color:var(--primary-maroon)">⚠ ' + esc((d && d.name) || sel.value) + ' already has an account (' + esc(busy) + ')</span>';
       return;
     }
-    hint.innerHTML = '<span style="color:var(--success,#2E7D6B)">✓ <strong>' + esc(d.name) + '</strong>' +
-      (d.mobile ? ' · ' + esc(d.mobile) : '') + (d.city ? ' · ' + esc(d.city) : '') +
-      ' — the account links to this devotee record.</span>';
+    hint.innerHTML = '<span style="color:var(--success,#2E7D6B)">✓ the account links to this devotee record.</span>';
   };
 
   window.accSubmitAdd = async function () {
     var f = document.getElementById('accAddForm'); if (!f) return;
     var email = f.email.value.trim();
     if (!email) { toast('Google email is required'); return; }
-    var devoteeId = f.devoteeId.value;
+    var devoteeId = (document.getElementById('accDevoteeSel') || {}).value || '';
     if (!devoteeId) { toast('Pick a devotee, or add a new one.'); return; }
     try {
       await window.API.post('/users', { email: email, roles: pickedRoles(f), devoteeId: devoteeId });
@@ -322,9 +283,10 @@
             (linked && linked.city ? ' · ' + esc(linked.city) : '') + '" disabled>' +
           '<span class="mg-muted-xs">Linked to devotee ' + esc((linked && linked.id) || devKey) +
             ' — edit the person\'s name / mobile / city in the People register; it updates everywhere.</span></div>'
-      : '<div class="form-group"><label class="form-label">Full name</label><input class="form-input" name="fullName" value="' + esc(u.name || '') + '" placeholder="e.g. Rameshbhai Rabari"></div>' +
-        '<div class="form-group"><label class="form-label">Mobile</label><input class="form-input" name="mobile" maxlength="10" value="' + esc(u.mobile || '') + '"></div>' +
-        '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city" value="' + esc(u.city || '') + '"></div>';
+      : ((typeof devoteeLinkField === 'function')
+          ? devoteeLinkField({ selId: 'accProfileDevSel', label: 'Person (devotee)', required: true }) +
+            '<div class="mg-muted-xs" style="margin:.2rem 0 .5rem">This account is not yet linked to a person — pick the devotee it belongs to (or add a new one).</div>'
+          : '<div class="form-group"><label class="form-label">DEV-### code</label><input class="form-input" id="accProfileDevSel"></div>');
     openSheet({
       title: 'Edit profile — ' + esc(u.name || u.email),
       body: '<form id="accProfileForm">' +
@@ -334,22 +296,17 @@
         personBlock +
       '</form>',
       footer: '<button class="btn btn-outline" onclick="closeSheet()">Cancel</button>' +
-              (devKey ? '' : '<button class="btn btn-primary" onclick="accSubmitProfile(\'' + id + '\')">Save</button>'),
+              (devKey ? '' : '<button class="btn btn-primary" onclick="accSubmitProfile(\'' + id + '\')">Link devotee</button>'),
     });
   };
   window.accSubmitProfile = async function (id) {
-    var f = document.getElementById('accProfileForm');
-    var nameEl = f && f.elements['fullName'];
-    if (!nameEl) return;                              // linked account — nothing editable here
-    var name = (nameEl.value || '').trim().replace(/\s+/g, ' ');
-    if (!name) { toast('Full name is required'); return; }
-    var mobile = f.mobile.value.trim();
-    if (mobile && !/^[0-9]{10}$/.test(mobile)) { toast('Mobile must be 10 digits'); return; }
-    var body = { name: name, mobile: mobile, city: f.city.value.trim() };
+    var sel = document.getElementById('accProfileDevSel');
+    var devoteeId = sel && sel.value;
+    if (!devoteeId) { toast('Pick a devotee, or add a new one.'); return; }
     try {
-      await window.API.patch('/users/' + id, body);
+      await window.API.patch('/users/' + id, { devoteeId: devoteeId });
       if (typeof closeSheet === 'function') closeSheet();
-      toast('Profile updated'); await refresh();
+      toast('Account linked to devotee'); await refresh();
     } catch (e) { toast(e.message); }
   };
 

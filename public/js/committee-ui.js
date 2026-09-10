@@ -502,11 +502,9 @@ function paneCmtSettings(c) {
     <p class="mg-page-sub">${admin ? window.t('cmt_settings_admin', 'Full settings including leader assignment') : window.t('cmt_settings_lead', 'Leaders can edit committee details. Leader assignment is admin-only.')}</p></div></div>
   <div class="card"><div class="card-body"><form onsubmit="saveCmtSettings(event,'${c.id}')">
     <div class="form-group"><label class="form-label">${window.t('cmt_name', 'Committee Name')} *</label><input class="form-input" id="setCmtName" value="${esc(c.name)}" required></div>
+    ${leaderCell}
     <div class="grid mg-2col-form">
-      ${leaderCell}
-      <div class="form-group"><label class="form-label">${window.t('cmt_samaj', 'Samaj')}</label><input class="form-input" id="setCmtSamaj" value="${esc(c.samaj || '')}" list="donCommitteeList"></div>
-    </div>
-    <div class="grid mg-2col-form">
+      <div class="form-group"><label class="form-label">${window.t('cmt_samaj', 'Samaj')}</label><input class="form-input" value="${esc(c.samaj || '—')}" disabled><span class="mg-muted-xs">Edit in “${window.t('cmt_edit', 'Edit Committee')}”.</span></div>
       <div class="form-group"><label class="form-label">${window.t('cmt_expected_size', 'Expected Size')} *</label><input class="form-input" type="number" min="1" id="setCmtSize" value="${c.expectedSize}" required></div>
       <div class="form-group"><label class="form-label">${window.t('status')} *</label><select class="form-select" id="setCmtStatus">
         <option value="active" ${c.status === 'active' ? 'selected' : ''}>${window.t('active')}</option>

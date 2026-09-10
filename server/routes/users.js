@@ -161,6 +161,17 @@ router.patch('/:id', adminTier, async (req, res, next) => {
       if (typeof req.body[f] === 'string') { sets.push(`${f} = ?`); args.push(req.body[f]); }
     }
     if (typeof req.body.active === 'boolean') { sets.push('active = ?'); args.push(req.body.active ? 1 : 0); }
+
+    // link an as-yet-unlinked (legacy) account to a canonical devotee
+    if (!u.devotee_id && req.body.devoteeId != null && String(req.body.devoteeId).trim()) {
+      const dev = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]);
+      if (!dev) return res.status(400).json({ error: 'That devotee no longer exists' });
+      const taken = await queryOne('SELECT id FROM users WHERE devotee_id = ? AND is_deleted = 0 AND id != ?', [dev.id, u.id]);
+      if (taken) return res.status(409).json({ error: 'That devotee already has an account' });
+      sets.push('devotee_id = ?'); args.push(dev.id);
+    }
+
     if (!sets.length) return res.json(dto(u));
 
     sets.push(`updated_at = datetime('now')`);

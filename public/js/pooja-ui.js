@@ -1401,13 +1401,11 @@ function panePoojaSettings(p) {
             <button class="mg-chip-x" onclick="revokeCoordinator('${p.id}','${id}')" title="Revoke">×</button></span>`;
         }).join(' ') : '<span class="mg-muted-xs">No coordinator assigned — only admins can open this pooja.</span>'}
       </div>
-      <form class="flex gap-2 mg-mt-sm" onsubmit="assignCoordinator(event,'${p.id}')">
-        <select class="form-select" id="pjGrantSelect" required>
-          <option value="">— Select a devotee to grant access —</option>
-          ${pool.map(c => `<option value="${c.id}">${esc(c.name)}${c.mobile ? ' · ' + esc(c.mobile) : ''}</option>`).join('')}
-        </select>
-        <button class="btn-add-devotee" type="button" onclick="pjAddCoordinatorDevotee()">Add new devotee</button>
-        <button class="btn btn-primary" type="submit">Grant Access</button>
+      <form class="mg-mt-sm" onsubmit="assignCoordinator(event,'${p.id}')">
+        ${(typeof devoteeLinkField === 'function') ? devoteeLinkField({
+          selId: 'pjGrantSelect', label: window.t('pj_grant_coordinator', 'Grant coordinator access to'), required: true
+        }) : ''}
+        <button class="btn btn-primary mg-mt-sm" type="submit">Grant Access</button>
       </form>
     </div>
   </div>

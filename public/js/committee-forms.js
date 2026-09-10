@@ -13,14 +13,7 @@
         <div class="form-group"><label class="form-label" for="cmtFieldName">Committee Name *</label>
           <input type="text" class="form-input" id="cmtFieldName" placeholder="e.g. Rabari Samaj Committee" required></div>
 
-        <div class="link-section">
-          <div class="link-section-head">
-            <p class="ls-title">Leader <span class="ls-req">*</span></p>
-            <button class="btn-add-devotee" type="button" onclick="cmtAddLeader()">Add new devotee</button>
-          </div>
-          <div class="link-section-hint">Pick a devotee from the register, or add a new one — no login account needed.</div>
-          <div class="link-field"><select class="form-select" id="cmtLeadSelect" required></select></div>
-        </div>
+        <div id="cmtLeadMount"></div>
 
         <div class="link-section">
           <div class="link-section-head">
@@ -137,10 +130,16 @@
    ============================================================ */
 
 /* ---- committee ---- */
-function cmtLeadOptions(sel) {
-  if (typeof personOptions === 'function') return personOptions(sel, '— ' + window.t('cmt_select_leader', 'Select leader') + ' —', { peopleOnly: true });
-  return `<option value="">— ${window.t('cmt_select_leader', 'Select leader')} —</option>` +
-    CMT.leaders.map(l => `<option value="${l.id}" ${l.id === sel ? 'selected' : ''}>${esc(l.name)} · ${esc(l.mobile)}</option>`).join('');
+/* Leader = the ONE shared searchable devotee picker (value in the hidden
+   #cmtLeadSelect input; handleSaveCommittee reads .value unchanged). */
+function cmtMountLead(selectedId, selectedLabel) {
+  const mount = document.getElementById('cmtLeadMount');
+  if (!mount || typeof devoteeLinkField !== 'function') return;
+  mount.innerHTML = devoteeLinkField({
+    selId: 'cmtLeadSelect', label: window.t('cmt_leader', 'Leader'), required: true,
+    selectedId: selectedId || '', selectedLabel: selectedLabel || '',
+    hint: 'Pick a devotee from the register, or add a new one — no login account needed.'
+  });
 }
 function openAddCommittee() {
   if (!isCmtAdmin()) { cmtToast(window.t('cmt_admin_only', 'Only an administrator can do this.')); return; }
@@ -148,7 +147,7 @@ function openAddCommittee() {
   document.getElementById('committeeFormTitle').textContent = window.t('cmt_add', 'Add Committee');
   document.getElementById('committeeFormSubmitBtn').textContent = window.t('cmt_create', 'Create Committee');
   document.getElementById('formCommittee').reset();
-  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions('');
+  cmtMountLead('');
   cmtRenderMemberPicker([]);
   document.getElementById('cmtFieldSize').value = 20;
   document.getElementById('cmtFieldStatus').value = 'active';
@@ -159,7 +158,7 @@ function openEditCommittee(id) {
   CMT.editingCmtId = id;
   document.getElementById('committeeFormTitle').textContent = window.t('cmt_edit', 'Edit Committee');
   document.getElementById('committeeFormSubmitBtn').textContent = window.t('save');
-  document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(c.leaderId);
+  cmtMountLead(c.leaderId, (typeof cmtLeadById === 'function' && cmtLeadById(c.leaderId)) ? cmtLeadById(c.leaderId).name : '');
   // prefill from the live roster (CMT.members) so members added on the workspace
   // tab also show; the leader lives in its own picker, so exclude it here
   cmtRenderMemberPicker(
@@ -174,15 +173,6 @@ function openEditCommittee(id) {
   document.getElementById('cmtFieldPurpose').value = c.purpose;
   document.getElementById('cmtFieldNotes').value = c.notes || '';
   openModal('modalCommittee');
-}
-/* leader "+ New devotee" — reuse the shared sheet, then select the new person */
-function cmtAddLeader() {
-  openDevoteeSheet({
-    title: 'Add a new Leader (devotee)',
-    onSaved: function (dev) {
-      document.getElementById('cmtLeadSelect').innerHTML = cmtLeadOptions(dev.id);
-    }
-  });
 }
 /* members roster inside the committee form — each ticked person also gets a role */
 const CMT_MEMBER_ROLES = ['Member', 'Secretary', 'Treasurer', 'Coordinator', 'Village In-charge', 'Mahila Wing'];
@@ -648,7 +638,6 @@ function saveCmtSettings(e, cid) {
   e.preventDefault();
   const c = cmtById(cid); if (!c) return;
   c.name = document.getElementById('setCmtName').value.trim() || c.name;
-  c.samaj = document.getElementById('setCmtSamaj').value.trim();
   c.expectedSize = parseInt(document.getElementById('setCmtSize').value, 10) || c.expectedSize;
   c.status = document.getElementById('setCmtStatus').value;
   c.purpose = document.getElementById('setCmtPurpose').value.trim() || c.purpose;
@@ -662,7 +651,7 @@ function saveCmtSettings(e, cid) {
   if (window.API && window.API.online) {
     const code = c.code || c.id;
     window.API.patch('/committees/' + code, {
-      name: c.name, samaj: c.samaj, purpose: c.purpose, expectedSize: c.expectedSize, status: c.status, notes: c.notes
+      name: c.name, purpose: c.purpose, expectedSize: c.expectedSize, status: c.status, notes: c.notes
     })
       .then(function () { return (c.leaderId && c.leaderId !== prevLeader) ? window.API.post('/committees/' + code + '/leader', { devoteeId: c.leaderId }) : null; })
       .then(function () { return window.__rehydrate && window.__rehydrate('committees'); })

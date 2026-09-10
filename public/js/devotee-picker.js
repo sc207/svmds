@@ -174,6 +174,7 @@
       if (String(p.name || '').toLowerCase().indexOf(ql) !== -1) return true;
       if (qd.length >= 3 && digits(p.mobile).indexOf(qd) !== -1) return true;
       if (String(p.id || '').toLowerCase().indexOf(ql) !== -1) return true;
+      if (String(p.city || '').toLowerCase().indexOf(ql) !== -1) return true;
       return false;
     }).slice(0, 50);
     if (!hits.length) {

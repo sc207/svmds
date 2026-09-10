@@ -14,10 +14,8 @@
           <div class="form-group"><label class="form-label" for="evFieldType">Event Type *</label><select class="form-select" id="evFieldType" onchange="onEventTypeChange()"></select></div>
           <div class="form-group"><label class="form-label" for="evFieldName">Event Name *</label><input type="text" class="form-input" id="evFieldName" placeholder="e.g. Navratri Mahotsav 2026" required></div>
         </div>
-        <div class="grid mg-2col-form">
-          <div class="form-group"><label class="form-label" for="evFieldVenue">Venue</label><input type="text" class="form-input" id="evFieldVenue" placeholder="e.g. Mahotsav Ground"></div>
-          <div class="form-group"><label class="form-label" for="evFieldIncharge">In-charge</label><select class="form-select" id="evFieldIncharge"></select></div>
-        </div>
+        <div class="form-group"><label class="form-label" for="evFieldVenue">Venue</label><input type="text" class="form-input" id="evFieldVenue" placeholder="e.g. Mahotsav Ground"></div>
+        <div id="evInchargeMount"></div>
         <div class="grid mg-2col-form">
           <div class="form-group"><label class="form-label" for="evFieldFootfall">Expected Footfall</label><input type="number" class="form-input" id="evFieldFootfall" min="0" placeholder="e.g. 3000"></div>
           <div class="form-group"><label class="form-label" for="evFieldBudget">Budget (₹)</label><input type="number" class="form-input" id="evFieldBudget" min="0" placeholder="e.g. 250000"></div>
@@ -78,10 +76,17 @@ function evTypeOptions(sel) {
   return `<option value="">— ${window.t('ev_select_type', 'Select type')} —</option>` +
     EV.eventTypes.map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${esc((t.icon || '') + ' ' + t.name)}</option>`).join('');
 }
-function evInchargeOptions(sel) {
-  if (typeof personOptions === 'function') return personOptions(sel, '— ' + window.t('ev_select_incharge', 'Select in-charge') + ' —');
-  return `<option value="">— ${window.t('ev_select_incharge', 'Select in-charge')} —</option>` +
-    EV.incharges.map(i => `<option value="${i.id}" ${i.id === sel ? 'selected' : ''}>${esc(i.name)} · ${esc(i.mobile || '')}</option>`).join('');
+/* In-charge = the ONE shared searchable devotee picker (value in hidden
+   #evFieldIncharge input; handleSaveEvent reads .value unchanged). */
+function evMountIncharge(selectedId, selectedLabel) {
+  const mount = document.getElementById('evInchargeMount');
+  if (!mount || typeof devoteeLinkField !== 'function') return;
+  mount.innerHTML = devoteeLinkField({
+    selId: 'evFieldIncharge', label: window.t('ev_incharge', 'In-charge'),
+    selectedId: (selectedId && /^DEV-/i.test(selectedId)) ? selectedId : '',
+    selectedLabel: selectedLabel || '',
+    hint: 'Pick a devotee — no login account needed.'
+  });
 }
 function evAccentOptions(sel) {
   return EV.accentPalette.map(a => `<option value="${a.hex}" ${a.hex === sel ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
@@ -115,7 +120,7 @@ function openAddEvent() {
   document.getElementById('eventFormSubmitBtn').textContent = window.t('ev_add', 'Add Event');
   document.getElementById('formEvent').reset();
   document.getElementById('evFieldType').innerHTML = evTypeOptions('');
-  document.getElementById('evFieldIncharge').innerHTML = evInchargeOptions('');
+  evMountIncharge('');
   document.getElementById('evFieldAccent').innerHTML = evAccentOptions(EV.accentPalette[0].hex);
   evRenderDayRows([]);
   openModal('modalEvent');
@@ -126,7 +131,7 @@ function openEditEvent(id) {
   document.getElementById('eventFormTitle').textContent = window.t('ev_edit', 'Edit Event');
   document.getElementById('eventFormSubmitBtn').textContent = window.t('save');
   document.getElementById('evFieldType').innerHTML = evTypeOptions(e.typeId);
-  document.getElementById('evFieldIncharge').innerHTML = evInchargeOptions(e.inChargeId);
+  evMountIncharge(e.inChargeId, (typeof evInchargeById === 'function' && evInchargeById(e.inChargeId)) ? evInchargeById(e.inChargeId).name : '');
   document.getElementById('evFieldAccent').innerHTML = evAccentOptions(e.color);
   document.getElementById('evFieldName').value = e.name;
   document.getElementById('evFieldVenue').value = e.venue || '';
