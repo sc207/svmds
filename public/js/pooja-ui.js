@@ -320,7 +320,7 @@ function poojaCard(p) {
   const sess = poojaSessions(p);
   const sevs = sevarthisOf(p);
   const guests = (typeof peopleOf === 'function') ? peopleOf(p) : [];
-  const venues = Array.from(new Set(sess.map(s => s.venue).filter(Boolean)));
+  const venues = Array.from(new Set(sess.map(s => pjLoc(s.venue)).filter(Boolean)));
   const nx = nextSession(p);
   const dtg = nx ? Math.max(0, Math.round((new Date(nx.date) - new Date(pjToday())) / 86400000)) : null;
   const seva = p.estimatedSevaAmount ? '₹' + Number(p.estimatedSevaAmount).toLocaleString('en-IN') : '—';
@@ -338,7 +338,7 @@ function poojaCard(p) {
     <p class="mg-card-desc">${esc(t ? pjLoc(t.name) : 'Custom pooja')} · ${p.scheduleMode === 'multi' ? sess.length + ' sessions' : 'Single event'}</p>
     <div class="mg-card-meta">
       <div><span>Schedule</span><strong>${dateRangeText(p)}</strong></div>
-      <div><span>Venue</span><strong>${esc(venues[0] || p.defaultVenue || '—')}</strong></div>
+      <div><span>Venue</span><strong>${esc(venues[0] || pjLoc(p.defaultVenue) || '—')}</strong></div>
       <div><span>Sevarthi</span><strong>${sevs.length ? esc(sevs.map(s => s.firstName).join(', ')) : '—'}</strong></div>
       <div><span>Guests</span><strong>${guests.length || '—'}</strong></div>
       <div><span>Coordinator</span><strong>${esc(coordinatorNames(p) || '—')}</strong></div>
@@ -359,7 +359,7 @@ function poojaDirectoryRows(list) {
     const t = typeById(p.typeId);
     const st = poojaStatus(p);
     const sess = poojaSessions(p);
-    const venues = Array.from(new Set(sess.map(s => s.venue).filter(Boolean)));
+    const venues = Array.from(new Set(sess.map(s => pjLoc(s.venue)).filter(Boolean)));
     return `
     <tr>
       <td>
@@ -370,7 +370,7 @@ function poojaDirectoryRows(list) {
       </td>
       <td>${esc(t ? pjLoc(t.name) : '—')}</td>
       <td>${dateRangeText(p)}${p.scheduleMode === 'multi' ? `<div class="mg-muted-xs">${sess.length} sessions</div>` : ''}</td>
-      <td>${esc(venues.join(', ') || p.defaultVenue || '—')}</td>
+      <td>${esc(venues.join(', ') || pjLoc(p.defaultVenue) || '—')}</td>
       <td>${sevarthisOf(p).length || '—'}</td>
       <td>${esc(coordinatorNames(p))}</td>
       <td><span class="badge ${POOJA_STATUS_BADGE[st]}">${POOJA_STATUS_DOT[st]} ${poojaStatusLabel(st)}</span></td>
@@ -505,7 +505,7 @@ function panePoojaOverview(p) {
   <div class="stats-grid mg-mt">
     ${kpiCard('Schedule', p.scheduleMode === 'multi' ? `${sess.length} sessions` : 'Single event', dateRangeText(p), '🗓️')}
     ${kpiCard('Next Session', nx ? fmtDate(nx.date).replace(/ \d{4}$/, '') : '—', nx ? `${fmtTime(nx.startTime)} · ${esc(pjLoc(nx.label || p.name))}` : 'Nothing upcoming', '⏭️')}
-    ${kpiCard('Days To Go', daysToGo, nx ? esc(nx.venue || p.defaultVenue || '') : '', '📅')}
+    ${kpiCard('Days To Go', daysToGo, nx ? esc(pjLoc(nx.venue || p.defaultVenue) || '') : '', '📅')}
     ${kpiCard('People', `${sevs.length} sevarthi`, `${people.length} guest`, '🙏')}
   </div>
 
@@ -519,7 +519,7 @@ function panePoojaOverview(p) {
         <div class="mg-profile-grid">
           <div><span>Type</span><strong>${esc(t ? `${t.icon || ''} ${t.name}` : 'Custom')}</strong></div>
           <div><span>Schedule</span><strong>${p.scheduleMode === 'multi' ? 'Multi-session' : 'Single event'}</strong></div>
-          <div><span>Default Venue</span><strong>${esc(p.defaultVenue || '—')}</strong></div>
+          <div><span>Default Venue</span><strong>${esc(pjLoc(p.defaultVenue) || '—')}</strong></div>
           <div><span>Est. Seva Contribution</span><strong>${p.estimatedSevaAmount ? '₹' + Number(p.estimatedSevaAmount).toLocaleString('en-IN') : '—'}</strong></div>
         </div>
         ${p.notes ? `<div class="mg-note-box mg-mt-sm"><strong>Notes:</strong> ${esc(p.notes)}</div>` : ''}
@@ -558,7 +558,7 @@ function panePoojaOverview(p) {
             <td><strong>${esc(s.label || 'Session ' + (i + 1))}</strong></td>
             <td>${fmtDateLong(s.date)}</td>
             <td>${fmtTime(s.startTime)} – ${fmtTime(s.endTime)}</td>
-            <td>${esc(s.venue || p.defaultVenue || '—')}</td>
+            <td>${esc(pjLoc(s.venue || p.defaultVenue) || '—')}</td>
             <td>${sessionIsPast(s) ? '<span class="badge badge-maroon">Done</span>' : (s.date === pjToday() ? '<span class="badge badge-confirmed">Today</span>' : '<span class="badge badge-pending">Upcoming</span>')}</td>
           </tr>`).join('')}</tbody>
       </table></div>` : `<div class="mg-pad-note">No sessions yet. Use “Edit Pooja” to add a date and time.</div>`}

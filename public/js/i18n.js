@@ -668,6 +668,8 @@
       'Rudrabhishek':'रुद्राभिषेक',
       'Garbha Mandap':'गर्भ मंडप',
       'Main Sabha Mandap':'मुख्य सभा मंडप',
+      'Shree Vihat Meldi Dham Sanand':'श्री विहत मेलडी धाम, साणंद',
+      'Shri Vihat Meldi Dham Sanand':'श्री विहत मेलडी धाम, साणंद',
       'Shiv Mandir':'शिव मंदिर',
       'Yagna Shala':'यज्ञ शाला',
       /* --- scheduled pooja master list (Feb consecration, PTY-001..017) --- */
@@ -787,6 +789,8 @@
       'Rudrabhishek':'રુદ્રાભિષેક',
       'Garbha Mandap':'ગર્ભ મંડપ',
       'Main Sabha Mandap':'મુખ્ય સભા મંડપ',
+      'Shree Vihat Meldi Dham Sanand':'શ્રી વિહત મેલડી ધામ, સાણંદ',
+      'Shri Vihat Meldi Dham Sanand':'શ્રી વિહત મેલડી ધામ, સાણંદ',
       'Shiv Mandir':'શિવ મંદિર',
       'Yagna Shala':'યજ્ઞ શાળા',
       /* --- scheduled pooja master list (Feb consecration, PTY-001..017) --- */
