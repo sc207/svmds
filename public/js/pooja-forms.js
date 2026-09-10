@@ -944,12 +944,9 @@ function handleSaveSevarthi(e) {
   const city = person.city || '';
   const state = person.state || 'Gujarat';
   const pickedDevoteeId = person.id;
-  // community label is a devotee attribute now (set on the devotee record),
-  // not a field on this form — carry the devotee's current samaj forward so
-  // the sevarthi row's denormalised copy stays meaningful.
-  const _dev = (typeof state !== 'undefined' && Array.isArray(state.devotees))
-    ? state.devotees.find(d => d.id === pickedDevoteeId) : null;
-  const committee = (person && person.samaj) || (_dev && _dev.samaj) || '';
+  // sevarthis.committee is a dead denormalised column (samaj is a committee
+  // relationship now) — never write it from this form.
+  const committee = '';
   const status = document.getElementById('sevFieldStatus').value;
   const notes = document.getElementById('sevFieldNotes').value.trim();
 

@@ -446,7 +446,7 @@ function devoteeListView() {
   const upcomingEng = profiles.reduce((s, p) =>
     s + p.counts.sevaUpcoming + p.counts.coordUpcoming + p.counts.guestUpcoming + p.counts.visitsUpcoming, 0);
 
-  const samajOpts = ['<option value="all">' + window.t('all', 'All') + ' ' + window.t('dv_samaj', 'Samaj / Category') + '</option>']
+  const samajOpts = ['<option value="all">' + window.t('all', 'All') + ' ' + window.t('dv_samaj', 'Samaj') + '</option>']
     .concat(devoteeSamajOptions().map(n =>
       '<option value="' + esc(n) + '"' + (DEVO.samaj === n ? ' selected' : '') + '>' + esc(devoData(n)) + '</option>')).join('');
 
@@ -509,7 +509,7 @@ function devoteeListView() {
           '<th>' + window.t('dv_col_devotee', 'Devotee') + '</th>' +
           '<th>' + window.t('mobile', 'Mobile') + '</th>' +
           '<th>' + window.t('city', 'City') + '</th>' +
-          '<th>' + window.t('dv_samaj', 'Samaj / Category') + '</th>' +
+          '<th>' + window.t('dv_samaj', 'Samaj') + '</th>' +
           '<th>' + window.t('dv_committees', 'Committees') + '</th>' +
           '<th>' + window.t('dv_teams', 'Teams') + '</th>' +
           '<th>' + window.t('dv_k_seva', 'Sevarthi') + '</th>' +
@@ -560,7 +560,7 @@ function devoteeProfileView(id) {
   const grid = [
     kv(window.t('mobile', 'Mobile'), p.mobile || '—'),
     kv(window.t('city', 'City'), p.city || '—'),
-    kv(window.t('dv_samaj', 'Samaj / Category'), devoData(p.samaj) || '—'),
+    kv(window.t('dv_samaj', 'Samaj'), devoData(p.samaj) || '—'),
     kv(window.t('dv_committees', 'Committees'), p.counts.committees),
     kv(window.t('dv_teams', 'Teams'), p.counts.teams),
     kv(window.t('dv_visits', 'Visits to location'), p.visits.total),

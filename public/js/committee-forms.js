@@ -26,7 +26,7 @@
 
         <div class="grid mg-2col-form">
           <div class="form-group"><label class="form-label" for="cmtFieldSamaj">Samaj</label>
-            <input type="text" class="form-input" id="cmtFieldSamaj" list="donCommitteeList" placeholder="e.g. Rabari Samaj"></div>
+            <input type="text" class="form-input" id="cmtFieldSamaj" placeholder="e.g. Rabari Samaj"></div>
           <div class="form-group"><label class="form-label" for="cmtFieldSize">Expected Size *</label><input type="number" class="form-input" id="cmtFieldSize" min="1" value="20" required></div>
         </div>
         <div class="form-group"><label class="form-label" for="cmtFieldStatus">Status *</label><select class="form-select" id="cmtFieldStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
