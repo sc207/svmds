@@ -21,7 +21,7 @@ function dhajaEsc(s) {
 /* ---------- top-level ---------- */
 function viewDhaja() {
   const admin = dhajaIsAdmin();
-  const totalRaised = DHAJA.campaigns.reduce((a, c) => a + dhajaProgress(c).raised, 0);
+  const totalRaised = dhajaGrandTotal().raised;   // true total, no double-count from the General bucket
   const feb = DHAJA.campaigns.find(c => c.targetCount === 108) || DHAJA.campaigns[0];
 
   return `
@@ -32,6 +32,7 @@ function viewDhaja() {
     </div>
     <div class="flex gap-2">
       ${typeof exportBar === 'function' ? exportBar('mod-dhaja') : ''}
+      ${admin ? `<button class="btn btn-outline" onclick="openDhajaCampaignForm()">+ ${window.t('dhaja_new_campaign', 'New Campaign')}</button>` : ''}
       ${admin ? `<button class="btn btn-primary" onclick="openSponsorDhaja()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         ${window.t('dhaja_sponsor_btn', 'Sponsor a Dhaja')}</button>` : ''}
@@ -120,17 +121,20 @@ function dhajaRegisterRows() {
 /* ---------- one campaign progress card ---------- */
 function dhajaCampaignCard(c) {
   const p = dhajaProgress(c);
+  const admin = dhajaIsAdmin();
   const bar = p.pct != null
     ? `<div class="dhaja-bar"><span style="width:${p.pct}%"></span></div>`
     : '';
   return `
-  <div class="card mg-mt dhaja-camp">
+  <div class="card mg-mt dhaja-camp${p.general ? ' dhaja-camp--general' : ''}">
     <div class="card-body">
       <div class="flex justify-between items-center" style="flex-wrap:wrap;gap:.4rem">
         <div>
           <div class="card-title">🚩 ${dhajaEsc(typeof tData === 'function' ? tData(c.name) : c.name)}
             <span class="badge ${c.status === 'closed' ? 'badge-maroon' : 'badge-confirmed'}">${c.status === 'closed' ? window.t('dhaja_campaign_closed', 'Closed') : window.t('dhaja_open', 'Open')}</span></div>
-          ${c.startDate ? `<div class="mg-muted-xs">${window.t('dhaja_from', 'From')} ${dhajaDate(c.startDate)}</div>` : ''}
+          ${p.general
+            ? `<div class="mg-muted-xs">${window.t('dhaja_general_all', 'Every dhaja pooja — all occasions')}</div>`
+            : (c.startDate ? `<div class="mg-muted-xs">${window.t('dhaja_from', 'From')} ${dhajaDate(c.startDate)}</div>` : '')}
         </div>
         <div style="text-align:right">
           <div style="font-size:1.5rem;font-weight:700;color:var(--primary-maroon,#6B1F2A)">${p.n}${p.target ? ' / ' + p.target : ''}</div>
@@ -138,10 +142,12 @@ function dhajaCampaignCard(c) {
         </div>
       </div>
       ${bar}
-      <div class="flex gap-2 mg-mt" style="flex-wrap:wrap">
-        ${dhajaIsAdmin() && c.status !== 'closed'
+      <div class="flex gap-2 mg-mt items-center" style="flex-wrap:wrap">
+        ${admin && c.status !== 'closed'
           ? `<button class="btn btn-primary mg-btn-xs" onclick="openSponsorDhaja('${dhajaEsc(c.code)}')">+ ${window.t('dhaja_sponsor_btn', 'Sponsor a Dhaja')}</button>` : ''}
         ${p.remaining != null ? `<span class="badge badge-pending">${p.remaining} ${window.t('dhaja_left', 'left')}</span>` : ''}
+        ${admin && c.code ? `<button class="btn btn-outline mg-btn-xs" onclick="openDhajaCampaignForm('${dhajaEsc(c.code)}')" style="margin-left:auto">${window.t('edit', 'Edit')}</button>` : ''}
+        ${admin && c.code && !p.general ? `<button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="dhajaDeleteCampaign('${dhajaEsc(c.code)}')">${window.t('delete', 'Delete')}</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -149,11 +155,16 @@ function dhajaCampaignCard(c) {
 
 /* ---------- special days (from Annual Temple Events) ---------- */
 function dhajaSpecialDaysSection() {
-  if (typeof window.annualForYear !== 'function' || typeof ANNUAL === 'undefined') return '';
+  const admin = dhajaIsAdmin();
+  const head = `
+  <div class="section-title mg-mt flex justify-between items-center" style="flex-wrap:wrap;gap:.4rem">
+    <span>📿 ${window.t('dhaja_special_days', 'Special-day dhaja')}</span>
+    ${admin ? `<button class="btn btn-outline mg-btn-xs" onclick="dhajaAddSpecialDay()">+ ${window.t('dhaja_add_special_day', 'Add special day')}</button>` : ''}
+  </div>`;
+  if (typeof window.annualForYear !== 'function' || typeof ANNUAL === 'undefined') return admin ? head : '';
   const yr = ANNUAL.year || new Date().getFullYear();
   const evs = window.annualForYear(yr, false) || [];
-  if (!evs.length) return '';
-  const admin = dhajaIsAdmin();
+  if (!evs.length) return admin ? head + `<div class="card"><div class="card-body mg-pad-note">${window.t('dhaja_no_special', 'No special days yet — add one above.')}</div></div>` : '';
   const rows = evs.map(ev => {
     const camp = DHAJA.campaigns.find(c => c.annualEventCode === ev.id || c.annualEventId === ev.id);
     const name = (typeof window.annualName === 'function') ? window.annualName(ev) : ev.name;
@@ -175,7 +186,7 @@ function dhajaSpecialDaysSection() {
     </tr>`;
   }).join('');
   return `
-  <div class="section-title mg-mt"><span>📿 ${window.t('dhaja_special_days', 'Special-day dhaja')}</span></div>
+  ${head}
   <div class="card"><div class="card-body" style="padding:0">
     <div class="mg-table-scroll"><table class="custom-table" style="min-width:560px">
       <thead><tr><th>${window.t('dhaja_day', 'Day')}</th><th>${window.t('date')}</th><th></th></tr></thead>

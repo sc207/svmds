@@ -41,9 +41,26 @@ function dhajaSponsorshipsOf(campaignId) {
   return DHAJA.sponsorships.filter(s => s.campaignId === campaignId && s.status !== 'cancelled');
 }
 
+/* The "General" campaign is the catch-all bucket. Its board shows the TRUE
+   total of every non-cancelled dhaja sponsorship across every campaign — a
+   Maha Sud Bij or February-108 sponsor still counts here. It has no annual
+   event, no target, and "general" in its name. */
+function dhajaIsGeneral(c) {
+  return !!(c && !c.annualEventId && !(Number(c.targetCount) > 0)
+    && /general|સામાન્ય|सामान्य/i.test(String(c.name || '') + ' ' + String(c.nameGu || '')));
+}
+function dhajaGrandTotal() {
+  const live = DHAJA.sponsorships.filter(s => s.status !== 'cancelled');
+  return { n: live.length, raised: live.reduce((a, s) => a + (Number(s.pledgeAmount) || 0), 0) };
+}
+
 /** { n, target, remaining, pct, raised } — prefers the server-computed figures */
 function dhajaProgress(c) {
   if (!c) return { n: 0, target: 0, remaining: null, pct: null, raised: 0 };
+  if (dhajaIsGeneral(c)) {
+    const g = dhajaGrandTotal();
+    return { n: g.n, target: 0, raised: g.raised, remaining: null, pct: null, general: true };
+  }
   const local = dhajaSponsorshipsOf(c.id);
   const n = c.sponsoredCount != null ? c.sponsoredCount : local.length;
   const target = c.targetCount || 0;

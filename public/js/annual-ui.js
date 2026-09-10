@@ -26,6 +26,7 @@
     try { if (typeof annualClearCache === 'function') annualClearCache(); } catch (e) {}
     try { if (typeof renderPooja === 'function') renderPooja(); } catch (e) {}
     try { if (typeof renderEvents === 'function') renderEvents(); } catch (e) {}
+    try { if (typeof renderDhaja === 'function') renderDhaja(); } catch (e) {}
     try { if (typeof renderUnifiedCalendar === 'function') renderUnifiedCalendar(); } catch (e) {}
   }
   window.annualRerender = annualRerender;

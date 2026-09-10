@@ -25,8 +25,145 @@
       <button class="btn btn-primary" id="dhajaSubmitBtn" onclick="handleSponsorDhaja(event)">Save &amp; Issue Receipt</button>
     </div>
   </div>
+</div>
+<div class="modal-overlay" id="modalDhajaCamp">
+  <div class="modal-box" style="max-width: 560px;">
+    <div class="modal-header">
+      <div class="modal-title" id="dhajaCampTitle">New Dhaja Campaign</div>
+      <button class="modal-close-btn" onclick="closeModal('modalDhajaCamp')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="formDhajaCamp" onsubmit="handleSaveDhajaCampaign(event)">
+        <input type="hidden" id="dcEditCode">
+        <div class="grid mg-2col-form">
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label" for="dcName">Campaign name *</label>
+            <input class="form-input" id="dcName" placeholder="e.g. February Dhaja Mahotsav" required>
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label" for="dcNameGu">Name (Gujarati)</label>
+            <input class="form-input" id="dcNameGu" placeholder="ફેબ્રુઆરી ધજા મહોત્સવ">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="dcTarget">Target count</label>
+            <input type="number" min="0" step="1" class="form-input" id="dcTarget" placeholder="0 = open-ended">
+            <div class="mg-muted-xs">0 means no limit. Set 108 for the February mahotsav.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="dcStatus">Status</label>
+            <select class="form-select" id="dcStatus"><option value="open">Open</option><option value="closed">Closed</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="dcStart">Start date</label>
+            <input type="date" class="form-input" id="dcStart">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="dcEnd">End date</label>
+            <input type="date" class="form-input" id="dcEnd">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline mg-btn-danger" id="dcDeleteBtn" style="margin-right:auto;display:none" onclick="dhajaDeleteCampaign(document.getElementById('dcEditCode').value)">Delete</button>
+      <button class="btn btn-outline" onclick="closeModal('modalDhajaCamp')">Cancel</button>
+      <button class="btn btn-primary" id="dcSubmitBtn" onclick="handleSaveDhajaCampaign(event)">Save Campaign</button>
+    </div>
+  </div>
 </div>`);
 })();
+
+/* ---------- campaigns: create / edit / delete ---------- */
+function openDhajaCampaignForm(code) {
+  const c = code ? dhajaCampaignById(code) : null;
+  document.getElementById('dhajaCampTitle').textContent = c
+    ? window.t('dhaja_edit_campaign', 'Edit Dhaja Campaign')
+    : window.t('dhaja_new_campaign', 'New Dhaja Campaign');
+  document.getElementById('dcEditCode').value = c ? c.code : '';
+  document.getElementById('dcName').value = c ? c.name : '';
+  document.getElementById('dcNameGu').value = c ? (c.nameGu || '') : '';
+  document.getElementById('dcTarget').value = c ? (c.targetCount || 0) : '';
+  document.getElementById('dcStatus').value = c ? (c.status || 'open') : 'open';
+  document.getElementById('dcStart').value = c ? (c.startDate || '') : '';
+  document.getElementById('dcEnd').value = c ? (c.endDate || '') : '';
+  // never offer Delete for the General catch-all (or a campaign that isn't synced)
+  const del = document.getElementById('dcDeleteBtn');
+  del.style.display = (c && c.code && !dhajaIsGeneral(c)) ? '' : 'none';
+  if (typeof openModal === 'function') openModal('modalDhajaCamp');
+}
+
+function handleSaveDhajaCampaign(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const btn = document.getElementById('dcSubmitBtn');
+  const code = (document.getElementById('dcEditCode') || {}).value || '';
+  const name = ((document.getElementById('dcName') || {}).value || '').trim();
+  if (!name) { dhajaToast(window.t('dhaja_camp_need_name', 'Enter a campaign name.')); return; }
+  const body = {
+    name,
+    nameGu: ((document.getElementById('dcNameGu') || {}).value || '').trim(),
+    targetCount: Math.max(0, parseInt((document.getElementById('dcTarget') || {}).value, 10) || 0),
+    startDate: (document.getElementById('dcStart') || {}).value || null,
+    endDate: (document.getElementById('dcEnd') || {}).value || null,
+  };
+  if (code) body.status = (document.getElementById('dcStatus') || {}).value || 'open';
+
+  if (!(window.API && window.API.online)) { dhajaToast(window.t('dhaja_need_online', 'Go online to manage campaigns.')); return; }
+  if (btn) btn.disabled = true;
+  const req = code
+    ? window.API.patch('/dhaja/campaigns/' + code, body)
+    : window.API.post('/dhaja/campaigns', body);
+  req
+    .then(() => window.__rehydrate && window.__rehydrate())
+    .then(() => {
+      if (typeof closeModal === 'function') closeModal('modalDhajaCamp');
+      dhajaToast(code ? window.t('saved', 'Saved') : window.t('dhaja_camp_created', 'Campaign created.'));
+    })
+    .catch(err => dhajaToast((err && err.message) || 'Save failed'))
+    .then(() => { if (btn) btn.disabled = false; });
+}
+
+function dhajaDeleteCampaign(code) {
+  const c = dhajaCampaignById(code);
+  if (!c || !c.code) return;
+  if (dhajaIsGeneral(c)) { dhajaToast(window.t('dhaja_camp_general_keep', 'The General campaign cannot be deleted.')); return; }
+  if (!(window.API && window.API.online)) { dhajaToast(window.t('dhaja_need_online', 'Go online to manage campaigns.')); return; }
+
+  const doDelete = (force) => window.API.del('/dhaja/campaigns/' + c.code + (force ? '?force=1' : ''))
+    .then(() => window.__rehydrate && window.__rehydrate())
+    .then(() => { if (typeof closeModal === 'function') closeModal('modalDhajaCamp'); dhajaToast(window.t('dhaja_camp_deleted', 'Campaign deleted.')); })
+    .catch(err => {
+      if (err && err.status === 409 && !force) {
+        const n = (err.body && err.body.count) || '';
+        const msg = window.t('dhaja_camp_has_sponsors', 'This campaign has {n} sponsorship(s). Delete it and void their receipts?').replace('{n}', n);
+        if ((typeof openConfirm === 'function')) {
+          openConfirm({ title: window.t('dhaja_camp_delete_title', 'Delete campaign?'), body: msg,
+            confirmText: window.t('delete', 'Delete'), onConfirm: () => doDelete(true) });
+        } else if (window.confirm(msg)) { doDelete(true); }
+        return;
+      }
+      dhajaToast((err && err.message) || 'Delete failed');
+    });
+
+  if (typeof openConfirm === 'function') {
+    openConfirm({
+      title: window.t('dhaja_camp_delete_title', 'Delete campaign?'),
+      body: window.t('dhaja_camp_delete_body', 'Remove this dhaja campaign?') + ' — ' + (c.name || c.code),
+      confirmText: window.t('delete', 'Delete'), onConfirm: () => doDelete(false),
+    });
+  } else if (window.confirm(window.t('dhaja_camp_delete_body', 'Remove this dhaja campaign?'))) {
+    doDelete(false);
+  }
+}
+
+/* Add a new special day (annual tithi / fixed-date event) straight from the
+   Dhaja page — reuses the shared Annual Temple Event form. */
+function dhajaAddSpecialDay() {
+  if (typeof window.openAnnualEventForm === 'function') {
+    window.openAnnualEventForm();
+  } else {
+    dhajaToast(window.t('dhaja_no_annual_form', 'Add the special day from the Events page.'));
+  }
+}
 
 function dhajaOpenReceipt(donationId) {
   if (typeof openDonationReceipt === 'function') { openDonationReceipt(donationId); return; }
@@ -35,8 +172,14 @@ function dhajaOpenReceipt(donationId) {
 
 function openSponsorDhaja(campaignCode) {
   const open = DHAJA.campaigns.filter(c => c.status !== 'closed');
-  if (!open.length) { dhajaToast(window.t('dhaja_no_open', 'No open dhaja campaign — open one from a special day first.')); return; }
-  const pre = campaignCode && open.find(c => c.code === campaignCode) ? campaignCode : open[0].code;
+  if (!open.length) {
+    dhajaToast(window.t('dhaja_no_open', 'No open dhaja campaign. Use “New Campaign”, or open one from a special day below.'));
+    return;
+  }
+  // default to the chosen campaign, else the General catch-all, else the first
+  const pre = (campaignCode && open.find(c => c.code === campaignCode))
+    ? campaignCode
+    : (open.find(dhajaIsGeneral) || open[0]).code;
 
   const campOpts = open.map(c =>
     `<option value="${c.code}" ${c.code === pre ? 'selected' : ''}>${(typeof tData === 'function' ? tData(c.name) : c.name)}${c.targetCount ? ' (' + dhajaProgress(c).n + '/' + c.targetCount + ')' : ''}</option>`).join('');

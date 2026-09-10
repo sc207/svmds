@@ -3711,3 +3711,4 @@ body.annc-open { overflow: hidden; }
   background: linear-gradient(90deg, var(--antique-gold), var(--saffron));
   transition: width .4s ease;
 }
+.dhaja-camp--general { border-color: var(--antique-gold); background: linear-gradient(180deg, var(--gold-bg) 0%, var(--ivory-card) 40%); }
