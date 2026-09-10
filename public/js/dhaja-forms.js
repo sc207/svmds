@@ -73,18 +73,22 @@
 </div>`);
 })();
 
-/* ---------- campaigns: create / edit / delete ---------- */
-function openDhajaCampaignForm(code) {
+/* ---------- campaigns: create / edit / delete ----------
+   A dhaja campaign is a standalone row: name, dates, target, status. It links
+   to nothing else. `prefill` (name/nameGu/startDate) just seeds a NEW form —
+   e.g. from the "temple tithis" shortcut — it never creates any other record. */
+function openDhajaCampaignForm(code, prefill) {
   const c = code ? dhajaCampaignById(code) : null;
+  const pf = (!c && prefill) ? prefill : {};
   document.getElementById('dhajaCampTitle').textContent = c
     ? window.t('dhaja_edit_campaign', 'Edit Dhaja Campaign')
     : window.t('dhaja_new_campaign', 'New Dhaja Campaign');
   document.getElementById('dcEditCode').value = c ? c.code : '';
-  document.getElementById('dcName').value = c ? c.name : '';
-  document.getElementById('dcNameGu').value = c ? (c.nameGu || '') : '';
+  document.getElementById('dcName').value = c ? c.name : (pf.name || '');
+  document.getElementById('dcNameGu').value = c ? (c.nameGu || '') : (pf.nameGu || '');
   document.getElementById('dcTarget').value = c ? (c.targetCount || 0) : '';
   document.getElementById('dcStatus').value = c ? (c.status || 'open') : 'open';
-  document.getElementById('dcStart').value = c ? (c.startDate || '') : '';
+  document.getElementById('dcStart').value = c ? (c.startDate || '') : (pf.startDate || '');
   document.getElementById('dcEnd').value = c ? (c.endDate || '') : '';
   // never offer Delete for the General catch-all (or a campaign that isn't synced)
   const del = document.getElementById('dcDeleteBtn');
@@ -155,15 +159,32 @@ function dhajaDeleteCampaign(code) {
   }
 }
 
-/* Add a new special day (annual tithi / fixed-date event) straight from the
-   Dhaja page — reuses the shared Annual Temple Event form. */
-function dhajaAddSpecialDay() {
-  if (typeof window.openAnnualEventForm === 'function') {
-    window.openAnnualEventForm();
-  } else {
-    dhajaToast(window.t('dhaja_no_annual_form', 'Add the special day from the Events page.'));
+/* A "special-day dhaja" is just a campaign for that day — nothing links to the
+   Annual Temple Events table. This opens the New Campaign form, optionally
+   pre-filled with a tithi's name + date from the read-only reference list. */
+function dhajaAddSpecialDay(evId) {
+  let pf;
+  if (evId && typeof window.annualEventById === 'function') {
+    const ev = window.annualEventById(evId);
+    if (ev) {
+      const nm = (typeof window.annualName === 'function') ? window.annualName(ev) : ev.name;
+      let date = ev.gregorianDate || '';
+      if (!date && typeof window.annualResolve === 'function') {
+        const yr = (typeof ANNUAL !== 'undefined' && ANNUAL.year) || new Date().getFullYear();
+        try { date = (window.annualResolve(ev, yr) || {}).date || ''; } catch (e) {}
+      }
+      const suffix = ' — ' + window.t('dhaja_title', 'Dhaja Pooja');
+      pf = {
+        name: nm + suffix,
+        nameGu: ev.name_gu ? ev.name_gu + suffix : '',
+        startDate: date,
+      };
+    }
   }
+  openDhajaCampaignForm(null, pf);
 }
+/* back-compat: the old special-day button now just pre-fills a new campaign */
+function dhajaOpenSpecialDay(evId) { dhajaAddSpecialDay(evId); }
 
 function dhajaOpenReceipt(donationId) {
   if (typeof openDonationReceipt === 'function') { openDonationReceipt(donationId); return; }
@@ -173,7 +194,7 @@ function dhajaOpenReceipt(donationId) {
 function openSponsorDhaja(campaignCode) {
   const open = DHAJA.campaigns.filter(c => c.status !== 'closed');
   if (!open.length) {
-    dhajaToast(window.t('dhaja_no_open', 'No open dhaja campaign. Use “New Campaign”, or open one from a special day below.'));
+    dhajaToast(window.t('dhaja_no_open', 'No open dhaja campaign — create one with “New Campaign” first.'));
     return;
   }
   // default to the chosen campaign, else the General catch-all, else the first

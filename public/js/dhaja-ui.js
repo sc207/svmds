@@ -50,7 +50,8 @@ function viewDhaja() {
     ? DHAJA.campaigns.map(dhajaCampaignCard).join('')
     : `<div class="card mg-mt"><div class="card-body" style="text-align:center;padding:2rem 1rem">
         <div style="font-size:1.8rem">🚩</div>
-        <p class="mg-page-sub">${window.t('dhaja_empty', 'No dhaja campaigns yet. Open one from a special day below, or use “Sponsor a Dhaja”.')}</p>
+        <p class="mg-page-sub">${window.t('dhaja_empty', 'No dhaja campaigns yet — use “New Campaign” to add one.')}</p>
+        ${dhajaIsAdmin() ? `<button class="btn btn-primary mg-btn-xs mg-mt" onclick="openDhajaCampaignForm()">+ ${window.t('dhaja_new_campaign', 'New Campaign')}</button>` : ''}
       </div></div>`}</div>
 
   <div class="section-title mg-mt"><span>🧾 ${window.t('dhaja_register', 'Sponsorship register')}</span></div>
@@ -78,7 +79,7 @@ function viewDhaja() {
     </div>
   </div>
 
-  ${dhajaSpecialDaysSection()}`;
+  ${dhajaTithiSection()}`;
 }
 
 function renderDhajaRegisterBody() {
@@ -153,42 +154,30 @@ function dhajaCampaignCard(c) {
   </div>`;
 }
 
-/* ---------- special days (from Annual Temple Events) ---------- */
-function dhajaSpecialDaysSection() {
+/* ---------- temple tithis: a READ-ONLY date reference ----------
+   Not linked to anything. Each row's "Start a campaign" just opens the New
+   Campaign form pre-filled with that day's name + date — you review and save
+   a plain dhaja campaign. Nothing is written to the Annual Temple Events table. */
+function dhajaTithiSection() {
   const admin = dhajaIsAdmin();
-  const head = `
-  <div class="section-title mg-mt flex justify-between items-center" style="flex-wrap:wrap;gap:.4rem">
-    <span>📿 ${window.t('dhaja_special_days', 'Special-day dhaja')}</span>
-    ${admin ? `<button class="btn btn-outline mg-btn-xs" onclick="dhajaAddSpecialDay()">+ ${window.t('dhaja_add_special_day', 'Add special day')}</button>` : ''}
-  </div>`;
-  if (typeof window.annualForYear !== 'function' || typeof ANNUAL === 'undefined') return admin ? head : '';
+  if (!admin || typeof window.annualForYear !== 'function' || typeof ANNUAL === 'undefined') return '';
   const yr = ANNUAL.year || new Date().getFullYear();
-  const evs = window.annualForYear(yr, false) || [];
-  if (!evs.length) return admin ? head + `<div class="card"><div class="card-body mg-pad-note">${window.t('dhaja_no_special', 'No special days yet — add one above.')}</div></div>` : '';
+  const evs = (window.annualForYear(yr, false) || []).filter(ev => ev.gregorianDate);
+  if (!evs.length) return '';
   const rows = evs.map(ev => {
-    const camp = DHAJA.campaigns.find(c => c.annualEventCode === ev.id || c.annualEventId === ev.id);
     const name = (typeof window.annualName === 'function') ? window.annualName(ev) : ev.name;
     const tithi = (typeof window.annualTithiLabel === 'function') ? window.annualTithiLabel(ev) : '';
-    let action;
-    if (camp) {
-      const p = dhajaProgress(camp);
-      action = `<span class="badge badge-confirmed">${p.n}${p.target ? '/' + p.target : ''} ${window.t('dhaja_sponsored', 'sponsored')}</span>`
-        + (admin && camp.status !== 'closed' ? ` <button class="btn btn-outline mg-btn-xs" onclick="openSponsorDhaja('${dhajaEsc(camp.code)}')">${window.t('dhaja_sponsor_btn', 'Sponsor')}</button>` : '');
-    } else {
-      action = admin
-        ? `<button class="btn btn-outline mg-btn-xs" onclick="dhajaOpenSpecialDay('${dhajaEsc(ev.id)}')">${window.t('dhaja_open_sponsorship', 'Open Dhaja sponsorship')}</button>`
-        : '<span class="mg-muted-xs">—</span>';
-    }
     return `<tr>
       <td><strong>${dhajaEsc(name)}</strong>${tithi ? `<div class="mg-muted-xs">${dhajaEsc(tithi)}</div>` : ''}</td>
       <td>${dhajaDate(ev.gregorianDate)}</td>
-      <td>${action}</td>
+      <td><button class="btn btn-outline mg-btn-xs" onclick="dhajaAddSpecialDay('${dhajaEsc(ev.id)}')">${window.t('dhaja_start_campaign', 'Start a campaign')}</button></td>
     </tr>`;
   }).join('');
   return `
-  ${head}
+  <div class="section-title mg-mt"><span>📿 ${window.t('dhaja_tithi_ref', 'Temple tithis this year')} <span class="mg-muted-xs">(${yr})</span></span></div>
+  <p class="mg-page-sub" style="margin-top:-.4rem">${window.t('dhaja_tithi_hint', 'A date reference. “Start a campaign” pre-fills a new dhaja campaign for that day — it does not change the temple calendar.')}</p>
   <div class="card"><div class="card-body" style="padding:0">
-    <div class="mg-table-scroll"><table class="custom-table" style="min-width:560px">
+    <div class="mg-table-scroll"><table class="custom-table" style="min-width:520px">
       <thead><tr><th>${window.t('dhaja_day', 'Day')}</th><th>${window.t('date')}</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>

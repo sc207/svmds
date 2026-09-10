@@ -64,6 +64,8 @@
       dhaja_add_special_day:'Add special day', dhaja_no_special:'No special days yet — add one above.',
       dhaja_no_annual_form:'Add the special day from the Events page.',
       dhaja_general_all:'Every dhaja pooja — all occasions',
+      dhaja_start_campaign:'Start a campaign', dhaja_tithi_ref:'Temple tithis this year',
+      dhaja_tithi_hint:'A date reference. “Start a campaign” pre-fills a new dhaja campaign for that day — it does not change the temple calendar.',
 
       temple_name:'Shri Vihat Meldi Mata Mandir',
       temple_loc:'Sanand, Gujarat',
@@ -259,6 +261,8 @@
       dhaja_add_special_day:'विशेष दिन जोड़ें', dhaja_no_special:'अभी कोई विशेष दिन नहीं — ऊपर जोड़ें।',
       dhaja_no_annual_form:'विशेष दिन Events पेज से जोड़ें।',
       dhaja_general_all:'हर ध्वजा पूजा — सभी अवसर',
+      dhaja_start_campaign:'अभियान शुरू करें', dhaja_tithi_ref:'इस वर्ष की मंदिर तिथियाँ',
+      dhaja_tithi_hint:'केवल तारीख संदर्भ। “अभियान शुरू करें” उस दिन के लिए नया ध्वजा अभियान भर देता है — मंदिर कैलेंडर नहीं बदलता।',
 
       temple_name:'श्री विहत मेलडी माता मंदिर',
       temple_loc:'साणंद, गुजरात',
@@ -452,6 +456,8 @@
       dhaja_add_special_day:'વિશેષ દિવસ ઉમેરો', dhaja_no_special:'હજી કોઈ વિશેષ દિવસ નથી — ઉપર ઉમેરો.',
       dhaja_no_annual_form:'વિશેષ દિવસ Events પાનેથી ઉમેરો.',
       dhaja_general_all:'દરેક ધજા પૂજા — બધા પ્રસંગો',
+      dhaja_start_campaign:'અભિયાન શરૂ કરો', dhaja_tithi_ref:'આ વર્ષની મંદિર તિથિઓ',
+      dhaja_tithi_hint:'ફક્ત તારીખ સંદર્ભ. “અભિયાન શરૂ કરો” તે દિવસ માટે નવું ધજા અભિયાન ભરી આપે છે — મંદિર કેલેન્ડર બદલાતું નથી.',
 
       temple_name:'શ્રી વિહત મેલડી માતા મંદિર',
       temple_loc:'સાણંદ, ગુજરાત',
