@@ -222,8 +222,14 @@
   window.openDevoteeSheet = function (opts) {
     opts = opts || {};
     var pf = String(opts.prefillName || '').trim();
-    var commOpts = (typeof committeeNames === 'function' ? committeeNames() : [])
+    var samajSeen = {};
+    (typeof state !== 'undefined' && Array.isArray(state.devotees) ? state.devotees : [])
+      .forEach(function (d) { if (d && d.samaj) samajSeen[d.samaj] = 1; });
+    var commOpts = Object.keys(samajSeen).sort()
       .map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join('');
+    var cmtPickerHTML = (opts.committeePicker && typeof devoteeCommitteeChecklist === 'function')
+      ? devoteeCommitteeChecklist(null, []) : '';
+    window.__dpCommitteePicker = !!opts.committeePicker;
     window.__dpExtra = Array.isArray(opts.extraFields) ? opts.extraFields : [];
     var extraHTML = window.__dpExtra.length
       ? '<hr class="dp-extra-divider"><div class="dp-form-caption">' +
@@ -243,9 +249,10 @@
             '<div id="dpHint" class="mg-muted-xs" style="margin-top:.3rem"></div></div>' +
           '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city"></div>' +
           '<div class="form-group"><label class="form-label">State</label><input class="form-input" name="state" value="Gujarat"></div>' +
-          '<div class="form-group"><label class="form-label">Committee / Samaj</label>' +
-            '<input class="form-input" name="samaj" list="dpCommList" placeholder="which committee">' +
+          '<div class="form-group"><label class="form-label">Samaj / community</label>' +
+            '<input class="form-input" name="samaj" list="dpCommList" placeholder="community label, e.g. Rabari Samaj">' +
             '<datalist id="dpCommList">' + commOpts + '</datalist></div>' +
+          cmtPickerHTML +
           extraHTML +
         '</form>',
       footer:
@@ -285,6 +292,8 @@
       var el = f.elements['x_' + fld.name];
       if (el) extras[fld.name] = (el.value || '').trim();
     });
+    var pickedCmt = (window.__dpCommitteePicker && typeof devoteeCommitteePicked === 'function')
+      ? devoteeCommitteePicked('dpForm') : null;
 
     // dedupe against the register
     var existing = window.allPeople().filter(function (p) { return digits(p.mobile) === mobile; })[0];
@@ -314,6 +323,11 @@
       }
     }
     function finish(dev) {
+      try {
+        if (pickedCmt && pickedCmt.length && dev && dev.id && typeof syncDevoteeCommittees === 'function') {
+          syncDevoteeCommittees(dev.id, pickedCmt, true /* add-only from the Add sheet */);
+        }
+      } catch (e) {}
       try { if (typeof syncEntitySelects === 'function') syncEntitySelects(); } catch (e) {}
       dpCloseSheet();
       toast(dev.name + ' saved.');

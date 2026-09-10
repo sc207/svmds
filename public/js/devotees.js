@@ -315,8 +315,96 @@ function backToDevotees() {
 function devoteeSamajOptions() {
   const set = {};
   (state.devotees || []).forEach(d => { if (d.samaj) set[d.samaj] = 1; });
-  if (typeof committeeNames === 'function') (committeeNames() || []).forEach(n => { if (n) set[n] = 1; });
   return Object.keys(set).sort();
+}
+
+/* ------------------------------------------------------------
+   Committee membership from the devotee form
+   ------------------------------------------------------------
+   "Samaj / Category" on a devotee is just a community label. Real
+   committee membership is a committee_members row. This lets the
+   devotee Add/Edit form manage those rows directly so one shared
+   person record stays wired everywhere it appears. */
+
+/** Checkbox list of every committee, ticked where the devotee is an
+    active member. `checkedCodes` overrides the ticked set (used on Add). */
+function devoteeCommitteeChecklist(devId, checkedCodes) {
+  if (typeof CMT === 'undefined' || !Array.isArray(CMT.committees) || !CMT.committees.length) return '';
+  const cur = {};
+  if (checkedCodes) { (checkedCodes || []).forEach(c => { if (c) cur[c] = 1; }); }
+  else if (typeof committeesOfDevotee === 'function') {
+    committeesOfDevotee(devId).forEach(x => {
+      const code = x.committee && (x.committee.code || x.committee.id);
+      if (code) cur[code] = 1;
+    });
+  }
+  const rows = CMT.committees.map(c => {
+    const code = c.code || c.id;
+    const nm = (typeof tData === 'function') ? tData(c.name) : c.name;
+    return '<label class="dv-cmt-opt"><input type="checkbox" class="dv-cmt-cb" value="' + esc(code) + '"' +
+      (cur[code] ? ' checked' : '') + '> <span>' + esc(nm) + '</span></label>';
+  }).join('');
+  return '<div class="form-group" style="grid-column:1/-1">' +
+    '<label class="form-label">' + window.t('dv_committees_pick', 'Committees — tick to add this devotee as a member') + '</label>' +
+    '<div class="dv-cmt-list">' + rows + '</div></div>';
+}
+
+/** Read the ticked committee codes out of an open devotee form. */
+function devoteeCommitteePicked(formId) {
+  const f = document.getElementById(formId);
+  if (!f) return null;
+  const boxes = Array.prototype.slice.call(f.querySelectorAll('.dv-cmt-cb'));
+  if (!boxes.length) return null;   // picker not rendered — never treat as "clear all"
+  return boxes.filter(cb => cb.checked).map(cb => cb.value);
+}
+
+/** Make the devotee's committee memberships match `wantCodes` (committee
+    codes): POST new links, soft-DELETE dropped ones. Returns a Promise. */
+function syncDevoteeCommittees(devId, wantCodes, addOnly) {
+  if (typeof CMT === 'undefined' || wantCodes == null) return Promise.resolve();
+  const want = {}; (wantCodes || []).forEach(c => { if (c) want[c] = 1; });
+  const curByCode = {};
+  if (typeof committeesOfDevotee === 'function') {
+    committeesOfDevotee(devId).forEach(x => {
+      const code = x.committee && (x.committee.code || x.committee.id);
+      if (code) curByCode[code] = x.member;
+    });
+  }
+  const toAdd = Object.keys(want).filter(c => !curByCode[c]);
+  const toRemove = addOnly ? [] : Object.keys(curByCode).filter(c => !want[c]);
+  if (!toAdd.length && !toRemove.length) return Promise.resolve();
+
+  const online = !!(window.API && window.API.online);
+  if (!online) {
+    const d = (typeof devoteeById === 'function' && devoteeById(devId)) || {};
+    const parts = String(d.name || '').trim().split(/\s+/);
+    toAdd.forEach(code => {
+      const c = CMT.committees.find(x => (x.code || x.id) === code);
+      if (!c) return;
+      CMT.members.push({
+        id: 'MEM-' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 90 + 10),
+        committeeId: c.id, devoteeId: devId,
+        firstName: parts[0] || '', lastName: parts.slice(1).join(' '),
+        mobile: d.mobile || d.phone || '', city: d.city || '', state: 'Gujarat',
+        role: 'Member', status: 'active', notes: '', joinedDate: (typeof devoToday === 'function' ? devoToday() : '')
+      });
+    });
+    toRemove.forEach(code => { const m = curByCode[code]; CMT.members = CMT.members.filter(x => x !== m); });
+    if (typeof renderCommittee === 'function') renderCommittee();
+    return Promise.resolve();
+  }
+
+  const jobs = []
+    .concat(toAdd.map(code => () => window.API.post('/committees/' + code + '/members', { devoteeId: devId, role: 'Member' })
+      .catch(e => { if (!(e && e.status === 409)) throw e; })))
+    .concat(toRemove.map(code => () => {
+      const m = curByCode[code];
+      const mid = m && (m.code || m.id);
+      return mid ? window.API.del('/committees/' + code + '/members/' + mid).catch(() => {}) : Promise.resolve();
+    }));
+  return jobs.reduce((p, j) => p.then(j), Promise.resolve())
+    .then(() => { if (window.__rehydrate) return window.__rehydrate('committees'); })
+    .catch(() => { if (typeof devoToast === 'function') devoToast(window.t('dv_cmt_sync_fail', 'Some committee changes did not sync.')); });
 }
 function devoteesSetSearch(v) {
   DEVO.search = v;
@@ -432,6 +520,7 @@ function openDevoteeAdd() {
   if (typeof openDevoteeSheet !== 'function') { devoToast('Devotee form unavailable'); return; }
   openDevoteeSheet({
     title: window.t('dv_add', 'Add a new devotee'),
+    committeePicker: true,
     onSaved: function (dev) {
       renderDevotees();
       if (dev && dev.id) openDevotee(dev.id);
@@ -637,7 +726,7 @@ function openDevoteeEdit(id) {
   const d = devoteeById(id);
   if (!d) return;
   if (typeof openSheet !== 'function') { devoToast('UI not ready'); return; }
-  const commOpts = (typeof committeeNames === 'function' ? committeeNames() : [])
+  const samajOpts = devoteeSamajOptions()
     .map(n => '<option value="' + esc(n) + '"></option>').join('');
   openSheet({
     title: window.t('dv_edit', 'Edit devotee'),
@@ -650,13 +739,14 @@ function openDevoteeEdit(id) {
         '<div class="form-group"><label class="form-label">' + window.t('city', 'City') + '</label>' +
           '<input class="form-input" id="dvE_city" value="' + esc(d.city || '') + '"></div>' +
         '<div class="form-group"><label class="form-label">' + window.t('dv_samaj', 'Samaj / Category') + '</label>' +
-          '<input class="form-input" id="dvE_samaj" list="dvE_commList" value="' + esc(d.samaj || '') + '">' +
-          '<datalist id="dvE_commList">' + commOpts + '</datalist></div>' +
+          '<input class="form-input" id="dvE_samaj" list="dvE_samajList" placeholder="' + esc(window.t('dv_samaj_ph', 'community label, e.g. Rabari Samaj')) + '" value="' + esc(d.samaj || '') + '">' +
+          '<datalist id="dvE_samajList">' + samajOpts + '</datalist></div>' +
         '<div class="form-group"><label class="form-label">' + window.t('status', 'Status') + '</label>' +
           '<select class="form-select" id="dvE_status">' +
             '<option value="active"' + ((d.status || 'active').toLowerCase() !== 'inactive' ? ' selected' : '') + '>Active</option>' +
             '<option value="inactive"' + ((d.status || '').toLowerCase() === 'inactive' ? ' selected' : '') + '>Inactive</option>' +
           '</select></div>' +
+        devoteeCommitteeChecklist(id) +
       '</form>',
     footer:
       '<button class="btn btn-outline" onclick="closeSheet()">' + window.t('cancel', 'Cancel') + '</button>' +
@@ -671,6 +761,7 @@ function saveDevoteeEdit(id) {
   const name = g('dvE_name').trim().replace(/\s+/g, ' ');
   if (!name) { devoToast(window.t('dv_need_name', 'Full name is required.')); return; }
   if (mob && mob.length !== 10) { devoToast(window.t('dv_need_mobile', 'Mobile must be 10 digits.')); return; }
+  const wantCommittees = devoteeCommitteePicked('dvEditForm');
   Object.assign(d, {
     name: name, mobile: mob, phone: mob,     // keep BOTH — templePeople() reads d.phone || d.mobile
     city: g('dvE_city').trim(), samaj: g('dvE_samaj').trim(), status: g('dvE_status')
@@ -680,6 +771,7 @@ function saveDevoteeEdit(id) {
       window.API.patch('/devotees/' + id, { name: d.name, mobile: mob, city: d.city, samaj: d.samaj, status: d.status }).catch(function () {});
     }
   } catch (e) {}
+  try { syncDevoteeCommittees(id, wantCommittees); } catch (e) {}
   try { if (typeof syncEntitySelects === 'function') syncEntitySelects(); } catch (e) {}
   if (typeof closeSheet === 'function') closeSheet();
   devoToast(name + ' — ' + window.t('save', 'Saved') + ' ✓');

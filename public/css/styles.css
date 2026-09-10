@@ -2437,6 +2437,19 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
   margin: 0.85rem 0 0.15rem;
 }
 
+/* --- Committee picker inside the devotee Add/Edit form --- */
+.dv-cmt-list {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  margin-top: 0.3rem; padding: 0.6rem 0.7rem;
+  border: 1px solid var(--warm-border); border-radius: 9px;
+  background: var(--cream, #fbf6ee);
+}
+.dv-cmt-opt {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.85rem; color: var(--text-brown, #4a3728); cursor: pointer;
+}
+.dv-cmt-opt input { width: 15px; height: 15px; accent-color: var(--primary-maroon); flex: none; }
+
 @media (max-width: 560px) {
   .pcr-role { max-width: 120px; }
   .btn-add-devotee { padding: 0.4rem 0.6rem; }
