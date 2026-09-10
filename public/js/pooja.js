@@ -23,6 +23,7 @@ const POOJA = {
   /* Router state ------------------------------------------- */
   view: 'directory',        // 'directory' | 'workspace'
   dirView: 'cards',         // 'cards' | 'table' — directory list mode
+  dirSort: 'date-asc',      // 'date-asc' | 'date-desc' — directory order by nearest session date
   activePoojaId: null,
   activeTab: 'overview',
   activeSevarthiId: null,

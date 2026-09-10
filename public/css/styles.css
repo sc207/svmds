@@ -3739,3 +3739,8 @@ body.annc-open { overflow: hidden; }
 }
 .dhaja-add-tile:hover { background: var(--saffron-bg); border-color: var(--saffron); }
 .dhaja-add-plus { font-size: 2rem; line-height: 1; color: var(--saffron); }
+
+/* Pooja directory — sortable Schedule column */
+th.pj-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.pj-sortable:hover { color: var(--gold-light); }
+th.pj-sortable .pj-sort-ar { font-size: .8em; opacity: .85; }

@@ -135,14 +135,37 @@ function setPoojaDirView(m) {
   renderPooja();
 }
 
+/* Directory order — by the pooja's earliest session date. Undated poojas sink
+   to the bottom; ties broken by id so the order is stable. */
+function pjSortKey(p) { return (firstSession(p) || {}).date || '9999-99-99'; }
+function pjDirSorted(list) {
+  const dir = POOJA.dirSort === 'date-desc' ? -1 : 1;
+  return list.slice().sort((a, b) =>
+    dir * (pjSortKey(a).localeCompare(pjSortKey(b)) || String(a.id).localeCompare(String(b.id))));
+}
+function togglePjDirSort() {
+  POOJA.dirSort = POOJA.dirSort === 'date-asc' ? 'date-desc' : 'date-asc';
+  renderPooja();
+}
+function pjSortArrow() { return POOJA.dirSort === 'date-desc' ? '▼' : '▲'; }
+
 function poojaDirTableWrap(list) {
   return `
   <div class="mg-table-scroll">
     <table class="custom-table">
       <thead>
-        <tr><th>Pooja</th><th>Type</th><th>Schedule</th><th>Venue</th><th>Sevarthi</th><th>Coordinator</th><th>Status</th><th>Actions</th></tr>
+        <tr>
+          <th>${window.t('pj_col_pooja', 'Pooja')}</th>
+          <th>${window.t('pj_type', 'Type')}</th>
+          <th class="pj-sortable" onclick="togglePjDirSort()" title="${window.t('pj_sort_date', 'Sort by date')}">${window.t('pj_schedule', 'Schedule')} <span class="pj-sort-ar">${pjSortArrow()}</span></th>
+          <th>${window.t('venue', 'Venue')}</th>
+          <th>${window.t('pj_sevarthi', 'Sevarthi')}</th>
+          <th>${window.t('pj_coordinator', 'Coordinator')}</th>
+          <th>${window.t('status', 'Status')}</th>
+          <th>${window.t('pj_actions', 'Actions')}</th>
+        </tr>
       </thead>
-      <tbody id="pjDirectoryBody">${poojaDirectoryRows(list)}</tbody>
+      <tbody id="pjDirectoryBody">${poojaDirectoryRows(pjDirSorted(list))}</tbody>
     </table>
   </div>`;
 }
@@ -182,6 +205,8 @@ function viewPoojaDirectory() {
       <div class="card-title">${window.t('pj_scheduled', 'Scheduled Poojas & Sevas')} <span class="mg-muted-xs">(${list.length})</span></div>
       <div class="flex gap-2 items-center pj-list-tools">
         ${admin ? `<input class="form-input mg-inline-search" id="pjDirSearch" placeholder="Search pooja, type or sevarthi..." oninput="filterPoojaDirectory()">` : ''}
+        <button type="button" class="btn btn-outline mg-btn-xs" onclick="togglePjDirSort()" title="${window.t('pj_sort_date', 'Sort by date')}">
+          🗓️ ${window.t('date', 'Date')} ${pjSortArrow()}</button>
         <div class="pj-viewtoggle" role="group" aria-label="View">
           <button type="button" class="${mode === 'cards' ? 'is-on' : ''}" onclick="setPoojaDirView('cards')">▦ ${window.t('pj_view_cards', 'Cards')}</button>
           <button type="button" class="${mode === 'table' ? 'is-on' : ''}" onclick="setPoojaDirView('table')">≣ ${window.t('pj_view_table', 'Table')}</button>
@@ -189,7 +214,7 @@ function viewPoojaDirectory() {
       </div>
     </div>
     <div class="card-body" style="padding:${mode === 'table' ? '0' : '1.1rem'};">
-      <div id="pjDirList">${mode === 'table' ? poojaDirTableWrap(list) : `<div class="mg-card-grid">${list.map(poojaCard).join('')}</div>`}</div>
+      <div id="pjDirList">${mode === 'table' ? poojaDirTableWrap(list) : `<div class="mg-card-grid">${pjDirSorted(list).map(poojaCard).join('')}</div>`}</div>
     </div>
   </div>`;
 
@@ -397,9 +422,9 @@ function filterPoojaDirectory() {
       || coordinatorNames(p).toLowerCase().includes(q);
   });
   const body = document.getElementById('pjDirectoryBody');
-  if (body) { body.innerHTML = poojaDirectoryRows(list); return; }
+  if (body) { body.innerHTML = poojaDirectoryRows(pjDirSorted(list)); return; }
   const host = document.getElementById('pjDirList');
-  if (host) host.innerHTML = `<div class="mg-card-grid">${list.map(poojaCard).join('')}</div>`;
+  if (host) host.innerHTML = `<div class="mg-card-grid">${pjDirSorted(list).map(poojaCard).join('')}</div>`;
 }
 
 /* ------------------------------------------------------------
@@ -1564,7 +1589,7 @@ function poojaExport() {
       window.t('pj_coordinator', 'Coordinator'), window.t('status', 'Status'),
       window.t('pj_est_seva', 'Est. Seva (INR)'),
     ],
-    rows: visiblePoojas().map(p => {
+    rows: pjDirSorted(visiblePoojas()).map(p => {
       const t = typeById(p.typeId);
       const venues = Array.from(new Set(poojaSessions(p).map(s => pjLoc(s.venue)).filter(Boolean)));
       return [
