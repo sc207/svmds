@@ -12,7 +12,15 @@
   if (!(window.API && window.API.online)) return;      // demo / logged-out → nothing
 
   var LS_KEY = 'svmmm_annc_shown_on';
-  var overlay, listEl, shownKeys = [];
+  var overlay, listEl, shownKeys = [], opened = false;
+
+  // Defensively force the overlay out of view the moment this script runs — even
+  // if a stale cached stylesheet is missing the `.annc-overlay[hidden]` rule,
+  // inline display:none always wins. It is only un-set in open().
+  (function forceHidden() {
+    var el = document.getElementById('openingAnnounce');
+    if (el) { el.hidden = true; el.style.display = 'none'; }
+  })();
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -57,19 +65,24 @@
   function dismiss() {
     if (!overlay) return;
     overlay.hidden = true;
+    overlay.style.display = 'none';            // beats a stale stylesheet
     document.body.classList.remove('annc-open');
-    if (shownKeys.length) {
-      window.API.post('/reminders/seen', { keys: shownKeys }).catch(function () {});
+    var keys = shownKeys;
+    shownKeys = [];
+    if (keys.length) {
+      window.API.post('/reminders/seen', { keys: keys }).catch(function () {});
     }
   }
 
   function open(data) {
+    if (opened) return;
     overlay = document.getElementById('openingAnnounce');
     listEl = document.getElementById('anncList');
     if (!overlay || !listEl) return;
 
     var items = (data.items || []).filter(function (it) { return !it.seenToday; });
     if (!items.length) return;                 // nothing to announce → never show the overlay
+    opened = true;
     shownKeys = items.map(function (it) { return it.key; });
 
     var kicker = document.getElementById('anncKicker');
@@ -97,6 +110,7 @@
     });
 
     document.body.classList.add('annc-open');
+    overlay.style.display = '';                // let the stylesheet place it (grid, centered)
     overlay.hidden = false;
     try { localStorage.setItem(LS_KEY, data.today); } catch (e) {}
   }
@@ -126,10 +140,24 @@
     }).catch(function () { /* never block the dashboard */ });
   }
 
-  // Only after the app has fully loaded and painted the dashboard. Then, if
-  // there is an announcement, it appears on top; closing it returns to the
-  // dashboard that is already there.
-  function boot() { setTimeout(maybeShow, 150); }
-  if (document.readyState === 'complete') boot();
-  else window.addEventListener('load', boot);
+  // The splash loader (#appLoader in index.html) must finish and be REMOVED
+  // from the DOM before anything shows — the announcement is the second screen,
+  // never layered over the loader. Wait for window.load, then poll until the
+  // loader node is gone (it removes itself on load, with an 8s self-guard), then
+  // a short beat for the dashboard's first paint. Capped so a broken loader
+  // can't block the announcement forever.
+  function afterLoader(cb) {
+    var start = Date.now();
+    (function tick() {
+      var loaderGone = !document.getElementById('appLoader');
+      if ((loaderGone && document.readyState === 'complete') || Date.now() - start > 12000) {
+        setTimeout(cb, 250);
+      } else {
+        setTimeout(tick, 100);
+      }
+    })();
+  }
+
+  if (document.readyState === 'complete') afterLoader(maybeShow);
+  else window.addEventListener('load', function () { afterLoader(maybeShow); });
 })();
