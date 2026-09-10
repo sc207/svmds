@@ -90,8 +90,50 @@ async function deleteDraft(draftIdOrCode) {
   return listDrafts(row.context_type, row.context_id);
 }
 
+/* ---------- roster link tables (013) ----------
+   kind: 'meeting' (→ meeting_members / committee_members) | 'session'
+   (→ session_members / team_members). Replaces member_ids_json.
+   Works in CODE space (CMM-### / MEM-####) to match mapCommitteeMember /
+   mapTeamMember `.id`; the link tables store the numeric member id. */
+const ROSTER = {
+  meeting: { table: 'meeting_members', ctx: 'meeting_id', mem: 'committee_member_id', memTable: 'committee_members' },
+  session: { table: 'session_members', ctx: 'session_id', mem: 'team_member_id', memTable: 'team_members' },
+};
+async function getRoster(kind, contextId) {
+  const r = ROSTER[kind]; if (!r) return [];
+  const rows = await queryAll(
+    `SELECT m.code AS code, m.id AS id FROM ${r.table} l JOIN ${r.memTable} m ON m.id = l.${r.mem}
+     WHERE l.${r.ctx} = ? AND m.is_deleted = 0 ORDER BY m.id`, [String(contextId)]);
+  return rows.map(x => x.code || String(x.id));
+}
+/** Replace the roster with the VALID subset of `memberIds` (numeric id OR
+    code); returns the codes kept. */
+async function setRoster(kind, contextId, memberIds) {
+  const r = ROSTER[kind]; if (!r) return [];
+  const want = [...new Set((memberIds || []).map(x => String(x).trim()).filter(Boolean))];
+  const valid = [];
+  await run(`DELETE FROM ${r.table} WHERE ${r.ctx} = ?`, [String(contextId)]);
+  for (const key of want) {
+    const m = await queryOne(
+      `SELECT id, code FROM ${r.memTable} WHERE (id = ? OR code = ?) AND is_deleted = 0`,
+      [parseInt(key, 10) || -1, key]);
+    if (!m) continue;
+    await run(`INSERT OR IGNORE INTO ${r.table} (${r.ctx}, ${r.mem}) VALUES (?, ?)`, [String(contextId), m.id]);
+    valid.push(m.code || String(m.id));
+  }
+  return valid;
+}
+/** Drop a member from every roster of its kind (member removal / devotee delete). */
+async function dropMemberFromRosters(kind, memberIdOrCode) {
+  const r = ROSTER[kind]; if (!r || memberIdOrCode == null) return;
+  const m = await queryOne(`SELECT id FROM ${r.memTable} WHERE id = ? OR code = ?`,
+    [parseInt(memberIdOrCode, 10) || -1, String(memberIdOrCode)]);
+  if (m) await run(`DELETE FROM ${r.table} WHERE ${r.mem} = ?`, [m.id]);
+}
+
 module.exports = {
   getAttendance, setAttendance,
   getCommunication, setCommunication,
   listDrafts, addDraft, updateDraft, deleteDraft,
+  getRoster, setRoster, dropMemberFromRosters,
 };

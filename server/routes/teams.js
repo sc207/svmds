@@ -37,7 +37,10 @@ async function hydrate(row) {
     queryOne('SELECT COUNT(*) AS n FROM public_signups WHERE team_id = ? AND status = ? AND is_deleted = 0', [row.id, 'pending']),
   ]);
   const sessions = [];
-  for (const s of sessRows) sessions.push(mapVolunteeringSession(s, await shared.getAttendance('volunteering', s.id)));
+  for (const s of sessRows) {
+    s.member_ids_json = JSON.stringify(await shared.getRoster('session', s.id));   // link table is authoritative
+    sessions.push(mapVolunteeringSession(s, await shared.getAttendance('volunteering', s.id)));
+  }
   return mapTeam(row, {
     members: members.map(mapTeamMember),
     sessions,
@@ -306,6 +309,7 @@ router.delete('/:id/members/:mid', async (req, res, next) => {
       [parseInt(req.params.mid, 10) || -1, req.params.mid, row.id]);
     if (m) {
       await run(`UPDATE team_members SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [m.id]);
+      await shared.dropMemberFromRosters('session', m.id);
       const sess = await queryAll('SELECT id, member_ids_json FROM volunteering_sessions WHERE team_id = ?', [row.id]);
       for (const s of sess) {
         let ids; try { ids = JSON.parse(s.member_ids_json || '[]'); } catch (_) { ids = []; }
@@ -336,6 +340,7 @@ router.post('/:id/sessions', async (req, res, next) => {
       [id, code, row.id, b.title, b.date, b.startTime || '', b.endTime || '', b.location || '',
        JSON.stringify(b.memberIds || []), b.notes || '', b.publicOpen ? 1 : 0]
     );
+    await shared.setRoster('session', id, b.memberIds);   // validated link rows
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
       action: 'CREATE', entityType: 'volunteering_session', entityId: code, scopeId: row.code });
     res.status(201).json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
@@ -367,6 +372,7 @@ router.patch('/:id/sessions/:sid', async (req, res, next) => {
       args.push(s.id);
       await run(`UPDATE volunteering_sessions SET ${sets.join(', ')} WHERE id = ?`, args);
     }
+    if (b.memberIds !== undefined) await shared.setRoster('session', s.id, b.memberIds);
     res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });
@@ -528,6 +534,7 @@ router.post('/:id/signups/:sid/approve', async (req, res, next) => {
         ids.push(member.id);
         await run('UPDATE volunteering_sessions SET member_ids_json = ? WHERE id = ?', [JSON.stringify(ids), sess.id]);
       }
+      await run('INSERT OR IGNORE INTO session_members (session_id, team_member_id) VALUES (?, ?)', [String(sess.id), member.id]);
     }
     await run('UPDATE public_signups SET status = ? WHERE id = ?', ['approved', su.id]);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',

@@ -38,6 +38,7 @@ async function hydrate(row) {
   ]);
   const meetings = [];
   for (const m of meetingRows) {
+    m.member_ids_json = JSON.stringify(await shared.getRoster('meeting', m.id));   // link table is authoritative
     meetings.push(mapMeeting(m, await shared.getAttendance('meeting', m.id)));
   }
   return mapCommittee(row, { members: members.map(mapCommitteeMember), meetings, communication, drafts });
@@ -311,6 +312,7 @@ router.delete('/:id/members/:mid', async (req, res, next) => {
     if (m) {
       await run(`UPDATE committee_members SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [m.id]);
       // no orphan attendance / stale meeting rosters for a removed member
+      await shared.dropMemberFromRosters('meeting', m.id);
       const meets = await queryAll('SELECT id, member_ids_json FROM meetings WHERE committee_id = ?', [row.id]);
       for (const mt of meets) {
         let ids; try { ids = JSON.parse(mt.member_ids_json || '[]'); } catch (_) { ids = []; }
@@ -341,6 +343,7 @@ router.post('/:id/meetings', async (req, res, next) => {
       [id, code, row.id, b.title, b.date, b.startTime || '', b.endTime || '', b.venue || '',
        b.agenda || '', JSON.stringify(b.memberIds || []), b.notes || '']
     );
+    await shared.setRoster('meeting', id, b.memberIds);   // validated link rows
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',
       action: 'CREATE', entityType: 'meeting', entityId: code, scopeId: row.code });
     res.status(201).json(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id])));
@@ -371,6 +374,7 @@ router.patch('/:id/meetings/:mid', async (req, res, next) => {
       args.push(mt.id);
       await run(`UPDATE meetings SET ${sets.join(', ')} WHERE id = ?`, args);
     }
+    if (b.memberIds !== undefined) await shared.setRoster('meeting', mt.id, b.memberIds);
     res.json(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id])));
   } catch (e) { next(e); }
 });
