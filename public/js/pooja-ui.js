@@ -1492,7 +1492,7 @@ function assignCoordinator(e, poojaId) {
     pjToast(`${c.name} can now open this pooja.`);
     if (window.API && window.API.online && (/^DEV-/i.test(val) || /^\d+$/.test(String(val)))) {
       window.API.post('/poojas/' + (p.code || p.id) + '/coordinators', { devoteeId: val })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('poojas'); })
         .catch(function (err) { pjToast((err && err.message) || 'Grant failed to sync'); });
     }
   }

@@ -113,7 +113,7 @@ function handleSaveDhajaCampaign(e) {
     ? window.API.patch('/dhaja/campaigns/' + code, body)
     : window.API.post('/dhaja/campaigns', body);
   req
-    .then(() => window.__rehydrate && window.__rehydrate())
+    .then(() => window.__rehydrate && window.__rehydrate('dhaja'))
     .then(() => {
       if (typeof closeModal === 'function') closeModal('modalDhajaCamp');
       dhajaToast(code ? window.t('saved', 'Saved') : window.t('dhaja_camp_created', 'Campaign created.'));
@@ -129,7 +129,7 @@ function dhajaDeleteCampaign(code) {
   if (!(window.API && window.API.online)) { dhajaToast(window.t('dhaja_need_online', 'Go online to manage campaigns.')); return; }
 
   const doDelete = (force) => window.API.del('/dhaja/campaigns/' + c.code + (force ? '?force=1' : ''))
-    .then(() => window.__rehydrate && window.__rehydrate())
+    .then(() => window.__rehydrate && window.__rehydrate('dhaja'))
     .then(() => { if (typeof closeModal === 'function') closeModal('modalDhajaCamp'); dhajaToast(window.t('dhaja_camp_deleted', 'Campaign deleted.')); })
     .catch(err => {
       if (err && err.status === 409 && !force) {
@@ -266,7 +266,7 @@ function handleSponsorDhaja(e) {
   }
   if (btn) btn.disabled = true;
   window.API.post('/dhaja', payload)
-    .then(() => window.__rehydrate && window.__rehydrate())
+    .then(() => window.__rehydrate && window.__rehydrate('dhaja'))
     .catch(err => {
       // revert the optimistic row
       const i = DHAJA.sponsorships.indexOf(localRow);
@@ -291,7 +291,7 @@ function dhajaOpenSpecialDay(annualEventId) {
     nameGu: (ev && ev.name_gu) || '',
     targetCount: 0,
   })
-    .then(() => window.__rehydrate && window.__rehydrate())
+    .then(() => window.__rehydrate && window.__rehydrate('dhaja'))
     .then(() => dhajaToast(window.t('dhaja_opened', 'Dhaja sponsorship opened.')))
     .catch(err => dhajaToast((err && err.message) || 'Could not open campaign'));
 }
@@ -303,8 +303,8 @@ function dhajaMarkPerformed(code) {
   renderDhaja();
   if (window.API && window.API.online && s.code) {
     window.API.patch('/dhaja/' + s.code, { status: 'performed' })
-      .then(() => window.__rehydrate && window.__rehydrate())
-      .catch(err => { dhajaToast((err && err.message) || 'Sync failed'); window.__rehydrate && window.__rehydrate(); });
+      .then(() => window.__rehydrate && window.__rehydrate('dhaja'))
+      .catch(err => { dhajaToast((err && err.message) || 'Sync failed'); window.__rehydrate && window.__rehydrate('dhaja'); });
   }
 }
 
@@ -318,8 +318,8 @@ function dhajaCancel(code) {
     renderDhaja();
     if (window.API && window.API.online && s.code) {
       window.API.patch('/dhaja/' + s.code, { status: 'cancelled' })
-        .then(() => window.__rehydrate && window.__rehydrate())
-        .catch(err => { dhajaToast((err && err.message) || 'Sync failed'); window.__rehydrate && window.__rehydrate(); });
+        .then(() => window.__rehydrate && window.__rehydrate('dhaja'))
+        .catch(err => { dhajaToast((err && err.message) || 'Sync failed'); window.__rehydrate && window.__rehydrate('dhaja'); });
     }
   };
   if (typeof openConfirm === 'function') {

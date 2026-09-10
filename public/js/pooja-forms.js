@@ -583,7 +583,7 @@ function handleSavePooja(e) {
           }, Promise.resolve());
         })
         .then(function () { return pjDiffLinks(code, prevCoord, coordDevIds, prevSev, sevDevIds, p); })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('poojas'); })
         .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
@@ -620,7 +620,7 @@ function handleSavePooja(e) {
           local.code = code;
           return pjDiffLinks(code, [], coordDevIds, [], sevDevIds, local);
         })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('poojas'); })
         .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   }
@@ -860,7 +860,7 @@ function handleSaveGuest(e) {
         firstName: first, lastName: last, name: (first + ' ' + last).trim(), role, mobile, city, state,
         devoteeId: (pickedDevoteeId && /^DEV-/i.test(pickedDevoteeId)) ? pickedDevoteeId : undefined
       })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('poojas'); })
         .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
     }
     renderPooja();
@@ -974,7 +974,7 @@ function handleSaveSevarthi(e) {
     pjToast(`${firstName} ${lastName} updated.`);
     if (online && !!s.code) {
       window.API.patch('/sevarthis/' + (s.code || s.id), { firstName, lastName, mobile, city, state, committee, status, notes })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('poojas'); })
         .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
@@ -1001,9 +1001,9 @@ function handleSaveSevarthi(e) {
     pjToast(`${firstName} ${lastName} added to ${p.name}.`);
     if (online) {
       window.API.post('/poojas/' + code + '/sevarthis', { devoteeId: pickedDevoteeId })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('poojas'); })
         .catch(function (err) {
-          if (err && err.status === 409) { pjToast('Already a sevarthi of this pooja.'); return window.__rehydrate && window.__rehydrate(); }
+          if (err && err.status === 409) { pjToast('Already a sevarthi of this pooja.'); return window.__rehydrate && window.__rehydrate('poojas'); }
           pjToast((err && err.message) || 'Saved locally — sync failed');
         });
     }
@@ -1122,7 +1122,7 @@ function handleSavePoojaType(e) {
     POOJA.poojaTypes.push(t);
     pjToast(`${name} added to the catalog.`);
     if (online) window.API.post('/pooja-types', payload)
-      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { return window.__rehydrate && window.__rehydrate('poojas'); })
       .catch(function (err) { pjToast((err && err.message) || 'Saved locally — sync failed'); });
   }
   POOJA.editingTypeId = null;

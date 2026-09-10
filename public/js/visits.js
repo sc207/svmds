@@ -267,7 +267,7 @@ function handleSaveVisit(e) {
     visToast(name + ' — ' + window.t('save') + ' ✓');
     if (online && !!v.code) {
       window.API.patch('/visits/' + (v.code || v.id), body)
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('visits'); })
         .catch(function (err) { visToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
@@ -278,7 +278,7 @@ function handleSaveVisit(e) {
     visToast(window.t('vis_added', 'Visit added.'));
     if (online) {
       window.API.post('/visits', body)
-        .then(function (dto) { if (dto && (dto.code || dto.id)) local.id = dto.code || dto.id; return window.__rehydrate && window.__rehydrate(); })
+        .then(function (dto) { if (dto && (dto.code || dto.id)) local.id = dto.code || dto.id; return window.__rehydrate && window.__rehydrate('visits'); })
         .catch(function (err) { visToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   }

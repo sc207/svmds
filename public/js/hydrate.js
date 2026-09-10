@@ -52,9 +52,10 @@
     log('settings applied (clock ' + (overridden ? 'kept local override' : s.workingDate) + ')');
   }
 
-  async function hydrateCore() {
+  // just the people register — the one thing a scoped post-save refresh needs
+  // so devCode() resolves any devotee the save created.
+  async function hydrateDevotees() {
     if (typeof state === 'undefined') return;
-
     try {
       var devotees = await window.API.get('/devotees');
       for (var k in DEV_BY_ROW) delete DEV_BY_ROW[k];
@@ -70,6 +71,11 @@
       if (typeof renderDevotees === 'function') renderDevotees();
       log('devotees: ' + state.devotees.length);
     } catch (e) { log('devotees failed: ' + e.message); }
+  }
+
+  async function hydrateCore() {
+    if (typeof state === 'undefined') return;
+    await hydrateDevotees();
 
     try {
       var inv = await window.API.get('/inventory');
@@ -410,23 +416,62 @@
     try { if (typeof syncEntitySelects === 'function') syncEntitySelects(); } catch (e) {}
   }
 
-  async function run() {
+  // one hydrate step per module — used for both the full boot load and the
+  // scoped post-save refresh.
+  var STEPS = {
+    devotees: hydrateDevotees, core: hydrateCore,
+    committees: hydrateCommittees, teams: hydrateTeams,
+    poojas: hydratePoojas, events: hydrateEvents, visits: hydrateVisits,
+    donations: hydrateDonations, dhaja: hydrateDhaja,
+  };
+  // the full boot load runs `core` (devotees + inventory + expenses); a scoped
+  // refresh runs only `devotees`.
+  var ALL = ['core', 'committees', 'teams', 'poojas', 'events', 'visits', 'donations', 'dhaja'];
+
+  // run(undefined)        → full boot load (every module + settings)
+  // run('dhaja') / run(['poojas','donations']) → just those modules (+ core, so
+  //   devCode() stays current for any devotee the save created) + refreshViews.
+  // A failure in one step is logged and NEVER aborts the rest.
+  async function run(only) {
     if (!window.API || !window.API.online) { log('offline — keeping seed data'); return; }
-    log('backend online — hydrating');
-    try { await hydrateSettings(); } catch (e) { log('settings failed: ' + e.message); }
-    await hydrateCore();
-    try { await hydrateCommittees(); } catch (e) { log('committees failed: ' + e.message); }
-    try { await hydrateTeams(); } catch (e) { log('teams failed: ' + e.message); }
-    try { await hydratePoojas(); } catch (e) { log('poojas failed: ' + e.message); }
-    try { await hydrateEvents(); } catch (e) { log('events failed: ' + e.message); }
-    try { await hydrateVisits(); } catch (e) { log('visits failed: ' + e.message); }
-    try { await hydrateDonations(); } catch (e) { log('donations failed: ' + e.message); }
-    try { await hydrateDhaja(); } catch (e) { log('dhaja failed: ' + e.message); }
-    await refreshViews();
-    log('done');
+    var full = only == null;
+    var mods = full ? ALL.slice()
+      : (Array.isArray(only) ? only : [only]).filter(function (k) { return STEPS[k]; });
+    if (!full && !mods.length) { full = true; mods = ALL.slice(); }        // unknown key → be safe
+    if (!full && mods.indexOf('devotees') === -1 && mods.indexOf('core') === -1) mods = ['devotees'].concat(mods);
+
+    log(full ? 'full hydrate' : 'refresh [' + mods.join(',') + ']');
+    if (full) { try { await hydrateSettings(); } catch (e) { log('settings failed: ' + e.message); } }
+    for (var i = 0; i < mods.length; i++) {
+      try { await STEPS[mods[i]](); } catch (e) { log(mods[i] + ' failed: ' + e.message); }
+    }
+    try { await refreshViews(); } catch (e) { log('refreshViews failed: ' + e.message); }
+    log('done' + (full ? '' : ' [' + mods.join(',') + ']'));
   }
 
-  window.__rehydrate = run;   // modules can force a full re-pull after a big change
+  // Post-save calls are COALESCED: a save flow that fires several __rehydrate()
+  // calls (create + link + link…) collapses into ONE refresh a beat later, so
+  // the page never thrashes through a dozen API round-trips per entry. The
+  // widest scope requested wins (any full request beats scoped).
+  var _timer = null, _wantFull = false, _wantMods = {}, _waiters = [];
+  function schedule(only) {
+    if (only == null || (typeof only === 'string' && !STEPS[only])) _wantFull = true;
+    else (Array.isArray(only) ? only : [only]).forEach(function (k) { if (STEPS[k]) _wantMods[k] = true; });
+    if (_timer) clearTimeout(_timer);
+    return new Promise(function (resolve) {
+      _waiters.push(resolve);
+      _timer = setTimeout(function () {
+        _timer = null;
+        var full = _wantFull, mods = Object.keys(_wantMods), w = _waiters;
+        _wantFull = false; _wantMods = {}; _waiters = [];
+        run(full ? undefined : mods).then(function () { w.forEach(function (r) { r(); }); },
+                                          function () { w.forEach(function (r) { r(); }); });
+      }, 200);
+    });
+  }
+
+  window.__rehydrate = schedule;   // modules: window.__rehydrate('<module>') after a save
+  window.__rehydrateNow = run;     // synchronous, un-debounced (rarely needed)
 
   if (document.readyState === 'complete') run();
   else window.addEventListener('load', run);

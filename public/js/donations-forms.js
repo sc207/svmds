@@ -373,7 +373,7 @@ function handleSaveDonation(e) {
         valuation: payload.valuation, date: payload.date, status: payload.status,
         committee: payload.committee, purpose: payload.purpose, notes: payload.notes
       })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('donations'); })
         .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
@@ -388,7 +388,7 @@ function handleSaveDonation(e) {
       window.API.post('/donations', payload)
         .then(function (dto) {
           if (dto) { saved.id = dto.code || dto.id || saved.id; if (dto.receiptNo) saved.receiptNo = dto.receiptNo; }
-          return window.__rehydrate && window.__rehydrate();
+          return window.__rehydrate && window.__rehydrate('donations');
         })
         .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
     }
@@ -506,7 +506,7 @@ function handleSaveDonor(e) {
     donToast(window.t('don_donor_updated'));
     if (online && !!saved.code) {
       window.API.patch('/donors/' + (saved.code || saved.id), body)
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('donations'); })
         .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
@@ -524,7 +524,7 @@ function handleSaveDonor(e) {
         .then(function (dto) {
           if (dto && (dto.code || dto.id)) saved.id = dto.code || dto.id;
           if (dto && dto._deduped) donToast('Matched an existing donor — ' + (dto.name || ''));
-          return window.__rehydrate && window.__rehydrate();
+          return window.__rehydrate && window.__rehydrate('donations');
         })
         .then(function () { if (back === 'donationForm') refreshDonorSelect(saved.id); })
         .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
@@ -613,7 +613,7 @@ function handleSaveDonCategory(e) {
     DON.categories.push(c);
     donToast(window.t('don_cat_added'));
     if (online) window.API.post('/donation-categories', payload)
-      .then(function () { return window.__rehydrate && window.__rehydrate(); }).catch(function () {});
+      .then(function () { return window.__rehydrate && window.__rehydrate('donations'); }).catch(function () {});
   }
   DON.editingCatId = null;
   closeModal('modalDonCategory');

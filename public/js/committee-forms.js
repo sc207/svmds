@@ -268,7 +268,7 @@ function handleSaveCommittee(e) {
     })
       .then(function () { return leaderId && leaderId !== prevLeader ? window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId }) : null; })
       .then(function () { return cmtSyncRoster(code, CMT.editingCmtId, members, leaderId); })
-      .then(function () { cmtToast(name + ' — ' + window.t('save') + ' ✓'); return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { cmtToast(name + ' — ' + window.t('save') + ' ✓'); return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); })
       .then(done);
   } else {
@@ -287,7 +287,7 @@ function handleSaveCommittee(e) {
         const chain = leaderId ? window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId }) : Promise.resolve();
         return chain.then(function () { return cmtSyncRoster(code, id, members, leaderId); });
       })
-      .then(function () { cmtToast(name + ' — ' + window.t('cmt_create', 'created')); return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { cmtToast(name + ' — ' + window.t('cmt_create', 'created')); return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); })
       .then(done);
   }
@@ -418,7 +418,7 @@ function handleSaveCmtMember(e) {
       firstName: first, lastName: last, mobile, city: fields.city, state: fields.state,
       role: fields.role, status: fields.status, notes: fields.notes
     })
-      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); })
       .then(done);
   } else {
@@ -429,9 +429,9 @@ function handleSaveCmtMember(e) {
     cmtToast(first + ' ' + last + ' ' + window.t('cmt_added_word', 'added'));
     if (!online) { return done(); }
     window.API.post('/committees/' + code + '/members', { devoteeId: pickedDevoteeId, role: fields.role, notes: fields.notes })
-      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) {
-        if (err && err.status === 409) { cmtToast(window.t('cmt_already_member', 'already on this committee.')); return window.__rehydrate && window.__rehydrate(); }
+        if (err && err.status === 409) { cmtToast(window.t('cmt_already_member', 'already on this committee.')); return window.__rehydrate && window.__rehydrate('committees'); }
         cmtToast((err && err.message) || 'Saved locally — sync failed');
       })
       .then(done);
@@ -546,7 +546,7 @@ function handleSaveMeeting(e) {
       window.API.patch('/committees/' + ccode + '/meetings/' + (x.code || x.id), {
         title, date, startTime: start, endTime: end, venue: fields.venue, agenda: fields.agenda, memberIds: rowIds
       })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('committees'); })
         .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
@@ -558,7 +558,7 @@ function handleSaveMeeting(e) {
       window.API.post('/committees/' + ccode + '/meetings', {
         title, date, startTime: start, endTime: end, venue: fields.venue, agenda: fields.agenda, memberIds: rowIds
       })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('committees'); })
         .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   }
@@ -622,7 +622,7 @@ function handleSaveCmtDraft(e) {
     const d = { id: cmtNextId('CDR', CMT.drafts, 3), committeeId: CMT.activeCmtId, title, message, updatedAt: cmtToday() };
     CMT.drafts.push(d);
     if (online) window.API.post('/committees/' + code + '/drafts', { title, message })
-      .then(function () { return window.__rehydrate && window.__rehydrate(); }).catch(function () {});
+      .then(function () { return window.__rehydrate && window.__rehydrate('committees'); }).catch(function () {});
   }
   CMT.editingDraftId = null;
   closeModal('modalCmtDraft');
@@ -669,7 +669,7 @@ function saveCmtSettings(e, cid) {
       name: c.name, samaj: c.samaj, purpose: c.purpose, expectedSize: c.expectedSize, status: c.status, notes: c.notes
     })
       .then(function () { return (c.leaderId && c.leaderId !== prevLeader) ? window.API.post('/committees/' + code + '/leader', { devoteeId: c.leaderId }) : null; })
-      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); });
   }
 }

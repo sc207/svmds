@@ -1241,7 +1241,7 @@ function approvePublicSignup(id) {
       // the server creates/reuses the devotee + team member and links the session
       if (window.API && window.API.online && !!s.code) {
         window.API.post('/teams/' + (m.code || m.id) + '/signups/' + (s.code || s.id) + '/approve')
-          .then(function () { return window.__rehydrate && window.__rehydrate(); })
+          .then(function () { return window.__rehydrate && window.__rehydrate('teams'); })
           .catch(function (err) { mgToast((err && err.message) || 'Approve failed to sync'); });
       }
     }
@@ -1733,7 +1733,7 @@ function saveManagementSettings(e, mgmtId) {
     const code = m.code || m.id;
     window.API.patch('/teams/' + code, { name: m.name, description: m.description, expectedTeamSize: m.expectedTeamSize, status: m.status, notes: m.notes })
       .then(function () { return (m.leadId && m.leadId !== prevLead) ? window.API.post('/teams/' + code + '/lead', { devoteeId: m.leadId }) : null; })
-      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { return window.__rehydrate && window.__rehydrate('teams'); })
       .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); });
   }
 }

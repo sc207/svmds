@@ -175,7 +175,7 @@ function handleSaveEvent(ev) {
         budget: payload.budget, color: payload.color, notes: payload.notes, days
       })
         .then(function () { return (inChargeDev && inChargeDev !== prevInCharge) ? window.API.post('/events/' + code + '/incharge', { devoteeId: inChargeDev }) : null; })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('events'); })
         .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
@@ -192,7 +192,7 @@ function handleSaveEvent(ev) {
           local.code = code;
           return inChargeDev ? window.API.post('/events/' + code + '/incharge', { devoteeId: inChargeDev }) : null;
         })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('events'); })
         .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   }
@@ -259,7 +259,7 @@ function handleSaveEventType(ev) {
     const t = Object.assign({ id: evNextId('EVT', EV.eventTypes, 3) }, payload);
     EV.eventTypes.push(t);
     if (online) window.API.post('/events/types', payload)
-      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { return window.__rehydrate && window.__rehydrate('events'); })
       .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
   }
   EV.editingTypeId = null;

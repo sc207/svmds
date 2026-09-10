@@ -498,7 +498,7 @@ function handleSaveManagement(e) {
     window.API.patch('/teams/' + code, { name, description: desc, expectedTeamSize: size, status, notes })
       .then(function () { return (leadId && leadId !== prevLead) ? window.API.post('/teams/' + code + '/lead', { devoteeId: leadId }) : null; })
       .then(function () { return mgSyncRoster(code, m.id, members, leadId); })
-      .then(function () { mgToast(`${name} updated.`); return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { mgToast(`${name} updated.`); return window.__rehydrate && window.__rehydrate('teams'); })
       .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
       .then(finish);
   } else {
@@ -521,7 +521,7 @@ function handleSaveManagement(e) {
         const chain = leadId ? window.API.post('/teams/' + code + '/lead', { devoteeId: leadId }) : Promise.resolve();
         return chain.then(function () { return mgSyncRoster(code, id, members, leadId); });
       })
-      .then(function () { mgToast(`${name} created.`); return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { mgToast(`${name} created.`); return window.__rehydrate && window.__rehydrate('teams'); })
       .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
       .then(finish);
   }
@@ -680,7 +680,7 @@ function handleSaveMember(e) {
     mgToast(`${memberName(x)} updated.`);
     if (!online || !x.code) return finish();
     window.API.patch('/teams/' + code + '/members/' + x.id, { firstName, lastName, mobile, city, state, role, status, notes })
-      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { return window.__rehydrate && window.__rehydrate('teams'); })
       .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
       .then(finish);
   } else {
@@ -695,9 +695,9 @@ function handleSaveMember(e) {
     mgToast(`${firstName} ${lastName} added to ${m.name}.`);
     if (!online) return finish();
     window.API.post('/teams/' + code + '/members', { devoteeId: pickedDevoteeId, role, notes })
-      .then(function () { return window.__rehydrate && window.__rehydrate(); })
+      .then(function () { return window.__rehydrate && window.__rehydrate('teams'); })
       .catch(function (err) {
-        if (err && err.status === 409) { mgToast('Already in this Management.'); return window.__rehydrate && window.__rehydrate(); }
+        if (err && err.status === 409) { mgToast('Already in this Management.'); return window.__rehydrate && window.__rehydrate('teams'); }
         mgToast((err && err.message) || 'Saved locally — sync failed');
       })
       .then(finish);
@@ -886,7 +886,7 @@ function handleSaveSession(e) {
     mgToast('Volunteering updated.');
     if (online && (v.code || v.id) && !v.code) {
       window.API.patch('/teams/' + tcode + '/sessions/' + (v.code || v.id), { title, date, startTime: start, endTime: end, location, notes, memberIds: rowIds, publicOpen })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('teams'); })
         .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
@@ -897,7 +897,7 @@ function handleSaveSession(e) {
     mgToast(`Volunteering scheduled for ${fmtDate(date)}.`);
     if (online) {
       window.API.post('/teams/' + tcode + '/sessions', { title, date, startTime: start, endTime: end, location, notes, memberIds: rowIds, publicOpen })
-        .then(function () { return window.__rehydrate && window.__rehydrate(); })
+        .then(function () { return window.__rehydrate && window.__rehydrate('teams'); })
         .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   }
@@ -981,7 +981,7 @@ function handleSaveDraft(e) {
     logActivity(MG.activeMgmtId, `Message draft "${title}" created`);
     mgToast('Draft created.');
     if (online) window.API.post('/teams/' + teamCode(MG.activeMgmtId) + '/drafts', { title, message })
-      .then(function () { return window.__rehydrate && window.__rehydrate(); }).catch(function () {});
+      .then(function () { return window.__rehydrate && window.__rehydrate('teams'); }).catch(function () {});
   }
   MG.editingDraftId = null;
   closeModal('modalDraft');
