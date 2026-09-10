@@ -77,16 +77,9 @@
           </div>
         </div>
 
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="donFieldCommittee">Samaj / community</label>
-            <input type="text" class="form-input" id="donFieldCommittee" list="donCommitteeList" placeholder="Auto-filled from donor">
-            <datalist id="donCommitteeList"></datalist>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="donFieldPurpose">Purpose / Earmark</label>
-            <input type="text" class="form-input" id="donFieldPurpose" placeholder="e.g. Sabha Mandap flooring">
-          </div>
+        <div class="form-group">
+          <label class="form-label" for="donFieldPurpose">Purpose / Earmark</label>
+          <input type="text" class="form-input" id="donFieldPurpose" placeholder="e.g. Sabha Mandap flooring">
         </div>
 
         <div class="form-group">
@@ -121,10 +114,8 @@
         </div>
 
         <div id="donorIndividualFields">
-          <div class="form-group">
-            <label class="form-label" for="donorFieldName">Full Name *</label>
-            <input type="text" class="form-input" id="donorFieldName" placeholder="e.g. Rameshbhai Rabari">
-          </div>
+          <div id="donorPersonMount"></div>
+          <div class="mg-muted-xs" style="margin:.15rem 0 .6rem">Name, mobile and city come from the devotee record.</div>
         </div>
 
         <div id="donorOrgFields" hidden>
@@ -136,24 +127,15 @@
             <label class="form-label" for="donorFieldContact">Contact Person</label>
             <input type="text" class="form-input" id="donorFieldContact" placeholder="Authorised signatory">
           </div>
-        </div>
-
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="donorFieldMobile">Mobile Number *</label>
-            <input type="tel" class="form-input" id="donorFieldMobile" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile" oninput="checkExistingDonor()">
-            <div id="donorExistingHint"></div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="donorFieldPan">PAN (for 80G)</label>
-            <input type="text" class="form-input" id="donorFieldPan" maxlength="10" placeholder="ABCDE1234F" style="text-transform:uppercase">
-          </div>
-        </div>
-
-        <div class="grid mg-2col-form">
-          <div class="form-group">
-            <label class="form-label" for="donorFieldCity">City</label>
-            <input type="text" class="form-input" id="donorFieldCity" placeholder="e.g. Sanand">
+          <div class="grid mg-2col-form">
+            <div class="form-group">
+              <label class="form-label" for="donorFieldMobile">Mobile Number</label>
+              <input type="tel" class="form-input" id="donorFieldMobile" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="donorFieldCity">City</label>
+              <input type="text" class="form-input" id="donorFieldCity" placeholder="e.g. Sanand">
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label" for="donorFieldState">State</label>
@@ -161,15 +143,17 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="donorFieldCommittee">Samaj / community</label>
-          <input type="text" class="form-input" id="donorFieldCommittee" list="donCommitteeList" placeholder="community label, e.g. Rabari Samaj">
+        <div class="grid mg-2col-form">
+          <div class="form-group">
+            <label class="form-label" for="donorFieldPan">PAN (for 80G)</label>
+            <input type="text" class="form-input" id="donorFieldPan" maxlength="10" placeholder="ABCDE1234F" style="text-transform:uppercase">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="donorFieldNotes">Notes</label>
+            <input type="text" class="form-input" id="donorFieldNotes" placeholder="Optional">
+          </div>
         </div>
-
-        <div class="form-group">
-          <label class="form-label" for="donorFieldNotes">Notes</label>
-          <textarea class="form-input mg-textarea" id="donorFieldNotes" rows="2"></textarea>
-        </div>
+        <div id="donorExistingHint"></div>
       </form>
     </div>
     <div class="modal-footer">
@@ -269,10 +253,8 @@ function onDonationCategoryChange() {
 function onDonorSelectChange() {
   const d = donorById(document.getElementById('donFieldDonor').value);
   const hint = document.getElementById('donDonorHint');
-  const comm = document.getElementById('donFieldCommittee');
   if (d) {
     hint.innerHTML = `${esc(donorTypeLabel(d))}${d.city ? ' · ' + esc(tData(d.city)) : ''}${d.pan ? ' · PAN ' + esc(d.pan) : ' · ' + window.t('don_no_pan')}`;
-    if (comm && !comm.value.trim() && d.committee) comm.value = d.committee;
   } else {
     hint.innerHTML = '';
   }
@@ -314,7 +296,6 @@ function openEditDonation(id) {
   document.getElementById('donFieldValuation').value = x.valuation || '';
   document.getElementById('donFieldDate').value = x.date || donToday();
   document.getElementById('donFieldStatus').value = x.status || 'received';
-  document.getElementById('donFieldCommittee').value = x.committee || '';
   document.getElementById('donFieldPurpose').value = x.purpose || '';
   document.getElementById('donFieldNotes').value = x.notes || '';
   onDonationCategoryChange();
@@ -352,7 +333,6 @@ function handleSaveDonation(e) {
     valuation: kind ? valuation : 0,
     date: document.getElementById('donFieldDate').value || donToday(),
     status: document.getElementById('donFieldStatus').value,
-    committee: document.getElementById('donFieldCommittee').value.trim(),
     purpose: document.getElementById('donFieldPurpose').value.trim(),
     notes: document.getElementById('donFieldNotes').value.trim()
   };
@@ -367,7 +347,7 @@ function handleSaveDonation(e) {
       window.API.patch('/donations/' + (saved.code || saved.id), {
         mode: payload.mode, amount: payload.amount, item: payload.item, qty: payload.qty,
         valuation: payload.valuation, date: payload.date, status: payload.status,
-        committee: payload.committee, purpose: payload.purpose, notes: payload.notes
+        purpose: payload.purpose, notes: payload.notes
       })
         .then(function () { return window.__rehydrate && window.__rehydrate('donations'); })
         .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
@@ -421,8 +401,19 @@ let _donorReturnTo = null;
 
 function onDonorTypeChange() {
   const t = document.getElementById('donorFieldType').value;
-  document.getElementById('donorIndividualFields').hidden = (t !== 'individual');
+  const indiv = document.getElementById('donorIndividualFields');
+  indiv.hidden = (t !== 'individual');
   document.getElementById('donorOrgFields').hidden = (t === 'individual');
+  // (re)mount the shared devotee picker for the individual path
+  const mount = document.getElementById('donorPersonMount');
+  if (t === 'individual' && mount && !mount.querySelector('.dp-combo') && typeof devoteeLinkField === 'function') {
+    const d = DON.editingDonorId ? donorById(DON.editingDonorId) : null;
+    mount.innerHTML = devoteeLinkField({
+      selId: 'donorDevSel', label: window.t('don_donor', 'Donor') + ' (' + window.t('dv_title', 'devotee') + ')', required: true,
+      selectedId: (d && d.type === 'individual' && /^DEV-/i.test(d.devoteeId || '')) ? d.devoteeId : '',
+      selectedLabel: (d && d.type === 'individual') ? (d.name || '') : ''
+    });
+  }
 }
 
 function openAddDonor(returnTo) {
@@ -434,6 +425,7 @@ function openAddDonor(returnTo) {
   document.getElementById('donorFieldType').value = 'individual';
   document.getElementById('donorFieldState').value = 'Gujarat';
   document.getElementById('donorExistingHint').innerHTML = '';
+  document.getElementById('donorPersonMount').innerHTML = '';
   onDonorTypeChange();
   openModal('modalDonor');
 }
@@ -446,59 +438,54 @@ function openEditDonor(id, returnTo) {
   document.getElementById('donorFormTitle').textContent = window.t('don_edit_donor');
   document.getElementById('donorFormSubmitBtn').textContent = window.t('save');
   document.getElementById('donorFieldType').value = d.type || 'individual';
-  document.getElementById('donorFieldName').value = ((d.firstName || '') + ' ' + (d.lastName || '')).trim();
   document.getElementById('donorFieldOrg').value = d.orgName || '';
   document.getElementById('donorFieldContact').value = d.contactPerson || '';
   document.getElementById('donorFieldMobile').value = d.mobile || '';
   document.getElementById('donorFieldPan').value = d.pan || '';
   document.getElementById('donorFieldCity').value = d.city || '';
   document.getElementById('donorFieldState').value = d.state || '';
-  document.getElementById('donorFieldCommittee').value = d.committee || '';
   document.getElementById('donorFieldNotes').value = d.notes || '';
   document.getElementById('donorExistingHint').innerHTML = '';
+  document.getElementById('donorPersonMount').innerHTML = '';
   onDonorTypeChange();
   openModal('modalDonor');
-}
-
-function checkExistingDonor() {
-  const mobile = document.getElementById('donorFieldMobile').value.trim();
-  const hint = document.getElementById('donorExistingHint');
-  if (!hint || DON.editingDonorId) return;
-  if (mobile.length < 10) { hint.innerHTML = ''; return; }
-  const found = DON.donors.find(d => d.mobile === mobile);
-  if (!found) { hint.innerHTML = ''; return; }
-  hint.innerHTML = `<div class="mg-note-box mg-warn">⚠ ${window.t('don_donor_exists')}: <strong>${esc(donorName(found))}</strong> (${esc(found.id)}). ${window.t('don_edit_instead')}</div>`;
 }
 
 function handleSaveDonor(e) {
   e.preventDefault();
   const type = document.getElementById('donorFieldType').value;
-  const fullName = document.getElementById('donorFieldName').value.trim().replace(/\s+/g, ' ');
-  const nParts = fullName ? fullName.split(' ') : [];
-  const first = nParts.shift() || '';
-  const last = nParts.join(' ');
   const org = document.getElementById('donorFieldOrg').value.trim();
   const contact = document.getElementById('donorFieldContact').value.trim();
   const mobile = document.getElementById('donorFieldMobile').value.replace(/\D/g, '').slice(0, 10);
   const pan = document.getElementById('donorFieldPan').value.trim().toUpperCase();
   const city = document.getElementById('donorFieldCity').value.trim();
   const state = document.getElementById('donorFieldState').value.trim();
-  const committee = document.getElementById('donorFieldCommittee').value.trim();
   const notes = document.getElementById('donorFieldNotes').value.trim();
+  const person = (type === 'individual' && typeof devoteeLinkValue === 'function')
+    ? devoteeLinkValue('donorDevSel') : null;
 
   if (type === 'individual') {
-    if (!first) { donToast(window.t('don_need_name')); return; }
-  } else if (!org) { donToast(window.t('don_need_org')); return; }
-  if (!/^[0-9]{10}$/.test(mobile)) { donToast(window.t('don_need_mobile')); return; }
+    if (!person || !person.id) { donToast(window.t('don_pick_donor', 'Pick a devotee, or add a new one.')); return; }
+  } else {
+    if (!org) { donToast(window.t('don_need_org')); return; }
+    if (mobile && !/^[0-9]{10}$/.test(mobile)) { donToast(window.t('don_need_mobile')); return; }
+  }
   if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) { donToast(window.t('don_bad_pan')); return; }
 
   const online = !!(window.API && window.API.online);
-  const body = { type, firstName: first, lastName: last, orgName: org, contactPerson: contact, mobile, pan, city, state, committee, notes };
+  const body = (type === 'individual')
+    ? { type: 'individual', devoteeId: person.id, pan, notes }
+    : { type, orgName: org, contactPerson: contact, mobile, pan, city, state, notes };
   const wasEditing = !!DON.editingDonorId;
   let saved;
   if (wasEditing) {
     saved = donorById(DON.editingDonorId);
-    Object.assign(saved, { type, firstName: first, lastName: last, orgName: org, contactPerson: contact, mobile, pan, city, state, committee, notes });
+    if (type === 'individual') {
+      Object.assign(saved, { type, devoteeId: person.id, firstName: person.firstName, lastName: person.lastName,
+        name: person.name, mobile: person.mobile, city: person.city, state: person.state, pan, notes });
+    } else {
+      Object.assign(saved, { type, orgName: org, contactPerson: contact, mobile, pan, city, state, notes });
+    }
     donToast(window.t('don_donor_updated'));
     if (online && !!saved.code) {
       window.API.patch('/donors/' + (saved.code || saved.id), body)
@@ -506,13 +493,12 @@ function handleSaveDonor(e) {
         .catch(function (err) { donToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {
-    const dupe = DON.donors.find(d => d.mobile === mobile);
-    if (dupe) { donToast(window.t('don_donor_exists') + ' — ' + donorName(dupe)); return; }
-    saved = {
-      id: nextId('DNR', DON.donors, 3), type,
-      firstName: first, lastName: last, orgName: org, contactPerson: contact,
-      mobile, pan, city, state, committee, notes, addedDate: donToday()
-    };
+    saved = (type === 'individual')
+      ? { id: nextId('DNR', DON.donors, 3), type, devoteeId: person.id,
+          firstName: person.firstName, lastName: person.lastName, name: person.name,
+          mobile: person.mobile, city: person.city, state: person.state, pan, notes, addedDate: donToday() }
+      : { id: nextId('DNR', DON.donors, 3), type, orgName: org, contactPerson: contact,
+          mobile, pan, city, state, notes, addedDate: donToday() };
     DON.donors.push(saved);
     donToast(window.t('don_donor_added') + ' — ' + donorName(saved));
     if (online) {

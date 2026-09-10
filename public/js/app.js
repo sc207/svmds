@@ -310,14 +310,6 @@ function handleSaveInventory(e) {
   }
 }
 
-function handleJoinTeam(e) {
-  e.preventDefault();
-  const name = document.getElementById('inputVolunteerName').value;
-  closeModal('modalJoinTeam');
-  e.target.reset();
-  showToast(`Volunteer application submitted for ${name}!`);
-}
-
 /* Auth is a real page now (public/login.html + Google Sign-In). The in-app
    "Sign in" button and the user menu route here to end the session. */
 function signOut() {

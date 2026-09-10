@@ -339,10 +339,12 @@
     var rows = await window.API.get('/visits');
     if (!Array.isArray(rows)) return;
     swap(VISITS.list, rows.map(function (v) {
-      return { id: v.id, code: v.code, devoteeName: v.devoteeName || '', devoteeId: devCode(v.devoteeId),
+      return { id: v.id, code: v.code, devoteeName: v.devoteeName || '',
+               devoteeId: v.devoteeCode || devCode(v.devoteeId),
                mobile: v.mobile || '', purpose: v.purpose || 'other', address: v.address || '',
                city: v.city || '', state: v.state || 'Gujarat', date: v.date, time: v.time || '',
-               escortTeam: v.escortTeam || '', status: v.status || 'requested', notes: v.notes || '' };
+               escortTeamId: v.escortTeamId || '', escortTeam: v.escortTeamName || v.escortTeam || '',
+               status: v.status || 'requested', notes: v.notes || '' };
     }));
     if (typeof renderVisits === 'function') renderVisits();
     log('visits: ' + VISITS.list.length);

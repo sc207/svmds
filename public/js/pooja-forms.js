@@ -931,11 +931,6 @@ function openEditSevarthi(id) {
   openModal('modalSevarthi');
 }
 
-/* checkExistingSevarthi() was the old mobile-field live lookup. The Sevarthi
-   modal is now a devotee picker (select an existing devotee or "+ Add new
-   devotee"), which handles reuse itself, so the function is gone. */
-function checkExistingSevarthi() {}
-
 function handleSaveSevarthi(e) {
   e.preventDefault();
   const p = poojaById(POOJA.activePoojaId);

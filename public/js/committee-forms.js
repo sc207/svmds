@@ -378,10 +378,6 @@ function openEditCmtMember(id) {
   document.getElementById('cmmExistingHint').innerHTML = '';
   openModal('modalCmtMember');
 }
-/* checkExistingCmtMember() was the old mobile-field live lookup on the Add
-   Member modal. That modal is now a devotee picker, which handles reuse
-   itself, so the function is gone. */
-function checkExistingCmtMember() {}
 function handleSaveCmtMember(e) {
   e.preventDefault();
   const cid = CMT.editingMemberId ? cmtMemberById(CMT.editingMemberId).committeeId : CMT.activeCmtId;

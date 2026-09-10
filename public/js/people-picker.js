@@ -87,26 +87,11 @@
      Samaj-type committee membership (committee_members), edited via the
      Committees checklist. So no donCommitteeList / sevCommitteeList fill. */
   window.syncEntitySelects = function () {
-    var teams = window.teamNames();
-
-    var fillSelect = function (id, items, opts) {
-      var el = document.getElementById(id);
-      if (!el || el.tagName !== 'SELECT') return;
-      var cur = el.value;
-      var head = (opts && opts.head) ? '<option value="' + esc(opts.head.v) + '">' + esc(opts.head.t) + '</option>' : '';
-      el.innerHTML = head + items.map(function (x) {
-        return '<option value="' + esc(x) + '">' + esc(x) + '</option>';
-      }).join('');
-      if (cur && items.indexOf(cur) !== -1) el.value = cur;
-      else if (opts && opts.head) el.value = opts.head.v;
-    };
     var fillDatalist = function (id, items) {
       var el = document.getElementById(id);
       if (!el) return;
       el.innerHTML = items.map(function (x) { return '<option value="' + esc(x) + '"></option>'; }).join('');
     };
-
-    fillSelect('inputVolunteerTeam', teams);
     // guest role suggestions — Pandit removed on request
     fillDatalist('gstRoleList', ['Chief Guest', 'Guest of Honour', 'Trust President', 'Trustee', 'Yagna Acharya', 'Path Acharya', 'Mahila Mandal Head']);
   };

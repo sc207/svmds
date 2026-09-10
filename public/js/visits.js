@@ -114,93 +114,46 @@ function renderVisits() {
   </div>`;
 }
 
-/* People from the shared register, for the devotee dropdown. */
-function visPeople() {
-  if (typeof allPeople === 'function') return allPeople();
-  if (typeof templePeople === 'function') return templePeople();
-  return [];
-}
-function visDevoteeOptions(v) {
+/* <select> of Management teams (value = team code) for the escort field. */
+function visEscortOptions(v) {
   v = v || {};
-  const people = visPeople();
-  let matched = false;
-  let opts = `<option value="">— ${window.t('vis_pick_devotee', 'pick a devotee')} —</option>`;
-  opts += people.map(p => {
-    const sel = (v.devoteeId && String(p.id) === String(v.devoteeId)) ||
-                (!v.devoteeId && v.devoteeName && p.name === v.devoteeName);
-    if (sel) matched = true;
-    return `<option value="${esc(p.id)}" ${sel ? 'selected' : ''}>${esc(p.name)}${p.mobile ? ' · ' + esc(p.mobile) : ''}${p.city ? ' · ' + esc(p.city) : ''}</option>`;
+  const teams = (typeof MG !== 'undefined' && Array.isArray(MG.managements)) ? MG.managements : [];
+  const cur = v.escortTeamId || '';
+  let opts = `<option value="">— ${window.t('vis_no_escort', 'none / to be assigned')} —</option>`;
+  opts += teams.map(t => {
+    const code = t.code || t.id;
+    const on = cur && String(code) === String(cur);
+    return `<option value="${esc(code)}" ${on ? 'selected' : ''}>${esc((typeof tData === 'function' ? tData(t.name) : t.name) || code)}</option>`;
   }).join('');
-  if (v.devoteeName && !matched) {
-    opts += `<option value="name:${esc(v.devoteeName)}" selected>${esc(v.devoteeName)} (${window.t('vis_not_in_register', 'not in register')})</option>`;
-  }
   return opts;
-}
-/* Auto-fill mobile / city from the chosen devotee when those fields are blank. */
-function visOnDevoteePick() {
-  const sel = document.getElementById('visDevoteeSelect');
-  if (!sel || !sel.value || sel.value.indexOf('name:') === 0) return;
-  const p = visPeople().find(x => String(x.id) === String(sel.value));
-  if (!p) return;
-  const m = document.getElementById('visMobile');
-  if (m && !m.value.trim() && p.mobile) m.value = String(p.mobile).replace(/\D/g, '').slice(0, 10);
-  const c = document.getElementById('visCity');
-  if (c && !c.value.trim() && p.city) c.value = p.city;
-}
-/* "+ Add new devotee" — the shared devotee sheet, opened ON TOP of this form. */
-function visAddDevotee() {
-  if (typeof openDevoteeSheet !== 'function') { visToast('Devotee form unavailable'); return; }
-  openDevoteeSheet({
-    title: window.t('vis_add_devotee', 'Add a new devotee'),
-    onSaved: function (dev) {
-      const sel = document.getElementById('visDevoteeSelect');
-      if (!sel) return;
-      let o = Array.prototype.slice.call(sel.options).find(x => String(x.value) === String(dev.id));
-      if (!o) {
-        o = document.createElement('option');
-        o.value = dev.id;
-        o.textContent = dev.name + (dev.mobile ? ' · ' + dev.mobile : '') + (dev.city ? ' · ' + dev.city : '');
-        sel.appendChild(o);
-      }
-      sel.value = dev.id;
-      visOnDevoteePick();
-    }
-  });
 }
 
 function visitFormBody(v) {
   v = v || {};
   const pOpts = VISITS.purposes.map(p => `<option value="${p}" ${v.purpose === p ? 'selected' : ''}>${esc(visitPurposeLabel(p))}</option>`).join('');
   const sOpts = ['requested', 'scheduled', 'confirmed', 'completed', 'cancelled'].map(s => `<option value="${s}" ${v.status === s ? 'selected' : ''}>${esc(visitStatusLabel(s))}</option>`).join('');
+  const personField = (typeof devoteeLinkField === 'function')
+    ? devoteeLinkField({
+        selId: 'visDevSel', label: window.t('vis_devotee', 'Devotee'), required: true,
+        selectedId: (v.devoteeId && /^DEV-/i.test(v.devoteeId)) ? v.devoteeId : '',
+        selectedLabel: v.devoteeName || '',
+        hint: window.t('vis_devotee_hint', 'Pick from the register, or add a new devotee — their contact details come from that record.')
+      })
+    : '';
   return `
   <form id="formVisit" onsubmit="handleSaveVisit(event)">
-    <div class="link-section">
-      <div class="link-section-head">
-        <p class="ls-title">${window.t('vis_devotee', 'Devotee')} <span class="ls-req">*</span></p>
-        <button class="btn-add-devotee" type="button" onclick="visAddDevotee()">${window.t('vis_add_devotee', 'Add new devotee')}</button>
-      </div>
-      <div class="link-section-hint">${window.t('vis_devotee_hint', 'Pick from the register, or add a new devotee. Mobile fills in automatically.')}</div>
-      <div class="grid mg-2col-form">
-        <div class="form-group"><div class="link-field"><select class="form-select" id="visDevoteeSelect" onchange="visOnDevoteePick()" required>${visDevoteeOptions(v)}</select></div></div>
-        <div class="form-group"><label class="form-label" for="visMobile">${window.t('mobile')}</label><input class="form-input" id="visMobile" maxlength="10" value="${esc(v.mobile || '')}"></div>
-      </div>
-    </div>
+    ${personField}
     <div class="grid mg-2col-form">
       <div class="form-group"><label class="form-label" for="visPurpose">${window.t('vis_purpose', 'Purpose')}</label><select class="form-select" id="visPurpose">${pOpts}</select></div>
       <div class="form-group"><label class="form-label" for="visStatus">${window.t('status')}</label><select class="form-select" id="visStatus">${sOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label" for="visAddress">${window.t('vis_address', 'Full Address')}</label><input class="form-input" id="visAddress" value="${esc(v.address || '')}" placeholder="House / shop no., society, landmark"></div>
     <div class="grid mg-2col-form">
-      <div class="form-group"><label class="form-label" for="visCity">${window.t('city')}</label><input class="form-input" id="visCity" value="${esc(v.city || '')}"></div>
-      <div class="form-group"><label class="form-label" for="visState">${window.t('state')}</label><input class="form-input" id="visState" value="${esc(v.state || 'Gujarat')}"></div>
-    </div>
-    <div class="grid mg-2col-form">
       <div class="form-group"><label class="form-label" for="visDate">${window.t('date')} *</label><input type="date" class="form-input" id="visDate" value="${esc(v.date || visToday())}" required></div>
       <div class="form-group"><label class="form-label" for="visTime">${window.t('time')}</label><input type="time" class="form-input" id="visTime" value="${esc(v.time || '11:00')}"></div>
     </div>
-    <div class="form-group"><label class="form-label" for="visEscort">${window.t('vis_escort', 'Escort Team')}</label>
-      <input class="form-input" id="visEscort" list="visTeamList" value="${esc(v.escortTeam || '')}" placeholder="${window.t('vis_escort_ph', 'Team that carries the palki & manages the visit')}">
-      <datalist id="visTeamList">${((typeof teamNames === 'function' ? teamNames() : null) || VISITS.teams).map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist>
+    <div class="form-group"><label class="form-label" for="visEscortSel">${window.t('vis_escort', 'Escort Team')}</label>
+      <select class="form-select" id="visEscortSel">${visEscortOptions(v)}</select>
     </div>
     <div class="form-group"><label class="form-label" for="visNotes">${window.t('notes')}</label><textarea class="form-input mg-textarea" id="visNotes" rows="2">${esc(v.notes || '')}</textarea></div>
   </form>`;
@@ -228,38 +181,31 @@ function openEditVisit(id) {
 function handleSaveVisit(e) {
   e.preventDefault();
   const g = id => document.getElementById(id);
-  const sel = g('visDevoteeSelect');
-  const selVal = sel ? sel.value : '';
-  let devoteeId = '';
-  let name = '';
-  if (selVal.indexOf('name:') === 0) {
-    name = selVal.slice(5);
-  } else if (selVal) {
-    devoteeId = selVal;
-    const p = visPeople().find(x => String(x.id) === String(selVal));
-    name = p ? p.name
-             : ((sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '').split(' · ')[0].trim());
-  }
-  if (!devoteeId && VISITS.editingId) {
-    const prev = visitById(VISITS.editingId);
-    if (prev && prev.devoteeId && name === prev.devoteeName) devoteeId = prev.devoteeId;
-  }
+  const person = (typeof devoteeLinkValue === 'function') ? devoteeLinkValue('visDevSel') : null;
+  if (!person || !person.id) { visToast(window.t('vis_need_name', 'Pick a devotee, or add a new one.')); return; }
+  const devoteeId = person.id;
+  const name = person.name;
   const date = g('visDate').value;
-  if (!name) { visToast(window.t('vis_need_name', 'Pick a devotee, or add a new one.')); return; }
   if (!date) { visToast(window.t('vis_need_date', 'Date is required.')); return; }
+  const escortTeamId = g('visEscortSel') ? g('visEscortSel').value : '';
+  const escortName = escortTeamId && typeof MG !== 'undefined' && Array.isArray(MG.managements)
+    ? ((MG.managements.find(t => String(t.code || t.id) === String(escortTeamId)) || {}).name || '')
+    : '';
   const fields = {
-    devoteeId: devoteeId, devoteeName: name, mobile: g('visMobile').value.replace(/\D/g, '').slice(0, 10),
+    devoteeId: devoteeId, devoteeName: name,
+    mobile: person.mobile || '', city: person.city || '', state: person.state || 'Gujarat',
     purpose: g('visPurpose').value, status: g('visStatus').value,
-    address: g('visAddress').value.trim(), city: g('visCity').value.trim(), state: g('visState').value.trim(),
-    date, time: g('visTime').value, escortTeam: g('visEscort').value.trim(),
+    address: g('visAddress').value.trim(),
+    date, time: g('visTime').value,
+    escortTeamId: escortTeamId || '', escortTeam: escortName,
     notes: g('visNotes').value.trim()
   };
   const online = !!(window.API && window.API.online);
   const body = {
-    devoteeId: fields.devoteeId && /^DEV-/i.test(fields.devoteeId) ? fields.devoteeId : undefined,
-    devoteeName: fields.devoteeName, mobile: fields.mobile, city: fields.city, state: fields.state,
-    address: fields.address, purpose: fields.purpose, status: fields.status,
-    date: fields.date, time: fields.time, escortTeam: fields.escortTeam, notes: fields.notes
+    devoteeId: /^DEV-/i.test(devoteeId) ? devoteeId : undefined,
+    devoteeName: name, address: fields.address, purpose: fields.purpose, status: fields.status,
+    date: fields.date, time: fields.time,
+    escortTeamId: escortTeamId || undefined, notes: fields.notes
   };
   if (VISITS.editingId) {
     const v = visitById(VISITS.editingId);

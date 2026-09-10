@@ -238,44 +238,6 @@
   </div>
 </div>
 
-<!-- Modal 6: Public Join Team -->
-<div class="modal-overlay" id="modalJoinTeam">
-  <div class="modal-box">
-    <div class="modal-header">
-      <div class="modal-title">👷 Public Volunteer Application</div>
-      <button class="modal-close-btn" onclick="closeModal('modalJoinTeam')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size: 0.85rem; color: var(--muted-brown); margin-bottom: 1rem;">Apply to serve as a volunteer at Shri Vihat Meldi Mata Mandir, Sanand.</p>
-      <form id="joinTeamForm" onsubmit="handleJoinTeam(event)">
-        <div class="form-group">
-          <label class="form-label">Full Name *</label>
-          <input type="text" class="form-input" id="inputVolunteerName" placeholder="Your Name" required>
-        </div>
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
-          <div class="form-group">
-            <label class="form-label">Mobile Number *</label>
-            <input type="tel" class="form-input" id="inputVolunteerPhone" placeholder="10-digit phone" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Select Team *</label>
-            <select class="form-select" id="inputVolunteerTeam">
-              <option value="Parking Management">Parking Management</option>
-              <option value="Mandir Handling Team">Mandir Handling Team</option>
-              <option value="Bhojan Shala & Prasad">Bhojan Shala & Prasad</option>
-              <option value="VIP Guest Escort">VIP Guest Escort</option>
-            </select>
-          </div>
-        </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('modalJoinTeam')">Cancel</button>
-      <button class="btn btn-primary" type="submit" form="joinTeamForm">Submit Application</button>
-    </div>
-  </div>
-</div>
-
 <!-- Modal 8: Member QR Badge -->
 <div class="modal-overlay" id="modalBadgeViewer">
   <div class="modal-box" style="max-width: 420px;">

@@ -52,7 +52,12 @@ router.post('/', async (req, res, next) => {
     const orgName = String(req.body.orgName || '').trim();
     const firstName = String(req.body.firstName || '').trim();
     const pan = String(req.body.pan || '').trim();
-    if (type === 'individual' && !firstName) return res.status(400).json({ error: 'firstName is required for an individual' });
+    const hasDevoteeRef = req.body.devoteeId != null && String(req.body.devoteeId).trim() !== '';
+    // an individual donor is a devotee — either an explicit devoteeId (preferred,
+    // the shared picker) or a name to create/reuse one from.
+    if (type === 'individual' && !firstName && !hasDevoteeRef) {
+      return res.status(400).json({ error: 'devoteeId or firstName is required for an individual' });
+    }
     if (type !== 'individual' && !orgName) return res.status(400).json({ error: 'orgName is required for an organization / trust' });
     if (mobile && mobile.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
 
@@ -154,6 +159,13 @@ router.patch('/:id', async (req, res, next) => {
       }
       sets.push('mobile = ?'); args.push(m);
     }
+    // an explicit devoteeId (the shared picker on the individual form) repoints the link
+    if (req.body.devoteeId != null && String(req.body.devoteeId).trim() !== '') {
+      const dev = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
+        [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]);
+      if (!dev) return res.status(400).json({ error: 'That devotee no longer exists' });
+      if (dev.id !== row.devotee_id) { sets.push('devotee_id = ?'); args.push(dev.id); }
+    }
     if (!sets.length) return res.json(mapDonor(row));
 
     // for an individual, keep the shared devotee row in step with a name/mobile edit
@@ -174,7 +186,12 @@ router.patch('/:id', async (req, res, next) => {
 
     sets.push(`updated_at = datetime('now')`);
     args.push(row.id);
-    await run(`UPDATE donors SET ${sets.join(', ')} WHERE id = ?`, args);
+    try {
+      await run(`UPDATE donors SET ${sets.join(', ')} WHERE id = ?`, args);
+    } catch (e) {
+      // ux_donors_devotee / ux_donors_mobile — another donor already represents this person
+      return res.status(409).json({ error: 'Another donor already represents that person / mobile' });
+    }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Donations',
       action: 'UPDATE', entityType: 'donor', entityId: row.code });
     res.json(mapDonor(await queryOne(`${DONOR_SELECT} WHERE d.id = ?`, [row.id])));
