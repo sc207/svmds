@@ -1557,14 +1557,20 @@ function poojaExport() {
     filename: 'pooja-directory',
     title: window.t('pj_directory', 'Pooja Directory'),
     subtitle: window.t('pj_sub_admin', 'Pooja events, sevarthis and coordinators'),
-    columns: ['Pooja ID', 'Name', 'Type', 'Schedule', 'Sessions', 'Venue(s)', 'Sevarthi', 'Coordinator', 'Status', 'Est. Seva (INR)'],
+    columns: [
+      window.t('pj_col_id', 'Pooja ID'), window.t('name', 'Name'), window.t('pj_type', 'Type'),
+      window.t('pj_schedule', 'Schedule'), window.t('pj_sessions_word', 'Sessions'),
+      window.t('venue', 'Venue(s)'), window.t('pj_sevarthi', 'Sevarthi'),
+      window.t('pj_coordinator', 'Coordinator'), window.t('status', 'Status'),
+      window.t('pj_est_seva', 'Est. Seva (INR)'),
+    ],
     rows: visiblePoojas().map(p => {
       const t = typeById(p.typeId);
-      const venues = Array.from(new Set(poojaSessions(p).map(s => s.venue).filter(Boolean)));
+      const venues = Array.from(new Set(poojaSessions(p).map(s => pjLoc(s.venue)).filter(Boolean)));
       return [
-        p.id, p.name, t ? t.name : '', dateRangeText(p), poojaSessions(p).length,
+        p.id, pjLoc(p.name), t ? pjLoc(t.name) : '', dateRangeText(p), poojaSessions(p).length,
         venues.join(' / '), sevarthisOf(p).map(s => s.firstName + ' ' + s.lastName).join(' / '),
-        coordinatorNames(p), POOJA_STATUS_LABEL[poojaStatus(p)], p.estimatedSevaAmount || 0
+        coordinatorNames(p), poojaStatusLabel(poojaStatus(p)), p.estimatedSevaAmount || 0
       ];
     })
   };
