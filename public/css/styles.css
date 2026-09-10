@@ -3711,7 +3711,18 @@ body.annc-open { overflow: hidden; }
   background: linear-gradient(90deg, var(--antique-gold), var(--saffron));
   transition: width .4s ease;
 }
-.dhaja-camp--general { border-color: var(--antique-gold); background: linear-gradient(180deg, var(--gold-bg) 0%, var(--ivory-card) 40%); }
+/* the General (all-occasions total) card gets its own maroon-gold identity */
+.dhaja-camp--general {
+  border: 2px solid var(--primary-maroon);
+  background: linear-gradient(160deg, #F3E3C6 0%, var(--gold-bg) 60%);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.dhaja-camp--general::before {
+  content: ""; display: block; height: 4px;
+  background: linear-gradient(90deg, var(--primary-maroon), var(--saffron), var(--antique-gold));
+}
+.dhaja-camp--general .card-title { color: var(--primary-maroon); }
 
 /* Dhaja — make "New Campaign" unmistakably a button + an add-tile in the grid */
 .dhaja-newcamp-btn {
