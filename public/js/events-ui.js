@@ -263,13 +263,39 @@ function printEventNotice(id) {
 }
 
 function eventsExport() {
+  const rows = EV.events.map(e => [e.name, evTypeName(e), evDateRange(e), e.venue, evInchargeName(e),
+    e.expectedFootfall || 0, e.budget || 0, evStatus(e)]);
+
+  /* The Temple Events page also lists the Annual Temple Events (tithi &
+     fixed-date occasions) below the festivals — include them in the register
+     so the PDF/CSV is not "blank" when the temple only keeps annual events. */
+  if (typeof ANNUAL !== 'undefined' && typeof annualForYear === 'function') {
+    const Y = ANNUAL.year;
+    const adminView = (typeof isPoojaAdmin === 'function') ? isPoojaAdmin() : true;
+    const annualLabel = window.t('ann_title_annual_event', 'Annual Temple Event');
+    annualForYear(Y, adminView).forEach(ev => {
+      const act = (typeof annualActivity === 'function') ? annualActivity(ev) : (ev.activity || '');
+      const name = (typeof annualName === 'function') ? annualName(ev) : ev.name;
+      const tithi = (typeof annualTithiLabel === 'function') ? annualTithiLabel(ev) : '';
+      const greg = ev.gregorianDate
+        ? ((typeof annualLocDate === 'function') ? annualLocDate(ev.gregorianDate) : ev.gregorianDate)
+        : '';
+      rows.push([
+        act ? (name + ' — ' + act) : name,
+        annualLabel,
+        [greg, tithi].filter(Boolean).join(' · '),
+        '', '', '', '',
+        ev.active ? window.t('ann_scheduled', 'Scheduled') : window.t('ann_disabled', 'Disabled')
+      ]);
+    });
+  }
+
   return {
     filename: 'temple-events',
     title: window.t('ev_title', 'Temple Events'),
     subtitle: window.t('ev_sub', 'Festivals, mahotsavs and seva programmes'),
     columns: ['Event', 'Type', 'Dates', 'Venue', 'In-charge', 'Footfall', 'Budget (INR)', 'Status'],
-    rows: EV.events.map(e => [e.name, evTypeName(e), evDateRange(e), e.venue, evInchargeName(e),
-      e.expectedFootfall || 0, e.budget || 0, evStatus(e)])
+    rows: rows
   };
 }
 if (typeof registerExport === 'function') registerExport('mod-events', eventsExport);

@@ -235,6 +235,8 @@ function renderReports() {
     return r.length ? Math.round(r.reduce((a, b) => a + b, 0) / r.length) : 0;
   })();
   const evCount = (typeof EV !== 'undefined') ? EV.events.length : 0;
+  const annualCount = (typeof ANNUAL !== 'undefined' && typeof annualForYear === 'function')
+    ? annualForYear(ANNUAL.year, true).length : 0;
   const visCount = (typeof VISITS !== 'undefined') ? VISITS.list.length : 0;
   const devCount = (typeof state !== 'undefined' && Array.isArray(state.devotees)) ? state.devotees.length : 0;
 
@@ -295,7 +297,7 @@ function renderReports() {
     ${modCard(window.t('rep_don', 'Donations register'), poojaCount >= 0 ? (typeof DON !== 'undefined' ? DON.donations.length : 0) : 0, window.t('don_records', 'record(s)'), 'mod-donations')}
     ${modCard(window.t('rep_pooja', 'Poojas'), poojaCount, window.t('pj_kpi_types', 'types') + ': ' + (typeof POOJA !== 'undefined' ? POOJA.poojaTypes.length : 0), 'mod-pooja')}
     ${modCard(window.t('rep_cmt', 'Committees'), (typeof CMT !== 'undefined' ? CMT.committees.length : 0), cmtRate + '% ' + window.t('cmt_kpi_attendance_meta', 'avg this month'), 'mod-committee')}
-    ${modCard(window.t('rep_ev', 'Events'), evCount, '', 'mod-events')}
+    ${modCard(window.t('rep_ev', 'Events'), evCount + annualCount, evCount + ' + ' + annualCount + ' ' + window.t('ann_title', 'annual'), 'mod-events')}
     ${modCard(window.t('rep_dhaja', 'Dhaja Pooja'), (typeof DHAJA !== 'undefined' ? DHAJA.sponsorships.filter(s => s.status !== 'cancelled').length : 0), window.t('dhaja_sponsored', 'sponsored'), 'mod-dhaja')}
     ${modCard(window.t('nav_management_s', 'Management teams'), (typeof MG !== 'undefined' ? MG.managements.length : 0), '', 'mod-management')}
     ${modCard(window.t('acc_audit', 'Audit trail'), (typeof mergedActivity === 'function' ? mergedActivity(999).length : 0), window.t('acc_audit_meta', 'merged from every module'), 'acc-audit')}

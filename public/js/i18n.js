@@ -131,7 +131,7 @@
       /* pooja module */
       /* Annual Temple Events */
       ann_title:'Annual Temple Events', ann_title_gu:'મંદિરના વાર્ષિક પ્રસંગો', ann_year:'Year', ann_add:'Add event',
-      ann_none:'No annual events.', ann_disabled:'Disabled', ann_disabled_t:'Event disabled.', ann_enabled:'Event enabled.',
+      ann_none:'No annual events.', ann_disabled:'Disabled', ann_scheduled:'Scheduled', ann_disabled_t:'Event disabled.', ann_enabled:'Event enabled.',
       ann_src_pinned:'pinned', ann_src_fixed:'fixed date', ann_src_calc:'calculated', ann_fixed:'fixed date',
       ann_verify:'Calculated — confirm against the temple panchang and pin if needed.',
       ann_no_date:'Could not calculate for this year — pin the correct date.', ann_not_set:'date not set — pin it',
@@ -329,7 +329,7 @@
 
       /* वार्षिक मंदिर प्रसंग */
       ann_title:'वार्षिक मंदिर आयोजन', ann_title_gu:'મંદિરના વાર્ષિક પ્રસંગો', ann_year:'वर्ष', ann_add:'आयोजन जोड़ें',
-      ann_none:'कोई वार्षिक आयोजन नहीं।', ann_disabled:'निष्क्रिय', ann_disabled_t:'आयोजन निष्क्रिय किया।', ann_enabled:'आयोजन सक्रिय किया।',
+      ann_none:'कोई वार्षिक आयोजन नहीं।', ann_disabled:'निष्क्रिय', ann_scheduled:'निर्धारित', ann_disabled_t:'आयोजन निष्क्रिय किया।', ann_enabled:'आयोजन सक्रिय किया।',
       ann_src_pinned:'निर्धारित', ann_src_fixed:'स्थिर तिथि', ann_src_calc:'गणना की गई', ann_fixed:'स्थिर तिथि',
       ann_verify:'गणना की गई — मंदिर पंचांग से मिलान करें और आवश्यकता हो तो निर्धारित करें।',
       ann_no_date:'इस वर्ष के लिए गणना नहीं हो सकी — सही तिथि निर्धारित करें।', ann_not_set:'तिथि तय नहीं — निर्धारित करें',
@@ -527,7 +527,7 @@
 
       /* વાર્ષિક મંદિર પ્રસંગો */
       ann_title:'મંદિરના વાર્ષિક પ્રસંગો', ann_title_gu:'મંદિરના વાર્ષિક પ્રસંગો', ann_year:'વર્ષ', ann_add:'પ્રસંગ ઉમેરો',
-      ann_none:'કોઈ વાર્ષિક પ્રસંગ નથી.', ann_disabled:'નિષ્ક્રિય', ann_disabled_t:'પ્રસંગ નિષ્ક્રિય કર્યો.', ann_enabled:'પ્રસંગ સક્રિય કર્યો.',
+      ann_none:'કોઈ વાર્ષિક પ્રસંગ નથી.', ann_disabled:'નિષ્ક્રિય', ann_scheduled:'નિર્ધારિત', ann_disabled_t:'પ્રસંગ નિષ્ક્રિય કર્યો.', ann_enabled:'પ્રસંગ સક્રિય કર્યો.',
       ann_src_pinned:'નિશ્ચિત', ann_src_fixed:'સ્થિર તારીખ', ann_src_calc:'ગણતરી કરેલ', ann_fixed:'સ્થિર તારીખ',
       ann_verify:'ગણતરી કરેલ — મંદિરના પંચાંગ સાથે ખાતરી કરો અને જરૂર પડ્યે નિશ્ચિત કરો.',
       ann_no_date:'આ વર્ષ માટે ગણતરી થઈ શકી નથી — સાચી તારીખ નિશ્ચિત કરો.', ann_not_set:'તારીખ સેટ નથી — નિશ્ચિત કરો',
