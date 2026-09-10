@@ -6,6 +6,12 @@
     openSheet, openConfirm, downloadCSV, copyText).
    ============================================================ */
 
+/* Localise a pooja / pooja-type name for display (data entry stays English).
+   Falls back to the raw string when no translation exists. */
+function pjLoc(s) {
+  return (typeof tData === 'function') ? tData(s == null ? '' : s) : (s == null ? '' : s);
+}
+
 /* ------------------------------------------------------------
    ROOT ROUTER
    ------------------------------------------------------------ */
@@ -291,8 +297,8 @@ function poojaTypeCards() {
       <div class="pj-type-top">
         <span class="pj-type-icon">${esc(t.icon || '🪔')}</span>
         <div class="pj-type-head">
-          <strong>${esc(t.name)}</strong>
-          <span class="mg-muted-xs">${esc(t.category || 'Pooja')}${t.defaultDurationMin ? ' · ~' + t.defaultDurationMin + ' min' : ''}</span>
+          <strong>${esc(pjLoc(t.name))}</strong>
+          <span class="mg-muted-xs">${esc(tData(t.category) || 'Pooja')}${t.defaultDurationMin ? ' · ~' + t.defaultDurationMin + ' min' : ''}</span>
         </div>
       </div>
       ${t.description ? `<p class="pj-type-desc">${esc(t.description)}</p>` : ''}
@@ -325,11 +331,11 @@ function poojaCard(p) {
     <div class="mg-card-top">
       <div class="mg-card-avatar" style="background:${p.color}">${esc(t ? t.icon : '🪔')}</div>
       <div class="mg-card-heading">
-        <h3>${esc(p.name)}</h3>
+        <h3>${esc(pjLoc(p.name))}</h3>
         <span class="badge ${POOJA_STATUS_BADGE[st]}">${POOJA_STATUS_DOT[st]} ${poojaStatusLabel(st)}</span>
       </div>
     </div>
-    <p class="mg-card-desc">${esc(t ? t.name : 'Custom pooja')} · ${p.scheduleMode === 'multi' ? sess.length + ' sessions' : 'Single event'}</p>
+    <p class="mg-card-desc">${esc(t ? pjLoc(t.name) : 'Custom pooja')} · ${p.scheduleMode === 'multi' ? sess.length + ' sessions' : 'Single event'}</p>
     <div class="mg-card-meta">
       <div><span>Schedule</span><strong>${dateRangeText(p)}</strong></div>
       <div><span>Venue</span><strong>${esc(venues[0] || p.defaultVenue || '—')}</strong></div>
@@ -340,7 +346,7 @@ function poojaCard(p) {
     </div>
     <div class="mg-card-next">
       ${sess.length
-        ? `${POOJA_STATUS_DOT[st]} Next: <strong>${esc((nx || {}).label || p.name)}</strong> · ${fmtDate((nx || {}).date)}, ${fmtTime((nx || {}).startTime)}${dtgText}`
+        ? `${POOJA_STATUS_DOT[st]} Next: <strong>${esc(pjLoc((nx || {}).label || p.name))}</strong> · ${fmtDate((nx || {}).date)}, ${fmtTime((nx || {}).startTime)}${dtgText}`
         : 'No session scheduled yet — use Edit Pooja to add a date'}
     </div>
     <button class="btn btn-primary w-full mg-open-btn" onclick="openPooja('${p.id}')">Open Pooja →</button>
@@ -359,10 +365,10 @@ function poojaDirectoryRows(list) {
       <td>
         <div class="mg-name-cell">
           <span class="mg-dot" style="background:${p.color}"></span>
-          <div><strong>${esc(p.name)}</strong><div class="mg-muted-xs">${esc(p.id)}</div></div>
+          <div><strong>${esc(pjLoc(p.name))}</strong><div class="mg-muted-xs">${esc(p.id)}</div></div>
         </div>
       </td>
-      <td>${esc(t ? t.name : '—')}</td>
+      <td>${esc(t ? pjLoc(t.name) : '—')}</td>
       <td>${dateRangeText(p)}${p.scheduleMode === 'multi' ? `<div class="mg-muted-xs">${sess.length} sessions</div>` : ''}</td>
       <td>${esc(venues.join(', ') || p.defaultVenue || '—')}</td>
       <td>${sevarthisOf(p).length || '—'}</td>
@@ -434,9 +440,9 @@ function viewPoojaWorkspace() {
     <div class="mg-ws-header">
       <div class="mg-ws-id" style="background:${p.color}">${esc(t ? t.icon : '🪔')}</div>
       <div class="mg-ws-titles">
-        <h1>${esc(p.name)}</h1>
+        <h1>${esc(pjLoc(p.name))}</h1>
         <div class="mg-ws-sub">
-          ${esc(t ? t.name : 'Custom pooja')}
+          ${esc(t ? pjLoc(t.name) : 'Custom pooja')}
           <span class="mg-sep">•</span> ${dateRangeText(p)}${p.scheduleMode === 'multi' ? ` (${poojaSessions(p).length} ${window.t('pj_sessions_word')})` : ''}
           <span class="mg-sep">•</span> <span class="badge ${POOJA_STATUS_BADGE[st]}">${POOJA_STATUS_DOT[st]} ${poojaStatusLabel(st)}</span>
         </div>
@@ -498,7 +504,7 @@ function panePoojaOverview(p) {
 
   <div class="stats-grid mg-mt">
     ${kpiCard('Schedule', p.scheduleMode === 'multi' ? `${sess.length} sessions` : 'Single event', dateRangeText(p), '🗓️')}
-    ${kpiCard('Next Session', nx ? fmtDate(nx.date).replace(/ \d{4}$/, '') : '—', nx ? `${fmtTime(nx.startTime)} · ${esc(nx.label || p.name)}` : 'Nothing upcoming', '⏭️')}
+    ${kpiCard('Next Session', nx ? fmtDate(nx.date).replace(/ \d{4}$/, '') : '—', nx ? `${fmtTime(nx.startTime)} · ${esc(pjLoc(nx.label || p.name))}` : 'Nothing upcoming', '⏭️')}
     ${kpiCard('Days To Go', daysToGo, nx ? esc(nx.venue || p.defaultVenue || '') : '', '📅')}
     ${kpiCard('People', `${sevs.length} sevarthi`, `${people.length} guest`, '🙏')}
   </div>
@@ -701,8 +707,8 @@ function paneSevarthiProfile(p) {
           const tt = typeById(pp.typeId);
           const stt = poojaStatus(pp);
           return `<tr>
-            <td><strong>${esc(pp.name)}</strong></td>
-            <td>${esc(tt ? tt.name : '—')}</td>
+            <td><strong>${esc(pjLoc(pp.name))}</strong></td>
+            <td>${esc(tt ? pjLoc(tt.name) : '—')}</td>
             <td>${dateRangeText(pp)}</td>
             <td><span class="badge ${POOJA_STATUS_BADGE[stt]}">${poojaStatusLabel(stt)}</span></td>
             <td><button class="btn btn-outline mg-btn-xs" onclick="openPooja('${pp.id}')">Open</button></td>
