@@ -175,6 +175,13 @@ function calGoto(idx) {
   const e = renderUnifiedCalendar._entries && renderUnifiedCalendar._entries[idx];
   if (e && typeof e.go === 'function') e.go();
 }
+/** Grid day cell "+N more" chip -> scroll down to that day's full entry in
+    the readable agenda list below (the grid cell itself is too small to
+    show every item's title/time on a phone). */
+function calJumpToDay(iso) {
+  const el = document.getElementById('cal-day-' + iso);
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 function renderUnifiedCalendar() {
   const root = document.getElementById('calendarRoot');
@@ -197,17 +204,24 @@ function renderUnifiedCalendar() {
     window.t('cal_thu', 'Thu'), window.t('cal_fri', 'Fri'), window.t('cal_sat', 'Sat'), window.t('cal_sun', 'Sun')
   ];
 
+  // cap chips per day so a busy day doesn't blow out the cell (esp. on a
+  // phone, where the 7-col grid stays visible now instead of hiding); the
+  // rest are one tap away via the "+N more" chip -> the readable agenda list.
+  const MAX_CHIPS_PER_DAY = 3;
   let cells = '';
   for (let i = 0; i < startDow; i++) cells += `<div class="mg-cal-cell mg-cal-empty"></div>`;
   for (let d = 1; d <= daysIn; d++) {
     const iso = monthKey + '-' + String(d).padStart(2, '0');
     const dayE = entries.map((e, i) => ({ e, i })).filter(x => x.e.date === iso);
+    const shown = dayE.slice(0, MAX_CHIPS_PER_DAY);
+    const overflow = dayE.length - shown.length;
     cells += `<div class="mg-cal-cell ${iso === calToday() ? 'mg-cal-today' : ''}">
       <div class="mg-cal-date">${d}${iso === calToday() ? `<span class="mg-cal-todaytag">${window.t('today')}</span>` : ''}</div>
-      ${dayE.map(x => `<div class="mg-cal-event cal-ev-${x.e.type}" style="--c:${x.e.color}" onclick="calGoto(${x.i})" title="${(x.e.title || '').replace(/"/g, '&quot;')}">
+      ${shown.map(x => `<div class="mg-cal-event cal-ev-${x.e.type}" style="--c:${x.e.color}" onclick="calGoto(${x.i})" title="${(x.e.title || '').replace(/"/g, '&quot;')}">
         <div class="mg-ev-title">${escCal(x.e.title)}</div>
         <div class="mg-ev-meta">${escCal(x.e.sub)}</div>
       </div>`).join('')}
+      ${overflow > 0 ? `<div class="cal-more-chip" onclick="calJumpToDay('${iso}')">+${calNum(overflow)} ${window.t('cal_more', 'more')}</div>` : ''}
     </div>`;
   }
   const trail = (7 - ((startDow + daysIn) % 7)) % 7;
@@ -231,7 +245,7 @@ function renderUnifiedCalendar() {
     if (e.date !== lastDay) {
       lastDay = e.date;
       const isT = e.date === calToday();
-      agenda += `<li class="cal-agenda-day${isT ? ' is-today' : ''}">${calDate(e.date)}${isT ? ` <span class="mg-cal-todaytag">${window.t('today')}</span>` : ''}</li>`;
+      agenda += `<li id="cal-day-${e.date}" class="cal-agenda-day${isT ? ' is-today' : ''}">${calDate(e.date)}${isT ? ` <span class="mg-cal-todaytag">${window.t('today')}</span>` : ''}</li>`;
     }
     const m = CAL_TYPE_META[e.type] || { badge: 'badge-maroon', key: '', def: e.type };
     agenda += `<li class="cal-agenda-item cal-ev-${e.type}" style="--c:${e.color}" onclick="calGoto(${i})">
@@ -275,7 +289,7 @@ function renderUnifiedCalendar() {
     </div>
   </div>
 
-  <div class="card mg-mt cal-grid-view">
+  <div class="card mg-mt cal-upnext-view">
     <div class="card-header"><div class="card-title">${window.t('cal_up_next', 'Up Next')}</div></div>
     <div class="card-body" style="padding:0;">
       ${upNext.length ? `<div class="mg-table-scroll"><table class="custom-table">

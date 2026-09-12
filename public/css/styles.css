@@ -1801,8 +1801,17 @@ input, select, textarea { font-family: inherit; outline: none; }
   transition: transform 0.15s ease;
 }
 .mg-cal-event:hover { transform: translateX(2px); }
-.mg-ev-title { font-size: 0.7rem; font-weight: 700; color: var(--dark-brown); line-height: 1.25; }
-.mg-ev-meta { font-size: 0.6rem; color: var(--muted-brown); }
+.mg-ev-title {
+  font-size: 0.7rem; font-weight: 700; color: var(--dark-brown); line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mg-ev-meta { font-size: 0.6rem; color: var(--muted-brown); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-more-chip {
+  text-align: center; font-size: 0.62rem; font-weight: 700;
+  color: var(--primary-maroon); background: var(--warm-ivory);
+  border-radius: 6px; padding: 0.18rem 0.3rem; cursor: pointer;
+}
+.cal-more-chip:hover { background: var(--saffron-bg); }
 .mg-ev-scheduled { border-left-style: dashed; }
 .mg-ev-running { box-shadow: 0 0 0 2px rgba(76,139,90,0.3); }
 .mg-ev-completed { opacity: 0.72; }
@@ -3137,11 +3146,29 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
    ============================================================ */
 .cal-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.25rem 0 0.5rem; }
 
-/* --- Mobile agenda view (replaces the cramped 7-col grid ≤720px) --- */
+/* --- Mobile: keep the real month grid (compacted — see the ≤600px block
+   below), add the readable agenda list underneath for full text, and drop
+   the "Up Next" table (redundant with that list once it's showing). --- */
 .cal-agenda-view { display: none; }
 @media (max-width: 720px) {
-  .cal-grid-view { display: none; }
+  .cal-upnext-view { display: none; }
   .cal-agenda-view { display: block; }
+}
+/* phone: the grid still shows (above), just tighter — a colour chip per
+   entry (title only, capped at 3 + "+N more") is enough at a glance; the
+   full text lives in the agenda list right below. */
+@media (max-width: 600px) {
+  .mg-cal-label { min-width: 0; font-size: 0.85rem; }
+  .cal-grid-view .card-body { padding: 0.6rem; }
+  .mg-cal-head, .mg-cal-grid { gap: 3px; }
+  .mg-cal-head { font-size: 0.56rem; }
+  .mg-cal-cell { min-height: 52px; padding: 0.18rem; border-radius: 5px; }
+  .mg-cal-date { font-size: 0.62rem; margin-bottom: 0.15rem; }
+  .mg-cal-todaytag { display: none; }   /* the saffron cell tint already marks today */
+  .mg-cal-event { padding: 0.14rem 0.2rem; margin-bottom: 2px; border-radius: 4px; }
+  .mg-ev-title { font-size: 0.56rem; }
+  .mg-ev-meta { display: none; }
+  .cal-more-chip { font-size: 0.52rem; padding: 0.1rem 0.15rem; }
 }
 .cal-agenda { list-style: none; margin: 0; padding: 0; }
 .cal-agenda-day {
