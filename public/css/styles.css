@@ -398,7 +398,14 @@ input, select, textarea { font-family: inherit; outline: none; }
   color: var(--primary-maroon);
   white-space: nowrap;
   overflow: hidden;
-  min-width: 0;
+  /* min-width was 0, which let this flex item (and its overflow:hidden)
+     shrink past the 30px emblem's own flex-shrink:0 floor on a squeezed
+     tablet-width header (~768-1024px) — clipping the round logo itself
+     instead of just truncating the text span next to it (which already
+     handles its own ellipsis independently, see .header-logo-title span
+     below). The emblem's width is the true floor; text keeps shrinking
+     to nothing (it's already display:none at that width) or ellipsizing. */
+  min-width: 30px;
   flex-shrink: 1;
   max-width: 340px;
 }
