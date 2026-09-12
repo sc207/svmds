@@ -80,7 +80,7 @@ async function repairDatabase({ dryRun = false } = {}) {
   // ---------- Step 1: merge duplicate devotees ----------
   {
     const rows = await queryAll(
-      `SELECT id, code, name, mobile, city, samaj, state FROM devotees WHERE is_deleted = 0`
+      `SELECT id, code, name, mobile, city, state FROM devotees WHERE is_deleted = 0`
     );
     const groups = new Map();
     for (const d of rows) {
@@ -109,7 +109,7 @@ async function repairDatabase({ dryRun = false } = {}) {
         continue;
       }
 
-      const score = (d) => (digits(d.mobile) ? 4 : 0) + (d.city ? 2 : 0) + (d.samaj ? 1 : 0)
+      const score = (d) => (digits(d.mobile) ? 4 : 0) + (d.city ? 2 : 0)
         + (d.state && d.state !== 'Gujarat' ? 0.5 : 0);
       let canonical;
       if (summary.rootOwnerDevoteeId && ids.includes(summary.rootOwnerDevoteeId)) {
@@ -121,7 +121,7 @@ async function repairDatabase({ dryRun = false } = {}) {
 
       // backfill canonical blanks from the best loser value
       const fill = {};
-      for (const f of ['name', 'mobile', 'city', 'samaj', 'state']) {
+      for (const f of ['name', 'mobile', 'city', 'state']) {
         if (canonical[f] && !(f === 'state' && canonical[f] === 'Gujarat')) continue;
         const donor = losers.find(l => l[f] && !(f === 'state' && l[f] === 'Gujarat'));
         if (donor) fill[f] = donor[f];
@@ -396,7 +396,7 @@ async function repairDatabase({ dryRun = false } = {}) {
       if (dryRun) { summary.donorsBackfilled++; continue; }
       const devId = await ensureDevotee({
         firstName: row.first_name, lastName: row.last_name, mobile: row.mobile,
-        city: row.city, state: row.state, samaj: row.committee,
+        city: row.city, state: row.state,
       });
       if (devId) { await run(`UPDATE donors SET devotee_id = ? WHERE id = ? AND devotee_id IS NULL`, [devId, row.id]); summary.donorsBackfilled++; }
     }
@@ -411,7 +411,7 @@ async function repairDatabase({ dryRun = false } = {}) {
       if (dryRun) { summary.sevarthisBackfilled++; continue; }
       const devId = await ensureDevotee({
         firstName: row.first_name, lastName: row.last_name, mobile: row.mobile,
-        city: row.city, state: row.state, samaj: row.committee,
+        city: row.city, state: row.state,
       });
       if (devId) { await run(`UPDATE sevarthis SET devotee_id = ? WHERE id = ? AND devotee_id IS NULL`, [devId, row.id]); summary.sevarthisBackfilled++; }
     }

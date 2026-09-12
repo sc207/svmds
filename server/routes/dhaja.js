@@ -288,7 +288,7 @@ router.post('/', adminTier, async (req, res, next) => {
       if (mob && mob.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
       devoteeId = await ensureDevotee({
         firstName: b.firstName, lastName: b.lastName, name: b.name,
-        mobile: mob, city: b.city, state: b.state, samaj: b.committee,
+        mobile: mob, city: b.city, state: b.state,
       });
       if (!devoteeId) return res.status(400).json({ error: 'a name or mobile is required' });
     }

@@ -39,7 +39,7 @@
     if (typeof state !== 'undefined' && Array.isArray(state.devotees))
       state.devotees.forEach(function (d) {
         add({ type: 'Devotee', icon: '👤', page: 'devotees', label: d.name,
-          sub: [d.phone || d.mobile, d.city || d.samaj].filter(Boolean).join(' · '),
+          sub: [d.phone || d.mobile, d.city].filter(Boolean).join(' · '),
           go: nav('devotees') });
       });
 

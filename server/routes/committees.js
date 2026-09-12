@@ -210,7 +210,7 @@ router.post('/:id/members', async (req, res, next) => {
       if (!first && !b.name && !mobile) return res.status(400).json({ error: 'devoteeId or firstName is required' });
       devoteeId = await ensureDevotee({
         firstName: first, lastName: b.lastName, name: b.name, mobile,
-        city: b.city, state: b.state, samaj: b.samaj || row.samaj,
+        city: b.city, state: b.state,
       });
     }
 

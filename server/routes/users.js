@@ -43,7 +43,7 @@ router.get('/:id', async (req, res, next) => {
 /* POST /  — create an account.
    body: { email, roles?[],
            devoteeId?  — link an existing person (id or code), OR
-           name?/firstName?/lastName?, mobile?, city?, state?, samaj? — a new one }
+           name?/firstName?/lastName?, mobile?, city?, state? — a new one }
    Every account is a person: an existing devotee is linked as-is, otherwise the
    shared devotee row is created (or reused by mobile). users.devotee_id is set. */
 router.post('/', adminTier, async (req, res, next) => {
@@ -113,7 +113,7 @@ router.post('/', adminTier, async (req, res, next) => {
     // never returns null now that a name is always derivable)
     const devoteeId = linkedDev ? linkedDev.id : await ensureDevotee({
       name, firstName: req.body.firstName, lastName: req.body.lastName,
-      mobile, city, state: req.body.state, samaj: req.body.samaj,
+      mobile, city, state: req.body.state,
     });
     try {
       await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devoteeId, userId]);

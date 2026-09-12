@@ -93,7 +93,7 @@ router.post('/', async (req, res, next) => {
       } else {
         devoteeId = await ensureDevotee({
           firstName, lastName: req.body.lastName, mobile,
-          city: req.body.city, state: req.body.state, samaj: req.body.committee,
+          city: req.body.city, state: req.body.state,
         });
       }
     }
@@ -179,7 +179,6 @@ router.patch('/:id', async (req, res, next) => {
         mobile: req.body.mobile !== undefined ? digits(req.body.mobile) : row.mobile,
         city: req.body.city !== undefined ? req.body.city : row.city,
         state: req.body.state !== undefined ? req.body.state : row.state,
-        samaj: req.body.committee !== undefined ? req.body.committee : row.committee,
       });
       if (devId && devId !== row.devotee_id) { sets.push('devotee_id = ?'); args.push(devId); }
     }

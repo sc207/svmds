@@ -17,7 +17,7 @@ const fullName = (first, last) => `${String(first || '').trim()} ${String(last |
  * @returns {Promise<number|null>} devotee id, or null only when there is neither
  *          a name nor a mobile to key on.
  */
-async function ensureDevotee({ firstName, lastName, name, mobile, city, state, samaj, notes } = {}) {
+async function ensureDevotee({ firstName, lastName, name, mobile, city, state, notes } = {}) {
   const mob = digits(mobile);
   const nm = (name && String(name).trim()) || fullName(firstName, lastName);
   const cty = String(city || '').trim();
@@ -27,7 +27,6 @@ async function ensureDevotee({ firstName, lastName, name, mobile, city, state, s
     if (!existing.name && nm) { sets.push('name = ?'); args.push(nm); }
     if (!existing.mobile && mob) { sets.push('mobile = ?'); args.push(mob); }
     if (!existing.city && cty) { sets.push('city = ?'); args.push(cty); }
-    if (!existing.samaj && samaj) { sets.push('samaj = ?'); args.push(String(samaj).trim()); }
     if (sets.length) {
       sets.push(`updated_at = datetime('now')`);
       args.push(existing.id);
@@ -65,10 +64,10 @@ async function ensureDevotee({ firstName, lastName, name, mobile, city, state, s
   try {
     const code = await nextCode('devotee');
     const r = await run(
-      `INSERT INTO devotees (code, name, mobile, city, state, samaj, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO devotees (code, name, mobile, city, state, notes)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [code, nm || '(unnamed)', mob, cty,
-       String(state || 'Gujarat').trim(), String(samaj || '').trim(), String(notes || '').trim()]
+       String(state || 'Gujarat').trim(), String(notes || '').trim()]
     );
     return Number(r.lastInsertRowid);
   } catch (e) {

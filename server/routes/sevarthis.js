@@ -88,7 +88,6 @@ router.patch('/:id', async (req, res, next) => {
         mobile: newMobile != null ? newMobile : row.mobile,
         city: req.body.city != null ? req.body.city : row.city,
         state: req.body.state != null ? req.body.state : row.state,
-        samaj: req.body.committee != null ? req.body.committee : row.committee,
       });
       if (devId) { sets.push('devotee_id = ?'); args.push(devId); }
     }

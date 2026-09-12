@@ -42,7 +42,7 @@ async function ensureDonorForDevotee(devoteeId) {
     const r = await run(
       `INSERT INTO donors (code, type, first_name, last_name, mobile, city, state, committee, devotee_id, added_date)
        VALUES (?, 'individual', ?, ?, ?, ?, ?, ?, ?, date('now'))`,
-      [code, first, last, mob, dev.city || '', dev.state || 'Gujarat', dev.samaj || '', dev.id]
+      [code, first, last, mob, dev.city || '', dev.state || 'Gujarat', '', dev.id]
     );
     return await queryOne('SELECT * FROM donors WHERE id = ?', [r.lastInsertRowid]);
   } catch (e) {

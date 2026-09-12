@@ -59,7 +59,6 @@ function mapDevotee(row) {
     phone: row.mobile || '',          // legacy alias used by app.js renderers
     city: row.city || '',
     state: row.state || 'Gujarat',
-    samaj: row.samaj || '',
     status: row.status === 'inactive' ? 'Inactive' : 'Active',
     notes: row.notes || '',
     visits: row.visit_count != null ? Number(row.visit_count) : 0,

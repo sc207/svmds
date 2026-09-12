@@ -19,7 +19,7 @@ const LIST_SQL = `
   FROM devotees d
   WHERE d.is_deleted = 0`;
 
-/* GET /            ?q=<search>&samaj=<>&status=active|inactive&limit=&offset= */
+/* GET /            ?q=<search>&status=active|inactive&limit=&offset= */
 router.get('/', async (req, res, next) => {
   try {
     const where = [];
@@ -29,7 +29,6 @@ router.get('/', async (req, res, next) => {
       const like = `%${req.query.q}%`;
       args.push(like, like, like, like);
     }
-    if (req.query.samaj) { where.push('d.samaj = ?'); args.push(req.query.samaj); }
     if (req.query.status) { where.push('d.status = ?'); args.push(req.query.status); }
 
     let sql = LIST_SQL + (where.length ? ' AND ' + where.join(' AND ') : '') + ' ORDER BY d.name';
@@ -64,7 +63,7 @@ function normStatus(s) {
   return String(s || '').toLowerCase() === 'inactive' ? 'inactive' : 'active';
 }
 
-/* POST /   { name, mobile, city?, state?, samaj?, status?, notes? }
+/* POST /   { name, mobile, city?, state?, status?, notes? }
    Dedupe by mobile; when no mobile, dedupe by lower(name)+lower(city). */
 router.post('/', async (req, res, next) => {
   try {
@@ -110,10 +109,10 @@ router.post('/', async (req, res, next) => {
     let newId;
     try {
       const r = await run(
-        `INSERT INTO devotees (code, name, mobile, city, state, samaj, status, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO devotees (code, name, mobile, city, state, status, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [code, name, mobile, city, req.body.state || 'Gujarat',
-         req.body.samaj || '', normStatus(req.body.status), req.body.notes || '']
+         normStatus(req.body.status), req.body.notes || '']
       );
       newId = r.lastInsertRowid;
     } catch (e) {
@@ -141,7 +140,7 @@ router.patch('/:id', async (req, res, next) => {
 
     const sets = [];
     const args = [];
-    for (const f of ['name', 'city', 'state', 'samaj', 'notes']) {
+    for (const f of ['name', 'city', 'state', 'notes']) {
       if (typeof req.body[f] === 'string') { sets.push(`${f} = ?`); args.push(req.body[f]); }
     }
     if (req.body.mobile !== undefined || req.body.phone !== undefined) {
