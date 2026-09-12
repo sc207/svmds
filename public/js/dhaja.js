@@ -24,7 +24,7 @@ const DHAJA = {
   activeCampaignId: null,
   filterStatus: 'all',
   search: '',
-  today: '2026-09-06',
+  today: (typeof mgRealDate === 'function') ? mgRealDate() : '2026-09-06',
 };
 
 function dhajaToday() { return (typeof MG !== 'undefined' && MG.today) ? MG.today : DHAJA.today; }

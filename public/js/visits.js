@@ -17,7 +17,7 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
 }
 
 const VISITS = {
-  today: '2026-09-06',
+  today: (typeof mgRealDate === 'function') ? mgRealDate() : '2026-09-06',
   filterStatus: 'all',
   search: '',
   editingId: null,

@@ -956,6 +956,24 @@ function reopenSession(volId) {
 /* ------------------------------------------------------------
    PANE: ATTENDANCE / MONTHLY REPORT
    ------------------------------------------------------------ */
+/** A rolling 12-month window ending at the real current month (was a
+    hardcoded ['2026-07'..'2026-10'] list — dead past October 2026, and
+    missing any month before July). `selectedKey` is always included even
+    if it falls outside the window, so an already-picked month is never
+    silently dropped from its own <select>. */
+function mgReportMonthOptions(selectedKey) {
+  const now = new Date();
+  const keys = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    keys.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+  }
+  if (selectedKey && keys.indexOf(selectedKey) === -1) keys.push(selectedKey);
+  return keys.sort().map(k => {
+    const [y, mo] = k.split('-');
+    return `<option value="${k}" ${k === selectedKey ? 'selected' : ''}>${locMonthYear(+y, +mo - 1)}</option>`;
+  }).join('');
+}
 function paneAttendance(m) {
   const monthKey = MG.reportMonth;
   const st = mgmtMonthStats(m.id, monthKey);
@@ -965,10 +983,7 @@ function paneAttendance(m) {
   const rows = membersOf(m.id).map(x => ({ x, s: memberStats(x.id, monthKey) }))
     .sort((a,b) => b.s.rate - a.s.rate || b.s.present - a.s.present);
 
-  const monthOptions = ['2026-07','2026-08','2026-09','2026-10'].map(k => {
-    const [y,mo] = k.split('-');
-    return `<option value="${k}" ${k === monthKey ? 'selected' : ''}>${locMonthYear(+y, +mo - 1)}</option>`;
-  }).join('');
+  const monthOptions = mgReportMonthOptions(monthKey);
 
   return `
   <div class="flex justify-between items-center mg-pane-head">

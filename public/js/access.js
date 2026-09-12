@@ -316,10 +316,6 @@ function renderSettings() {
   let cfg = {};
   try { cfg = JSON.parse(localStorage.getItem('svmmm_temple') || '{}'); } catch (e) {}
   const lang = (typeof currentLang === 'function') ? currentLang() : 'en';
-  const nowDate = (typeof MG !== 'undefined' && MG.today) ? MG.today : '2026-09-06';
-  const nowTime = (typeof MG !== 'undefined' && MG.nowTime) ? MG.nowTime : '18:30';
-  let clkOverridden = false;
-  try { clkOverridden = !!localStorage.getItem('svmmm_clock'); } catch (e) {}
 
   root.innerHTML = `
   <div class="mg-page-head"><div>

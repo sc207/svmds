@@ -29,7 +29,7 @@ const DON = {
   filterCat: 'all',
   filterStatus: 'all',
   search: '',
-  today: '2026-09-06',
+  today: (typeof mgRealDate === 'function') ? mgRealDate() : '2026-09-06',
 
   /* --- Donation categories (admin-managed) --------------- */
   categories: [
