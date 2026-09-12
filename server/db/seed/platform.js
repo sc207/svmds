@@ -36,8 +36,10 @@ const COUNTERS = [
 ];
 
 async function seedPlatform() {
-  await ensureSetting('working_date', new Date().toISOString().slice(0, 10));
-  await ensureSetting('working_time', '18:30');
+  // working_date/working_time are NOT seeded: settingsStore.getSettings()
+  // always returns the real current IST time unless working_date_pinned='1'
+  // (set only via PUT /settings/working-date), so there is nothing to
+  // default here — seeding one would freeze "today" on the deploy date.
   await ensureSetting('default_language', 'gu');
   await ensureSetting('temple_identity', JSON.stringify({
     name: 'Shri Vihat Meldi Mata Mandir',

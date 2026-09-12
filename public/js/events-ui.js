@@ -161,6 +161,7 @@ function paneEventSchedule(e) {
   const y = EV.calendarYear, mo = EV.calendarMonth;
   const daysIn = new Date(y, mo + 1, 0).getDate();
   const startDow = (new Date(y, mo, 1).getDay() + 6) % 7;
+  const todayDow = (typeof todayDowIndex === 'function') ? todayDowIndex(y, mo, evToday()) : -1;
   let cells = '';
   for (let i = 0; i < startDow; i++) cells += `<div class="mg-cal-cell mg-cal-empty"></div>`;
   for (let d = 1; d <= daysIn; d++) {
@@ -183,7 +184,7 @@ function paneEventSchedule(e) {
     </div>
   </div>
   <div class="card"><div class="card-body">
-    <div class="mg-cal-head">${locDowShort().map(x => `<div>${x}</div>`).join('')}</div>
+    <div class="mg-cal-head">${locDowShort().map((x, i) => `<div class="${i === todayDow ? 'mg-cal-dow-today' : ''}">${x}</div>`).join('')}</div>
     <div class="mg-cal-grid">${cells}</div>
   </div></div>`;
 }

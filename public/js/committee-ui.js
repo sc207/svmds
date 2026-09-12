@@ -417,6 +417,7 @@ function paneCmtCalendar(c) {
   const daysIn = new Date(yr, mo + 1, 0).getDate();
   const startDow = (new Date(yr, mo, 1).getDay() + 6) % 7;
   const meets = CMT.meetings.filter(x => x.committeeId === c.id && (x.date || '').indexOf(monthKey) === 0);
+  const todayDow = (typeof todayDowIndex === 'function') ? todayDowIndex(yr, mo, cmtToday()) : -1;
   let cells = '';
   for (let i = 0; i < startDow; i++) cells += `<div class="mg-cal-cell mg-cal-empty"></div>`;
   for (let d = 1; d <= daysIn; d++) {
@@ -440,7 +441,7 @@ function paneCmtCalendar(c) {
     </div>
   </div>
   <div class="card"><div class="card-body">
-    <div class="mg-cal-head">${locDowShort().map(x => `<div>${x}</div>`).join('')}</div>
+    <div class="mg-cal-head">${locDowShort().map((x, i) => `<div class="${i === todayDow ? 'mg-cal-dow-today' : ''}">${x}</div>`).join('')}</div>
     <div class="mg-cal-grid">${cells}</div>
   </div></div>`;
 }

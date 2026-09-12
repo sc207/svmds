@@ -3,7 +3,7 @@
    writes are admin tier. (BACKEND_PLAN.md §10.3) */
 const express = require('express');
 const { requireRole } = require('../middleware/authz');
-const { getSettings, setWorkingDate, setTempleIdentity, setDefaultLanguage } = require('../services/settingsStore');
+const { getSettings, setWorkingDate, clearWorkingDate, setTempleIdentity, setDefaultLanguage } = require('../services/settingsStore');
 const { logAudit } = require('../services/audit');
 
 const router = express.Router();
@@ -22,6 +22,16 @@ router.put('/working-date', adminTier, async (req, res, next) => {
     const out = await setWorkingDate(date, time);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Settings',
       action: 'UPDATE', entityType: 'working_date', details: { date, time } });
+    res.json(out);
+  } catch (e) { next(e); }
+});
+
+/* DELETE /working-date — un-pin; the clock goes back to tracking real time */
+router.delete('/working-date', adminTier, async (req, res, next) => {
+  try {
+    const out = await clearWorkingDate();
+    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Settings',
+      action: 'UPDATE', entityType: 'working_date', details: { cleared: true } });
     res.json(out);
   } catch (e) { next(e); }
 });

@@ -3,10 +3,20 @@
 const { queryAll, run } = require('../db/connection');
 
 const DEFAULTS = {
-  working_date: '2026-09-06',
-  working_time: '18:30',
   default_language: 'gu',
 };
+
+/** Real current date/time in the temple's own timezone (Asia/Kolkata) —
+    never the server host's timezone, which on Render is UTC and would be
+    up to 5:30h off around midnight IST. */
+function istNow() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(new Date());
+  const g = (type) => (parts.find((p) => p.type === type) || {}).value || '00';
+  return { date: `${g('year')}-${g('month')}-${g('day')}`, time: `${g('hour')}:${g('minute')}` };
+}
 
 async function getSettings() {
   const rows = await queryAll('SELECT key, value FROM app_settings');
@@ -16,9 +26,19 @@ async function getSettings() {
   let templeIdentity = {};
   try { templeIdentity = JSON.parse(map.temple_identity || '{}'); } catch (_) {}
 
+  // working_date/working_time are only trusted when an admin has explicitly
+  // pinned them (working_date_pinned = '1'); otherwise always the real
+  // current IST date/time. Without this flag a value only ever present
+  // because seedPlatform() wrote "today" once, at first boot, would get
+  // trusted forever afterwards and the platform's "today" would silently
+  // freeze on its deploy date.
+  const pinned = map.working_date_pinned === '1' && !!map.working_date;
+  const now = istNow();
+
   return {
-    workingDate: map.working_date || DEFAULTS.working_date,
-    workingTime: map.working_time || DEFAULTS.working_time,
+    workingDate: pinned ? map.working_date : now.date,
+    workingTime: pinned ? (map.working_time || now.time) : now.time,
+    workingDatePinned: pinned,
     defaultLanguage: map.default_language || DEFAULTS.default_language,
     templeIdentity,
   };
@@ -35,6 +55,13 @@ async function setSetting(key, value) {
 async function setWorkingDate(date, time) {
   if (date) await setSetting('working_date', String(date));
   if (time) await setSetting('working_time', String(time));
+  await setSetting('working_date_pinned', '1');
+  return getSettings();
+}
+
+/** Un-pin the working date — the clock goes back to tracking real IST time. */
+async function clearWorkingDate() {
+  await setSetting('working_date_pinned', '0');
   return getSettings();
 }
 
@@ -48,4 +75,4 @@ async function setDefaultLanguage(lang) {
   return getSettings();
 }
 
-module.exports = { getSettings, setSetting, setWorkingDate, setTempleIdentity, setDefaultLanguage };
+module.exports = { getSettings, setSetting, setWorkingDate, clearWorkingDate, setTempleIdentity, setDefaultLanguage };

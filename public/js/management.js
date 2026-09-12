@@ -23,6 +23,15 @@ if (typeof window !== 'undefined') {
 /* ------------------------------------------------------------
    1. MASTER DATA STORE
    ------------------------------------------------------------ */
+/* Real device date/time — was a hardcoded 2026-09-06 prototype default;
+   now the platform is live it must track the real calendar, or "today"
+   highlights the wrong day forever once the prototype date has passed.
+   The Working-date override (Settings -> Working date & data, stored in
+   localStorage['svmmm_clock']) still takes precedence — see below. */
+function mgRealDate(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function mgRealTime(d) { d = d || new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+const _mgNowD = new Date();
+
 const MG = {
   /* Session / permission context ------------------------------ */
   session: {
@@ -37,18 +46,19 @@ const MG = {
   activeTab: 'overview',
   activeSessionId: null,    // volunteering session open for attendance
   activeMemberId: null,     // volunteer profile open
-  calendarMonth: 8,         // 0-indexed. 8 = September
-  calendarYear: 2026,
-  reportMonth: '2026-09',
+  calendarMonth: _mgNowD.getMonth(),      // 0-indexed, real current month
+  calendarYear: _mgNowD.getFullYear(),
+  reportMonth: mgRealDate(_mgNowD).slice(0, 7),
   editingMemberId: null,
   editingMgmtId: null,
   editingSessionId: null,
   editingDraftId: null,
   badgeSelection: [],
 
-  /* Demo "today" so statuses are deterministic in the prototype */
-  today: '2026-09-06',
-  nowTime: '18:30',
+  /* Real "today" (overridable via Settings -> Working date & data) —
+     every module's xToday()/xNow() helper defers to this. */
+  today: mgRealDate(_mgNowD),
+  nowTime: mgRealTime(_mgNowD),
 
   /* --- Colour palette available for managements ------------- */
   palette: [

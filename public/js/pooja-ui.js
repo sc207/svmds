@@ -1314,6 +1314,7 @@ function panePoojaCalendar(p) {
   const daysInMonth = new Date(yr, mo + 1, 0).getDate();
   const startDow = (first.getDay() + 6) % 7;
   const entries = poojaSessionEntries(monthKey);
+  const todayDow = (typeof todayDowIndex === 'function') ? todayDowIndex(yr, mo, pjToday()) : -1;
 
   let cells = '';
   for (let i = 0; i < startDow; i++) cells += `<div class="mg-cal-cell mg-cal-empty"></div>`;
@@ -1351,7 +1352,7 @@ function panePoojaCalendar(p) {
 
   <div class="card">
     <div class="card-body">
-      <div class="mg-cal-head">${locDowShort().map(x => `<div>${x}</div>`).join('')}</div>
+      <div class="mg-cal-head">${locDowShort().map((x, i) => `<div class="${i === todayDow ? 'mg-cal-dow-today' : ''}">${x}</div>`).join('')}</div>
       <div class="mg-cal-grid">${cells}</div>
     </div>
   </div>

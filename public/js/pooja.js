@@ -31,12 +31,12 @@ const POOJA = {
   editingSevarthiId: null,
   editingTypeId: null,
   editingGuestId: null,
-  calendarMonth: 8,         // 0-indexed. 8 = September
-  calendarYear: 2026,
+  calendarMonth: new Date().getMonth(),      // 0-indexed, real current month
+  calendarYear: new Date().getFullYear(),
 
   /* Demo clock fallback — pjToday()/pjNow() defer to MG.today */
-  today: '2026-09-06',
-  nowTime: '18:30',
+  today: (typeof mgRealDate === 'function') ? mgRealDate() : '2026-09-06',
+  nowTime: (typeof mgRealTime === 'function') ? mgRealTime() : '18:30',
 
   /* Card / calendar accent palette ------------------------ */
   accentPalette: [

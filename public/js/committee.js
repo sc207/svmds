@@ -28,10 +28,10 @@ const CMT = {
   editingMemberId: null,
   editingMeetingId: null,
   editingDraftId: null,
-  calendarMonth: 8,
-  calendarYear: 2026,
-  today: '2026-09-06',
-  nowTime: '18:30',
+  calendarMonth: new Date().getMonth(),      // 0-indexed, real current month
+  calendarYear: new Date().getFullYear(),
+  today: (typeof mgRealDate === 'function') ? mgRealDate() : '2026-09-06',
+  nowTime: (typeof mgRealTime === 'function') ? mgRealTime() : '18:30',
 
   palette: [
     { name:'Maroon', hex:'#6B1F2A' }, { name:'Saffron', hex:'#C96A20' },

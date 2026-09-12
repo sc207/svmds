@@ -203,6 +203,7 @@ function renderUnifiedCalendar() {
     window.t('cal_mon', 'Mon'), window.t('cal_tue', 'Tue'), window.t('cal_wed', 'Wed'),
     window.t('cal_thu', 'Thu'), window.t('cal_fri', 'Fri'), window.t('cal_sat', 'Sat'), window.t('cal_sun', 'Sun')
   ];
+  const todayDow = (typeof todayDowIndex === 'function') ? todayDowIndex(y, mo, calToday()) : -1;
 
   // cap chips per day so a busy day doesn't blow out the cell (esp. on a
   // phone, where the 7-col grid stays visible now instead of hiding); the
@@ -277,7 +278,7 @@ function renderUnifiedCalendar() {
 
   <div class="card mg-mt cal-grid-view">
     <div class="card-body">
-      <div class="mg-cal-head">${dowNames.map(x => `<div>${x}</div>`).join('')}</div>
+      <div class="mg-cal-head">${dowNames.map((x, i) => `<div class="${i === todayDow ? 'mg-cal-dow-today' : ''}">${x}</div>`).join('')}</div>
       <div class="mg-cal-grid">${cells}</div>
     </div>
   </div>

@@ -690,6 +690,7 @@ function paneCalendar(m) {
   const daysInMonth = new Date(yr, mo+1, 0).getDate();
   const startDow = (first.getDay() + 6) % 7;   // Monday-first
   const sessions = MG.volunteering.filter(v => v.managementId === m.id && v.date.startsWith(monthKey));
+  const todayDow = (typeof todayDowIndex === 'function') ? todayDowIndex(yr, mo, MG.today) : -1;
 
   let cells = '';
   for (let i = 0; i < startDow; i++) cells += `<div class="mg-cal-cell mg-cal-empty"></div>`;
@@ -741,7 +742,7 @@ function paneCalendar(m) {
   <div class="card">
     <div class="card-body">
       <div class="mg-cal-head">
-        ${locDowShort().map(d => `<div>${d}</div>`).join('')}
+        ${locDowShort().map((d, i) => `<div class="${i === todayDow ? 'mg-cal-dow-today' : ''}">${d}</div>`).join('')}
       </div>
       <div class="mg-cal-grid">${cells}</div>
     </div>

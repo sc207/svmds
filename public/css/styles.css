@@ -1785,6 +1785,13 @@ input, select, textarea { font-family: inherit; outline: none; }
   margin-bottom: 6px; font-size: 0.68rem; font-weight: 700;
   color: var(--muted-brown); text-transform: uppercase; letter-spacing: 0.6px; text-align: center;
 }
+/* the weekday column matching today (e.g. શનિ), lit up the same as the date
+   cell below it so "today" reads at a glance without counting columns —
+   especially useful once cells shrink on phone/tablet. */
+.mg-cal-head .mg-cal-dow-today {
+  color: var(--primary-maroon); background: var(--saffron-bg);
+  border-radius: 5px; padding: 0.15rem 0;
+}
 .mg-cal-cell {
   min-height: 96px; padding: 0.4rem;
   border: 1px solid var(--warm-border); border-radius: var(--radius-sm);

@@ -945,6 +945,18 @@
             window.t('cal_thu', 'Thu'), window.t('cal_fri', 'Fri'), window.t('cal_sat', 'Sat'),
             window.t('cal_sun', 'Sun')];
   };
+  /** Monday-first weekday index (0=Mon..6=Sun) of `todayIso` ('YYYY-MM-DD'),
+      but ONLY when it falls inside the month being viewed (viewYear /
+      0-indexed viewMonth) — otherwise -1, so a calendar showing some other
+      month never highlights a weekday column that isn't actually "today".
+      Used to tint the day-of-week header (e.g. શનિ) alongside the date
+      cell itself, so "today" reads at a glance on a small screen too. */
+  window.todayDowIndex = function (viewYear, viewMonth, todayIso) {
+    if (!todayIso) return -1;
+    const p = String(todayIso).split('-').map(Number);
+    if (p.length !== 3 || p[0] !== viewYear || (p[1] - 1) !== viewMonth) return -1;
+    return (new Date(viewYear, viewMonth, p[2]).getDay() + 6) % 7;
+  };
 
   /** Walk the DOM and apply data-i18n / data-i18n-ph / data-i18n-html. */
   window.applyStaticI18n = function (root) {

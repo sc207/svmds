@@ -16,9 +16,9 @@ const EV = {
   activeTab: 'overview',
   editingEventId: null,
   editingTypeId: null,
-  calendarMonth: 8,
-  calendarYear: 2026,
-  today: '2026-09-06',
+  calendarMonth: new Date().getMonth(),      // 0-indexed, real current month
+  calendarYear: new Date().getFullYear(),
+  today: (typeof mgRealDate === 'function') ? mgRealDate() : '2026-09-06',
 
   accentPalette: [
     { name:'Saffron', hex:'#C96A20' }, { name:'Maroon', hex:'#6B1F2A' },
