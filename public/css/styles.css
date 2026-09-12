@@ -1793,9 +1793,9 @@ input, select, textarea { font-family: inherit; outline: none; }
   border-radius: 5px; padding: 0.15rem 0;
 }
 .mg-cal-cell {
-  min-height: 96px; padding: 0.4rem;
+  min-height: 96px; min-width: 0; padding: 0.4rem;
   border: 1px solid var(--warm-border); border-radius: var(--radius-sm);
-  background: var(--ivory-card);
+  background: var(--ivory-card); overflow: hidden;
 }
 .mg-cal-empty { background: transparent; border-color: transparent; }
 .mg-cal-today { border-color: var(--saffron); background: var(--saffron-bg); }
