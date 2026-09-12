@@ -592,16 +592,20 @@ input, select, textarea { font-family: inherit; outline: none; }
 }
 
 .user-menu-pop {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  /* fixed, not absolute: on mobile/tablet .top-navbar has overflow:hidden
+     (stops the header pushing the page wider than the screen) which was
+     clipping this popup, since it renders below the header's own box.
+     position:fixed escapes that entirely; app.js's toggleUserMenu() sets
+     top/right from the button's real screen position on each open, since
+     a fixed element has no positioning parent to anchor top/right to. */
+  position: fixed;
   min-width: 220px;
   background: #fff;
   border: 1px solid var(--antique-gold);
   border-radius: 12px;
   box-shadow: 0 12px 34px rgba(107, 31, 42, 0.18);
   padding: 0.5rem;
-  z-index: 120;
+  z-index: 1000;
 }
 
 .user-menu-email {

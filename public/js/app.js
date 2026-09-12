@@ -323,7 +323,16 @@ function signOut() {
 function toggleUserMenu(ev) {
   if (ev) ev.stopPropagation();
   var pop = document.getElementById('userMenuPop');
-  if (!pop) return;
+  var btn = document.getElementById('userMenuBtn');
+  if (!pop || !btn) return;
+  if (pop.hidden) {
+    // position:fixed has no positioning parent, so anchor it to the
+    // button's real screen position on every open (see styles.css for why
+    // it's fixed, not absolute).
+    var r = btn.getBoundingClientRect();
+    pop.style.top = (r.bottom + 8) + 'px';
+    pop.style.right = (window.innerWidth - r.right) + 'px';
+  }
   pop.hidden = !pop.hidden;
 }
 document.addEventListener('click', function (ev) {

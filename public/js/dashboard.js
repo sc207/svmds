@@ -34,18 +34,22 @@ function activePersona() {
   if (s && s.user) {
     var r = s.user.roles || [];
     var isAdmin = r.indexOf('superadmin') !== -1 || r.indexOf('admin') !== -1;
-    if (!isAdmin) {
-      var scoped = r.filter(function (x) { return SCOPED_ROLES.indexOf(x) !== -1; });
-      if (scoped.length) {
-        return {
-          kind: scoped.length === 1 ? scoped[0] : 'multi',
-          roles: scoped,
-          name: s.user.name || s.user.email || window.t('staff', 'Staff'),
-          id: s.user.id,
-        };
-      }
+    if (isAdmin) {
+      // the real signed-in person's name — "Welcome back, Administrator"
+      // was a hardcoded role label here, never the actual account name.
+      return { kind: 'admin', roles: r, name: s.user.name || s.user.email || window.t('administrator', 'Admin'), id: 'DEV-001' };
+    }
+    var scoped = r.filter(function (x) { return SCOPED_ROLES.indexOf(x) !== -1; });
+    if (scoped.length) {
+      return {
+        kind: scoped.length === 1 ? scoped[0] : 'multi',
+        roles: scoped,
+        name: s.user.name || s.user.email || window.t('staff', 'Staff'),
+        id: s.user.id,
+      };
     }
   }
+  // no real session (offline/demo mode) — nothing to name the banner after.
   return { kind: 'admin', roles: ['admin'], name: window.t('administrator', 'Admin'), id: 'DEV-001' };
 }
 

@@ -191,6 +191,10 @@
       errState((T('acc_load_fail', 'Could not load accounts') + ': ' + (e && e.message || 'request failed')));
       return;
     }
+    // keep the Dashboard "Authorized Accounts" KPI (hydrate.js's ACCOUNTS
+    // registry) live too — an add/edit/disable here shouldn't need a reload
+    // elsewhere to show up.
+    if (typeof window.__rehydrate === 'function') window.__rehydrate('accounts');
     try { draw(); }
     catch (e2) {
       console.error('[access] draw failed', e2);

@@ -418,6 +418,32 @@
     log('dhaja: ' + DHAJA.sponsorships.length + ' (' + DHAJA.campaigns.length + ' campaigns)');
   }
 
+  /* ---- Accounts (people.js's shared ACCOUNTS registry) ----
+     Nothing ever hydrated this before: ACCOUNTS was seeded once with a
+     single demo "Administrator" entry (people.js) and never touched again,
+     so the Dashboard "Authorized Accounts" KPI and accessSummary() (both
+     read ACCOUNTS.length) stayed stuck at 1 forever, even though the real
+     Accounts & Access page correctly shows the live account list (it has
+     its own separate fetch in access-api.js). Mutate ACCOUNTS in place —
+     same array reference every existing consumer (dashboard.js, people.js,
+     access.js's offline fallback) already holds — with the real, active
+     accounts. */
+  async function hydrateAccounts() {
+    if (typeof window.ACCOUNTS === 'undefined' || !Array.isArray(window.ACCOUNTS)) return;
+    var rows = await window.API.get('/users');
+    if (!Array.isArray(rows)) return;
+    swap(window.ACCOUNTS, rows.filter(function (u) { return u.active; }).map(function (u) {
+      return {
+        id: u.devoteeCode || (u.devoteeId != null ? String(u.devoteeId) : String(u.id)),
+        name: u.name || u.email || '',
+        mobile: u.mobile || '',
+        city: u.city || '',
+        roles: u.roles || []
+      };
+    }));
+    log('accounts: ' + window.ACCOUNTS.length);
+  }
+
   async function refreshViews() {
     try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) {}
     try { if (typeof renderUnifiedCalendar === 'function') renderUnifiedCalendar(); } catch (e) {}
@@ -430,11 +456,11 @@
     devotees: hydrateDevotees, core: hydrateCore,
     committees: hydrateCommittees, teams: hydrateTeams,
     poojas: hydratePoojas, events: hydrateEvents, visits: hydrateVisits,
-    donations: hydrateDonations, dhaja: hydrateDhaja,
+    donations: hydrateDonations, dhaja: hydrateDhaja, accounts: hydrateAccounts,
   };
   // the full boot load runs `core` (devotees + inventory + expenses); a scoped
   // refresh runs only `devotees`.
-  var ALL = ['core', 'committees', 'teams', 'poojas', 'events', 'visits', 'donations', 'dhaja'];
+  var ALL = ['core', 'committees', 'teams', 'poojas', 'events', 'visits', 'donations', 'dhaja', 'accounts'];
 
   // run(undefined)        → full boot load (every module + settings)
   // run('dhaja') / run(['poojas','donations']) → just those modules (+ core, so
