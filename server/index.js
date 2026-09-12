@@ -68,12 +68,22 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || !config.allowedOrigins.length || config.allowedOrigins.includes(origin)) return cb(null, true);
-    return cb(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
+app.use(cors((req, cb) => {
+  // POST /api/auth/google/redirect is the one endpoint in this app that is
+  // SUPPOSED to receive a cross-origin POST: Google's GIS ux_mode:'redirect'
+  // (the iOS sign-in path) submits a real top-level <form> from
+  // accounts.google.com straight to this URL, and browsers attach
+  // Origin: https://accounts.google.com to that POST. CORS enforcement is
+  // meaningless here anyway (it's a navigation the browser renders, not a
+  // fetch() reading the response cross-origin) — but the origin allowlist
+  // below would otherwise reject the request before it reaches the route
+  // handler, surfacing as a raw 500 ("Not allowed by CORS"). Skip the
+  // allowlist for this one path only; every other route is unaffected.
+  if (req.path === '/api/auth/google/redirect') return cb(null, { origin: true, credentials: true });
+
+  const origin = req.headers.origin;
+  const allowed = !origin || !config.allowedOrigins.length || config.allowedOrigins.includes(origin);
+  cb(allowed ? null : new Error('Not allowed by CORS'), { origin: allowed, credentials: true });
 }));
 
 app.use(express.json({ limit: '1mb' }));
