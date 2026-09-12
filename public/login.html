@@ -148,15 +148,51 @@
        it returns them to a usable /login with a clear message
      Google authentication (who owns this Google account) is separate from
      application authorization (is that email registered temple staff) — the
-     latter is decided by the backend at POST /api/auth/google. */
+     latter is decided by the backend at POST /api/auth/google.
+
+     iOS is a separate branch (see isIOS() below): Safari's popup/FedCM/
+     third-party-cookie restrictions make the normal popup account-chooser
+     unreliable there — the chooser can open but never call back into the
+     page after an account is picked. iOS therefore initializes GIS with
+     ux_mode:'redirect' (a real top-level navigation to Google and back,
+     landing on POST /api/auth/google/redirect) instead. Windows/Android/
+     desktop keep the exact popup+FedCM config below, unchanged. */
   (function () {
     var msg = document.getElementById('loginMsg');
     var box = document.getElementById('gbtn');
     var initialized = false;
     var watchdog = null;
 
+    /* iPhone/iPod always identify themselves in the UA; iPadOS 13+ instead
+       reports as desktop Safari ("MacIntel") but is still touch-only, so a
+       real Mac is distinguished by having at most one touch point (0). */
+    function isIOS() {
+      return /iP(hone|od|ad)/.test(navigator.userAgent) ||
+             (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+
     function show(kind, text) { msg.className = 'login-msg ' + kind; msg.textContent = text; }
     function clearWatchdog() { if (watchdog) { clearTimeout(watchdog); watchdog = null; } }
+
+    /* A previous POST /api/auth/google/redirect attempt (iOS) landed back
+       here with a failure code instead of completing — show it once, then
+       drop it from the URL so a later reload/retry starts clean. */
+    (function showRedirectErrorIfAny() {
+      var params = new URLSearchParams(location.search);
+      var code = params.get('error');
+      if (!code) return;
+      var TEXT = {
+        csrf: 'Sign-in could not be verified — please try again.',
+        no_credential: 'Google sign-in did not complete — please try again.',
+        not_authorized: 'This Google account is not authorised for the temple portal.',
+        google_failed: 'Google sign-in failed — please try again.',
+        server_error: 'Something went wrong on our end — please try again.'
+      };
+      show('err', TEXT[code] || 'Sign-in did not complete — please try again.');
+      params.delete('error');
+      var qs = params.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+    })();
 
     function armWatchdog() {
       clearWatchdog();
@@ -199,12 +235,22 @@
           setTimeout(ready, 120); return;
         }
 
-        google.accounts.id.initialize({
+        var iosMode = isIOS();
+        var initConfig = {
           client_id: clientId,
           callback: onGoogle,
           auto_select: false,          // never auto-pick when multiple accounts exist
           itp_support: true            // Safari / ITP support (not a FedCM toggle)
-        });
+        };
+        if (iosMode) {
+          // Full top-level navigation instead of the popup/FedCM chooser —
+          // see the file-header comment. `callback` above is ignored by GIS
+          // in this mode (there is no in-page callback); the credential
+          // arrives server-side instead, at login_uri.
+          initConfig.ux_mode = 'redirect';
+          initConfig.login_uri = window.location.origin + '/api/auth/google/redirect';
+        }
+        google.accounts.id.initialize(initConfig);
         initialized = true;
         window.__gisInitialized = true;
 
@@ -228,18 +274,24 @@
         /* One Tap prompt — the "Continue as …" auto-detect for a returning user.
            auto_select stays false (no silent pick among several accounts). If it
            can't show (multiple accounts / dismissed / cooldown) the notification
-           callback just steps aside — the button below still works, no error. */
-        try {
-          google.accounts.id.prompt(function (n) {
-            if (n && (n.isNotDisplayed && n.isNotDisplayed() || n.isSkippedMoment && n.isSkippedMoment())) {
-              /* silently fall back to the rendered button — do nothing */
-            }
-          });
-        } catch (e) { /* button remains the path */ }
+           callback just steps aside — the button below still works, no error.
+           Skipped entirely on iOS: it's a popup/iframe surface with an in-page
+           callback, the exact thing ux_mode:'redirect' exists to avoid there —
+           the rendered button (which honors ux_mode) remains the iOS path. */
+        if (!iosMode) {
+          try {
+            google.accounts.id.prompt(function (n) {
+              if (n && (n.isNotDisplayed && n.isNotDisplayed() || n.isSkippedMoment && n.isSkippedMoment())) {
+                /* silently fall back to the rendered button — do nothing */
+              }
+            });
+          } catch (e) { /* button remains the path */ }
+        }
 
         /* dev-only diagnostics — safe values only, never tokens/cookies */
         if (/^(localhost|127\.|\[::1\])/.test(location.hostname)) {
           console.info('[login] origin           :', window.location.origin);
+          console.info('[login] ux_mode          :', iosMode ? 'redirect (iOS)' : 'popup');
           console.info('[login] google client id :', clientId);
           console.info('[login] gis initialized  :', window.__gisInitialized === true);
         }

@@ -39,31 +39,97 @@ async function createSession(user, req, extra = {}) {
   return jti;
 }
 
+/* Verify a Google credential, resolve it to an active SVMDS user, link the
+   Google sub, create a session and set the auth cookie. Shared by the JSON
+   sign-in (POST /google, used by the Windows/Android popup+FedCM flow) and
+   the full-navigation sign-in (POST /google/redirect, used by the iOS GIS
+   redirect flow) so both do exactly the same authentication work — only
+   how the credential arrives and how the result is returned differ.
+   @throws {Error} with a `.status` (401 bad/expired credential, 403 email
+   not registered) that the caller maps to its own response shape. */
+async function authenticateGoogleCredential(credential, req, res) {
+  let profile;
+  try {
+    profile = await verifyGoogleToken(credential);
+  } catch (e) {
+    const err = new Error(e.message || 'Google sign-in failed');
+    err.status = 401;
+    throw err;
+  }
+
+  const user = await getActiveUserByEmail(profile.email);
+  if (!user) {
+    const err = new Error('This Google account has no access — ask an administrator');
+    err.status = 403;
+    throw err;
+  }
+
+  await linkGoogle(user.id, profile.sub, profile.name);
+
+  const jti = await createSession(user, req);
+  res.cookie(COOKIE, signToken(user, jti), cookieOptions());
+  await logAudit({ userId: user.id, userEmail: user.email, module: 'Auth', action: 'LOGIN' });
+
+  return user;
+}
+
 /* -------------------- POST /google -------------------- */
+/* Windows/Android (and any non-iOS browser): the GIS popup/FedCM button
+   hands the page an ID token, which is POSTed here as JSON via fetch. */
 router.post('/google', async (req, res, next) => {
   try {
     const credential = req.body && req.body.credential;
-    let profile;
+    let user;
     try {
-      profile = await verifyGoogleToken(credential);
+      user = await authenticateGoogleCredential(credential, req, res);
     } catch (e) {
-      return res.status(401).json({ error: e.message || 'Google sign-in failed' });
+      return res.status(e.status || 500).json({ error: e.message || 'Sign-in failed' });
     }
-
-    const user = await getActiveUserByEmail(profile.email);
-    if (!user) {
-      return res.status(403).json({ error: 'This Google account has no access — ask an administrator' });
-    }
-
-    await linkGoogle(user.id, profile.sub, profile.name);
-
-    const jti = await createSession(user, req);
-    res.cookie(COOKIE, signToken(user, jti), cookieOptions());
-    await logAudit({ userId: user.id, userEmail: user.email, module: 'Auth', action: 'LOGIN' });
-
     res.json({ user: publicUser(user), pages: pagesForUser(user), isSuperadmin: isSuperadmin(user) });
   } catch (e) {
     next(e);
+  }
+});
+
+/* -------------------- POST /google/redirect -------------------- */
+/* iOS only (public/login.html's isIOS() branch): GIS's ux_mode:'redirect'
+   does a full top-level navigation to Google and back, submitting a real
+   HTML form to this URL instead of calling back into the page with fetch —
+   iOS Safari's popup/FedCM/third-party-cookie restrictions make the normal
+   popup button unreliable there. This route must therefore respond with a
+   redirect, not JSON, and must never leave the browser hanging mid
+   navigation: every failure lands back on /login with a plain, non-technical
+   `?error=` code the page already knows how to display — never a raw
+   stack trace, a hang, or a silent bounce with no explanation.
+   Registering this URL in the Google Cloud OAuth client's "Authorized
+   redirect URIs" (a separate list from "Authorized JavaScript origins",
+   which stays as-is) is required before this can work, and is done outside
+   this codebase. */
+router.post('/google/redirect', async (req, res) => {
+  const fail = (code) => res.redirect('/login?error=' + encodeURIComponent(code));
+  try {
+    // Google's documented CSRF protection for redirect mode: it sets a
+    // g_csrf_token cookie on this origin and includes the same value as a
+    // form field in the POST — both must be present and equal.
+    const csrfCookie = req.cookies && req.cookies.g_csrf_token;
+    const csrfBody = req.body && req.body.g_csrf_token;
+    if (!csrfCookie || !csrfBody || csrfCookie !== csrfBody) {
+      return fail('csrf');
+    }
+
+    const credential = req.body && req.body.credential;
+    if (!credential) return fail('no_credential');
+
+    try {
+      await authenticateGoogleCredential(credential, req, res);
+    } catch (e) {
+      return fail(e.status === 403 ? 'not_authorized' : 'google_failed');
+    }
+
+    res.redirect('/');
+  } catch (e) {
+    console.error('[auth] POST /google/redirect unexpected failure:', e.message);
+    fail('server_error');
   }
 });
 
