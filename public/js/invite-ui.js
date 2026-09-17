@@ -24,7 +24,7 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
 var CIV = {
   selectedIds: [],
   search: '',
-  opts: { template: 'royal', accent: '#6B1F2A', lang: '', headline: '', inviteLine: '', blessing: '', audience: '' }
+  opts: { template: 'royal', accent: '#6B1F2A', lang: '', headline: '', inviteLine: '', blessing: '', audience: '', showTime: true }
 };
 
 /* ---- pooja selection ---- */
@@ -120,7 +120,8 @@ function readCombinedInvitationOpts() {
     audience: g('civAudience') ? g('civAudience').value : '',
     headline: g('civHeadline').value,
     inviteLine: g('civLine').value,
-    blessing: g('civBlessing').value
+    blessing: g('civBlessing').value,
+    showTime: g('civShowTime') ? g('civShowTime').checked : true
   };
 }
 
@@ -141,13 +142,19 @@ function readCombinedInvitationOpts() {
    instead of one overflowing/shrunk card — `opts.pageLabel` ('2 / 3') is
    stamped on continuation pages when there's more than one.
 
-   Two capacities, empirically measured against the offscreen render's fixed
-   A5 box: a personalised card carries the extra recipient block ("To Karan
-   Chauhan સપરિવાર") above the programme, so it only safely fits 3 rows (6
-   poojas); the open/public card has no recipient block and that room goes
-   to a 4th row (8 poojas) instead. ---- */
-var CIV_ROWS_PER_PAGE = 6;
-var CIV_ROWS_PER_PAGE_OPEN = 8;
+   Four capacities, empirically measured against the offscreen render's
+   fixed A5 box: a personalised card carries the extra recipient block ("To
+   Karan Chauhan સપરિવાર") above the programme, so it fits fewer rows than
+   the open/public card; and each row is one line shorter when the time is
+   turned off (opts.showTime), so more fit either way. */
+var CIV_CAPACITY = {
+  time: { personalized: 6, open: 8 },
+  noTime: { personalized: 8, open: 12 }
+};
+function civCapacity(hasAudience, showTime) {
+  var bucket = showTime ? CIV_CAPACITY.time : CIV_CAPACITY.noTime;
+  return hasAudience ? bucket.personalized : bucket.open;
+}
 
 function civChunk(arr, n) {
   var out = [];
@@ -181,14 +188,17 @@ function civLoc(name, lang) {
 }
 
 function combinedInvitationMarkup(poojas, opts) {
-  opts = Object.assign({ template: 'royal', accent: '#6B1F2A', headline: '', inviteLine: '', blessing: '', lang: '' }, opts || {});
+  opts = Object.assign({ template: 'royal', accent: '#6B1F2A', headline: '', inviteLine: '', blessing: '', lang: '', showTime: true }, opts || {});
   var L = invLang(opts);
   // No venue per row: every pooja is at the temple itself, and the exact
   // hall/spot inside it isn't tracked yet — repeating "Shree Vihat Dham
   // Sanand" on every line was redundant and just as unreadable as it was
   // uninformative. civLoc() (not pjLoc — see below) so a pooja name
   // translates to the CARD's own chosen language even when the app-wide
-  // language is still English.
+  // language is still English. Time is optional (opts.showTime, default on)
+  // — turning it off drops each row to a single line, so a page can fit
+  // more poojas (combinedInvitationCardSet picks the right capacity for
+  // whichever is on).
   var rows = (poojas || []).map(function (p) {
     var sess = poojaSessions(p);
     var first = sess[0], last = sess[sess.length - 1];
@@ -196,7 +206,7 @@ function combinedInvitationMarkup(poojas, opts) {
     var dateTxt = !first ? ivt(L, 'tba')
       : multi ? (civDateLoc(first.date, L) + ' – ' + civDateLoc(last.date, L))
               : civDateLoc(first.date, L);
-    var timeTxt = (!multi && first && first.startTime) ? (fmtTime(first.startTime) + '–' + fmtTime(first.endTime)) : '';
+    var timeTxt = (opts.showTime && !multi && first && first.startTime) ? (fmtTime(first.startTime) + '–' + fmtTime(first.endTime)) : '';
     // Day+date and time as two explicit lines (not left to wrap naturally) —
     // natural wrapping could break mid-time-range ("9:00 AM–" / "12:00 PM"),
     // which read poorly; a forced break always lands between the two.
@@ -250,7 +260,7 @@ function combinedInvitationCardSet() {
   var opts = readCombinedInvitationOpts();
   var rcpts = invAudienceRecipients(opts.audience);
   var baseTitle = window.t('civ_title', 'Combined Invitation');
-  var chunks = civChunk(poojas, rcpts.length ? CIV_ROWS_PER_PAGE : CIV_ROWS_PER_PAGE_OPEN);
+  var chunks = civChunk(poojas, civCapacity(!!rcpts.length, opts.showTime));
   var pagesPerRecipient = chunks.length;
 
   function pageMarkup(chunk, pageIdx, recipient) {
@@ -447,6 +457,13 @@ function renderInvitePage() {
                 '</optgroup>') : ''}
             </select>
             <span class="mg-muted-xs">${window.t('pj_inv_aud_hint', 'Pick a samaj / committee to generate a personalised card (name, city, state) for every member — one page each in the PDF.')}</span>
+          </div>
+          <div class="form-group">
+            <label class="mg-check-inline">
+              <input type="checkbox" id="civShowTime" ${CIV.opts.showTime ? 'checked' : ''} onchange="updateCombinedInvitationPreview()">
+              <span>${window.t('civ_show_time', 'Show session time')}</span>
+            </label>
+            <span class="mg-muted-xs">${window.t('civ_show_time_hint', 'Turn off to fit more poojas per page — each row keeps just the day and date.')}</span>
           </div>
           <div class="form-group">
             <label class="form-label" for="civAccent">${window.t('pj_inv_accent', 'Accent Colour')}</label>
