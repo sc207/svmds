@@ -2787,7 +2787,13 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
    down so more of the fixed A5 page goes to the actual schedule; the
    per-pooja invitation and events-ui.js notice never carry this class, so
    their own header/footer stay exactly as designed. */
-.pj-invite--civ .pj-invite-frame { margin: 12px; padding: 14px 16px 12px; }
+/* min-height matches civ's own smaller margin (12px, not the base card's
+   18px) — without this override the frame fell back to the base rule's
+   min-height (sized for 18px margins), landing 12px short of the card's
+   true bottom and leaving an asymmetric gap there (this is what showed up
+   in the on-screen designer preview; the PDF/print paths have their own
+   matching overrides already). */
+.pj-invite--civ .pj-invite-frame { margin: 12px; padding: 14px 16px 12px; min-height: calc(402px * 210 / 148 - 24px); }
 .pj-invite--civ .pj-invite-emblem-wrap,
 .pj-invite--civ .pj-invite-emblem,
 .pj-invite--civ .pj-invite-emblem-fallback { width: 46px; height: 46px; margin-bottom: 2px; }
