@@ -132,15 +132,15 @@ function readCombinedInvitationOpts() {
    programme overview instead of an itemized per-session list — full
    session detail is what the per-pooja Invitation tab is for.
 
-   Sized as a proper A4 page (`pj-invite--a4`, styles.css) rather than the
-   per-pooja card's A5 — a programme listing several/many poojas needs real
-   page room instead of being force-shrunk into an A5 box on export (that
-   used to make the exported card unreadably cramped, or silently clip
-   poojas past what an A5 box could hold). Callers chunk the selection into
-   CIV_A4_ROWS_PER_PAGE-sized groups (civChunk) so a long selection becomes
-   several clean A4 pages instead of one overflowing card — `opts.pageLabel`
-   ('2 / 3') is stamped on continuation pages when there's more than one. ---- */
-var CIV_A4_ROWS_PER_PAGE = 8;
+   Same A5 card as the per-pooja invitation (printInvitationHTML/
+   downloadInvitationPDF, unmodified) — a programme listing several poojas
+   needs to stay within that proven page size, so the two-per-row grid
+   layout (no venue column: every pooja is at the temple itself) buys back
+   the room instead. Callers chunk the selection into CIV_ROWS_PER_PAGE-sized
+   groups (civChunk) so a long selection becomes several clean A5 pages
+   instead of one overflowing/shrunk card — `opts.pageLabel` ('2 / 3') is
+   stamped on continuation pages when there's more than one. ---- */
+var CIV_ROWS_PER_PAGE = 6;
 
 function civChunk(arr, n) {
   var out = [];
@@ -162,9 +162,26 @@ function civDateLoc(iso, lang) {
   catch (e) { return iso; }
 }
 
+/* pjLoc() (pooja-ui.js) always localizes against the app-wide language
+   toggle. The combined card has its own per-card language selector
+   (opts.lang / L below), so a pooja name must translate against THAT
+   language even when the app itself is still in English — pass it through
+   as tData's langOverride (i18n.js) instead. Falls back to pjLoc when
+   tData's 2-arg form isn't available (older cached i18n.js). */
+function civLoc(name, lang) {
+  if (typeof tData === 'function') return tData(name == null ? '' : name, lang);
+  return (typeof pjLoc === 'function') ? pjLoc(name) : (name || '');
+}
+
 function combinedInvitationMarkup(poojas, opts) {
   opts = Object.assign({ template: 'royal', accent: '#6B1F2A', headline: '', inviteLine: '', blessing: '', lang: '' }, opts || {});
   var L = invLang(opts);
+  // No venue per row: every pooja is at the temple itself, and the exact
+  // hall/spot inside it isn't tracked yet — repeating "Shree Vihat Dham
+  // Sanand" on every line was redundant and just as unreadable as it was
+  // uninformative. civLoc() (not pjLoc — see below) so a pooja name
+  // translates to the CARD's own chosen language even when the app-wide
+  // language is still English.
   var rows = (poojas || []).map(function (p) {
     var sess = poojaSessions(p);
     var first = sess[0], last = sess[sess.length - 1];
@@ -173,20 +190,20 @@ function combinedInvitationMarkup(poojas, opts) {
       : multi ? (civDateLoc(first.date, L) + ' – ' + civDateLoc(last.date, L))
               : civDateLoc(first.date, L);
     var timeTxt = (!multi && first && first.startTime) ? (fmtTime(first.startTime) + '–' + fmtTime(first.endTime)) : '';
-    var venueTxt = p.defaultVenue || (first && first.venue) || '';
     return '<div class="pj-invite-schedule-row">' +
-      '<strong>' + esc(pjLoc(p.name)) + '</strong>' +
-      '<span>' + dateTxt + (timeTxt ? ' · ' + timeTxt : '') + (venueTxt ? ' · ' + esc(pjLoc(venueTxt)) : '') + '</span>' +
+      '<strong>' + esc(civLoc(p.name, L)) + '</strong>' +
+      '<span>' + dateTxt + (timeTxt ? ' · ' + timeTxt : '') + '</span>' +
       '</div>';
   }).join('');
   var pageNote = opts.pageLabel ? ' · ' + esc(opts.pageLabel) : '';
   var programme = '<div class="pj-invite-schedule">' +
     '<span class="pj-invite-schedule-h">' + esc(ivt(L, 'programme')) + pageNote + '</span>' +
-    (rows || '<div class="pj-invite-schedule-row"><span>' + esc(ivt(L, 'tba')) + '</span></div>') +
-    '</div>';
+    '<div class="pj-invite-schedule-grid">' +
+      (rows || '<div class="pj-invite-schedule-row"><span>' + esc(ivt(L, 'tba')) + '</span></div>') +
+    '</div></div>';
 
   return `
-  <div class="pj-invite pj-invite--${esc(opts.template)} pj-invite--a4" style="--c:${esc(opts.accent)}" data-lang="${L}">
+  <div class="pj-invite pj-invite--${esc(opts.template)} pj-invite--civ" style="--c:${esc(opts.accent)}" data-lang="${L}">
     <span class="pj-invite-corner c-tl"></span><span class="pj-invite-corner c-tr"></span>
     <span class="pj-invite-corner c-bl"></span><span class="pj-invite-corner c-br"></span>
     <img class="pj-invite-hero" src="${(typeof assetURL === 'function') ? assetURL('assets/temple.png') : 'assets/temple.png'}" alt="" aria-hidden="true" onerror="this.style.display='none'">
@@ -210,19 +227,19 @@ function combinedInvitationMarkup(poojas, opts) {
   </div>`;
 }
 
-/* ---- output — reuses printInvitationHTML / downloadInvitationPDF (with
-   pageSize:'A4') verbatim, exactly like invitationCardSet() does for a
-   single pooja, just built from the current multi-pooja selection chunked
-   across as many A4 pages as it takes. combinedInvitationCardSet() is the
-   single source of truth for both the live preview and every export path,
-   so what's previewed is always exactly what prints/downloads. ---- */
+/* ---- output — reuses printInvitationHTML / downloadInvitationPDF verbatim,
+   exactly like invitationCardSet() does for a single pooja, just built from
+   the current multi-pooja selection chunked across as many A5 pages as it
+   takes. combinedInvitationCardSet() is the single source of truth for both
+   the live preview and every export path, so what's previewed is always
+   exactly what prints/downloads. ---- */
 function combinedInvitationCardSet() {
   var poojas = selectedPoojasSorted();
   if (!poojas.length) return null;
   var opts = readCombinedInvitationOpts();
   var rcpts = invAudienceRecipients(opts.audience);
   var baseTitle = window.t('civ_title', 'Combined Invitation');
-  var chunks = civChunk(poojas, CIV_A4_ROWS_PER_PAGE);
+  var chunks = civChunk(poojas, CIV_ROWS_PER_PAGE);
   var pagesPerRecipient = chunks.length;
 
   function pageMarkup(chunk, pageIdx, recipient) {
@@ -289,15 +306,15 @@ function updateCombinedInvitationPreview() {
 function printCombinedInvitation() {
   var set = combinedInvitationCardSet();
   if (!set) { pjToast(window.t('civ_need_pooja', 'Select at least one pooja first.')); return; }
-  printInvitationHTML(set.cards, set.title, 'A4');
+  printInvitationHTML(set.cards, set.title);
 }
 function downloadCombinedInvitationPDF() {
   var set = combinedInvitationCardSet();
   if (!set) { pjToast(window.t('civ_need_pooja', 'Select at least one pooja first.')); return; }
-  downloadInvitationPDF(set.cards, set.title, null, 'A4');
+  downloadInvitationPDF(set.cards, set.title);
 }
-/* One PDF per recipient (may itself be several A4 pages when the selection
-   spans more than CIV_A4_ROWS_PER_PAGE poojas) — downloadInvitationZIP()
+/* One PDF per recipient (may itself be several A5 pages when the selection
+   spans more than CIV_ROWS_PER_PAGE poojas) — downloadInvitationZIP()
    (pooja-ui.js) only ever builds a single-page PDF per recipient, so this
    composes its own multi-page-per-recipient version from the exact same
    shared PDF services (ensurePdfLibs/renderInvitationImages/invPdfDocDef/
@@ -315,7 +332,7 @@ async function downloadCombinedInvitationZip() {
   catch (e) {
     done();
     pjToast(window.t('pj_inv_dl_offline', 'PDF engine unavailable — opening print view instead.'));
-    printInvitationHTML(set.cards, set.title, 'A4');
+    printInvitationHTML(set.cards, set.title);
     return;
   }
 
@@ -328,7 +345,7 @@ async function downloadCombinedInvitationZip() {
         if (set.items.length > 3) pjToast(window.t('pj_inv_zip_prog', 'Packing') + ' ' + (i + 1) + '/' + set.items.length + '…');
       });
       if (!images.length) continue;
-      var blob = await new Promise(function (res) { libs.pdfMake.createPdf(invPdfDocDef(images, 'A4')).getBlob(res); });
+      var blob = await new Promise(function (res) { libs.pdfMake.createPdf(invPdfDocDef(images)).getBlob(res); });
       var r = it.recipient;
       var base = invFileName([set.poojaName, r && r.name, r && r.mobile]) || (set.poojaName + ' ' + (i + 1));
       var name = base + '.pdf', k = 2;
@@ -343,7 +360,7 @@ async function downloadCombinedInvitationZip() {
   } catch (e) {
     console.error('combined invitation ZIP failed', e);
     pjToast(window.t('pj_inv_zip_fail', 'ZIP generation failed — opening print view instead.'));
-    printInvitationHTML(set.cards, set.title, 'A4');
+    printInvitationHTML(set.cards, set.title);
   } finally {
     done();
   }

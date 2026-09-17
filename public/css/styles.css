@@ -2771,6 +2771,32 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 }
 .pj-invite-schedule-row { padding: 4px 0; border-bottom: 1px dotted color-mix(in srgb, var(--c) 30%, transparent); }
 .pj-invite-schedule-row strong { display: block; color: var(--c); font-weight: 700; }
+/* Combined Invitation only (invite-ui.js) — two poojas per row (no venue
+   column: every pooja is at the temple itself, and the exact hall isn't
+   tracked yet) so a page holds roughly twice as many poojas at a readable
+   size. events-ui.js's day list and the per-pooja multi-session schedule
+   never wrap their rows in this class, so they're unaffected. */
+.pj-invite-schedule-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
+
+/* Combined Invitation only (invite-ui.js, `pj-invite--civ`) — a programme
+   listing several poojas needs the header/footer ceremonial chrome trimmed
+   down so more of the fixed A5 page goes to the actual schedule; the
+   per-pooja invitation and events-ui.js notice never carry this class, so
+   their own header/footer stay exactly as designed. */
+.pj-invite--civ .pj-invite-frame { margin: 12px; padding: 14px 16px 12px; }
+.pj-invite--civ .pj-invite-emblem-wrap,
+.pj-invite--civ .pj-invite-emblem,
+.pj-invite--civ .pj-invite-emblem-fallback { width: 46px; height: 46px; margin-bottom: 2px; }
+.pj-invite--civ .pj-invite-temple { font-size: 0.76rem; }
+.pj-invite--civ .pj-invite-temple-sub { margin-bottom: 3px; }
+.pj-invite--civ .pj-invite-ribbon { margin: 1px 0 3px; }
+.pj-invite--civ .pj-invite-invocation { margin-bottom: 3px; }
+.pj-invite--civ .pj-invite-recipient { margin: 1px 0 4px; padding: 3px 12px; }
+.pj-invite--civ .pj-invite-headline { font-size: 1.02rem; margin: 1px 0 2px; }
+.pj-invite--civ .pj-invite-schedule { margin-bottom: 4px; }
+.pj-invite--civ .pj-invite-schedule-h { margin-bottom: 2px; }
+.pj-invite--civ .pj-invite-blessing { font-size: 0.72rem; }
+.pj-invite--civ .pj-invite-foot { margin-top: 4px; padding-top: 4px; }
 
 .pj-invite-party { font-size: 0.74rem; color: #3a2a1a; margin-bottom: 9px; line-height: 1.55; }
 .pj-invite-party-h {
@@ -2788,23 +2814,6 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
   margin-top: 8px; padding-top: 8px;
   border-top: 1px solid color-mix(in srgb, var(--c) 30%, transparent); width: 74%;
 }
-
-/* --- A4 size variant: used only by the Combined Invitation (invite-ui.js),
-   whose programme list needs real page room instead of being squeezed into
-   an A5 card and force-shrunk on export. Same shape as .pj-invite (A4 and A5
-   are geometrically similar — both 1:√2), just a bigger canvas, with the
-   ceremonial header/emblem and the schedule rows scaled up to match. --- */
-.pj-invite--a4 { width: 570px; min-height: calc(570px * 297 / 210); }
-.pj-invite--a4 .pj-invite-frame { min-height: calc(570px * 297 / 210 - 36px); }
-.pj-invite--a4 .pj-invite-corner { width: 58px; height: 58px; }
-.pj-invite--a4 .pj-invite-emblem-wrap,
-.pj-invite--a4 .pj-invite-emblem,
-.pj-invite--a4 .pj-invite-emblem-fallback { width: 86px; height: 86px; }
-.pj-invite--a4 .pj-invite-temple { font-size: 1.3rem; }
-.pj-invite--a4 .pj-invite-headline { font-size: 1.75rem; }
-.pj-invite--a4 .pj-invite-schedule { width: 92%; font-size: 0.8rem; }
-.pj-invite--a4 .pj-invite-schedule-h { font-size: 0.72rem; }
-.pj-invite--a4 .pj-invite-schedule-row { padding: 6px 0; }
 
 /* --- Royal: ceremonial --- */
 .pj-invite--royal .pj-invite-watermark { opacity: 0.07; }
@@ -2851,36 +2860,34 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
     width: 148mm; min-height: 210mm;
     border-radius: 0; box-shadow: none; border: 0;
   }
-  .pj-invite--a4 {
-    width: 210mm; min-height: 297mm;
-  }
   .pj-invite-frame { min-height: 0; margin: 8mm; }
+  .pj-invite--civ .pj-invite-frame { min-height: calc(210mm - 16mm); }
 }
 
 /* --- Off-screen stage used to rasterise cards into a downloadable PDF
    (html2canvas). Fixed A5-ratio box; concrete colours in place of
-   color-mix(), which html2canvas cannot parse. The Combined Invitation's
-   .pj-invite--a4 card gets its own box below instead — it must not be
-   clamped to the A5 height (that used to silently clip its programme list). --- */
+   color-mix(), which html2canvas cannot parse. --- */
 .pj-pdf-stage {
   position: fixed; left: -20000px; top: 0; z-index: -1;
   width: 402px; background: #fff; pointer-events: none;
 }
-.pj-pdf-stage .pj-invite:not(.pj-invite--a4) {
+.pj-pdf-stage .pj-invite {
   width: 402px !important;
   height: calc(402px * 210 / 148) !important;
   min-height: 0 !important;
   margin: 0 !important; border-radius: 0 !important; box-shadow: none !important;
   overflow: hidden !important;
 }
-.pj-pdf-stage .pj-invite--a4 {
-  width: 570px !important;
-  height: auto !important;
-  min-height: calc(570px * 297 / 210) !important;
-  margin: 0 !important; border-radius: 0 !important; box-shadow: none !important;
-  overflow: visible !important;
-}
 .pj-pdf-stage .pj-invite-frame { min-height: 0 !important; }
+/* ...except the Combined Invitation card: with fewer poojas on a page (the
+   last, partly-filled chunk especially) its frame no longer had enough of
+   its own content to reach the card's fixed height, so margin-top:auto on
+   .pj-invite-blessing had no free space to push into and the closing
+   blessing/foot line sat right under the last row with a large blank gap
+   below it instead of at the bottom of the card. Restoring the frame's
+   min-height (sized for civ's own smaller margin) gives it that space back
+   so the blessing/foot line always lands flush against the bottom. */
+.pj-pdf-stage .pj-invite--civ .pj-invite-frame { min-height: calc(402px * 210 / 148 - 24px) !important; }
 .pj-pdf-stage .pj-invite-frame::after { border-color: rgba(120, 92, 62, 0.30) !important; }
 .pj-pdf-stage .pj-invite-schedule-row { border-bottom-color: rgba(120, 92, 62, 0.38) !important; }
 .pj-pdf-stage .pj-invite-recipient strong em,

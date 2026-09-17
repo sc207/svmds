@@ -1038,20 +1038,13 @@ async function renderInvitationImages(markups, onProgress) {
 // A5 portrait in PDF points (1pt = 1/72in): 148mm x 210mm.
 const INV_A5_W = 148 / 25.4 * 72;   // ≈ 419.53
 const INV_A5_H = 210 / 25.4 * 72;   // ≈ 595.28
-// A4 portrait: 210mm x 297mm — used by the multi-pooja Combined Invitation,
-// whose programme list needs real page room instead of being force-shrunk
-// into an A5 box.
-const INV_A4_W = 210 / 25.4 * 72;   // ≈ 595.28
-const INV_A4_H = 297 / 25.4 * 72;   // ≈ 841.89
 
-function invPdfDocDef(images, pageSize) {
-  const a4 = pageSize === 'A4';
-  const W = a4 ? INV_A4_W : INV_A5_W, H = a4 ? INV_A4_H : INV_A5_H;
+function invPdfDocDef(images) {
   return {
-    pageSize: a4 ? 'A4' : 'A5', pageOrientation: 'portrait', pageMargins: [0, 0, 0, 0],
+    pageSize: 'A5', pageOrientation: 'portrait', pageMargins: [0, 0, 0, 0],
     content: images.map((data, i) => {
       // fit box a hair under the page so rounding never spills a blank page
-      const node = { image: data, fit: [W, H - 2], alignment: 'center' };
+      const node = { image: data, fit: [INV_A5_W, INV_A5_H - 2], alignment: 'center' };
       if (i > 0) node.pageBreak = 'before';
       return node;
     })
@@ -1066,7 +1059,7 @@ function invBusy(sel, on) {
   });
 }
 
-async function downloadInvitationPDF(cards, title, id, pageSize) {
+async function downloadInvitationPDF(cards, title, id) {
   const arr = Array.isArray(cards) ? cards : [cards];
   if (!arr.length) return;
   const fname = invFileName([title]) || 'Invitations';
@@ -1078,7 +1071,7 @@ async function downloadInvitationPDF(cards, title, id, pageSize) {
   catch (e) {
     done();
     pjToast(window.t('pj_inv_dl_offline', 'PDF engine unavailable — opening print view instead.'));
-    printInvitationHTML(cards, title, pageSize);
+    printInvitationHTML(cards, title);
     return;
   }
 
@@ -1087,13 +1080,13 @@ async function downloadInvitationPDF(cards, title, id, pageSize) {
       if (tot > 6) pjToast(window.t('pj_inv_dl_prog', 'Rendering') + ' ' + n + '/' + tot + '…');
     });
     if (!images.length) throw new Error('no cards rendered');
-    libs.pdfMake.createPdf(invPdfDocDef(images, pageSize)).download(fname + '.pdf');
+    libs.pdfMake.createPdf(invPdfDocDef(images)).download(fname + '.pdf');
     if (typeof logPoojaActivity === 'function' && id) logPoojaActivity(id, 'Invitation PDF generated (' + images.length + ' page' + (images.length > 1 ? 's' : '') + ')');
     pjToast(images.length + ' ' + window.t('pj_inv_dl_ok', 'invitation page(s) saved as PDF.'));
   } catch (e) {
     console.error('invitation PDF failed', e);
     pjToast(window.t('pj_inv_dl_fail', 'PDF generation failed — opening print view instead.'));
-    printInvitationHTML(cards, title, pageSize);
+    printInvitationHTML(cards, title);
   } finally {
     done();
   }
@@ -1258,12 +1251,9 @@ function invitationMarkup(p, opts) {
 }
 
 /** Open a print window carrying the app CSS + fonts so the A5 output is faithful. */
-function printInvitationHTML(cards, title, pageSize) {
+function printInvitationHTML(cards, title) {
   if (typeof openPrintDoc !== 'function') { pjToast('Print service unavailable.'); return; }
   const arr = Array.isArray(cards) ? cards : [cards];
-  const a4 = pageSize === 'A4';
-  const pw = a4 ? '210mm' : '148mm', ph = a4 ? '297mm' : '210mm';
-  const screenW = a4 ? 570 : 402;
   // Each card gets its own plain BLOCK wrapper (.inv-page) — page-break-after
   // is reliably honoured on a block-flow element (it is ignored on flex items,
   // which is why cards were running together).
@@ -1277,28 +1267,26 @@ function printInvitationHTML(cards, title, pageSize) {
     css:
       /* on-screen popup: each card is a distinct sheet, stacked vertically */
       '.pj-invite-print{display:block;background:#efe7d7;padding:20px 0}' +
-      `.inv-page{display:block;position:relative;width:${screenW}px;max-width:92vw;margin:0 auto 26px;box-sizing:border-box}` +
+      '.inv-page{display:block;position:relative;width:402px;max-width:92vw;margin:0 auto 26px;box-sizing:border-box}' +
       '.inv-page .pj-invite{box-shadow:0 16px 44px rgba(107,31,42,.28)}' +
       '.inv-page-n{position:absolute;top:-15px;left:50%;transform:translateX(-50%);z-index:6;' +
         'font:600 11px/1 Inter,system-ui,sans-serif;letter-spacing:1px;color:#8a7a5c;background:#efe7d7;padding:2px 10px;border-radius:10px}' +
-      /* print / PDF: exactly one page (A5, or A4 for the Combined Invitation's
-         longer programme list) per card. Every rule is !important and each
-         .inv-page carries an explicit page height, so N recipients always
+      /* print / PDF: exactly one A5 page per card. Every rule is !important and
+         each .inv-page carries an explicit A5 height, so N recipients always
          produce N pages even if a forced page-break were ignored and even
          before the linked stylesheet finishes parsing. */
       '@media print{' +
-        `@page{size:${a4 ? 'A4' : 'A5'} portrait;margin:0}` +
+        '@page{size:A5 portrait;margin:0}' +
         'html,body{background:#fff !important;margin:0 !important;padding:0 !important}' +
         '.pj-invite-print{display:block !important;margin:0 !important;padding:0 !important;background:#fff !important}' +
         '.inv-page{display:block !important;position:relative !important;' +
-          `width:${pw} !important;height:${ph} !important;min-height:0 !important;max-height:${ph} !important;` +
+          'width:148mm !important;height:210mm !important;min-height:0 !important;max-height:210mm !important;' +
           'margin:0 !important;padding:0 !important;box-sizing:border-box !important;overflow:hidden !important;' +
           'break-inside:avoid !important;page-break-inside:avoid !important;' +
           'break-after:page !important;page-break-after:always !important}' +
         '.inv-page:last-child{break-after:auto !important;page-break-after:auto !important}' +
         '.inv-page-n{display:none !important}' +
-        '.pj-invite{' +
-          `width:${pw} !important;height:${ph} !important;min-height:0 !important;max-height:${ph} !important;` +
+        '.pj-invite{width:148mm !important;height:210mm !important;min-height:0 !important;max-height:210mm !important;' +
           'margin:0 !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;overflow:hidden !important;' +
           'break-inside:avoid !important;page-break-inside:avoid !important;' +
           'break-after:auto !important;page-break-after:auto !important;' +

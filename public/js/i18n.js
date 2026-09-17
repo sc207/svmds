@@ -919,10 +919,15 @@
     return fallback != null ? fallback : key;
   };
 
-  /** Localize a known DATA value (name/category/role/city). Unknown → returned as-is. */
-  window.tData = function (value) {
-    if (value == null || _lang === 'en') return value == null ? '' : value;
-    var map = DATA[_lang] || {};
+  /** Localize a known DATA value (name/category/role/city). Unknown → returned as-is.
+      Optional langOverride ('en'/'hi'/'gu') localizes against that language instead
+      of the app-wide toggle — used by a per-card language selector (the invitation
+      designers) so a card set to Gujarati still translates catalog pooja names even
+      while the rest of the app is in English. */
+  window.tData = function (value, langOverride) {
+    var lang = langOverride || _lang;
+    if (value == null || lang === 'en') return value == null ? '' : value;
+    var map = DATA[lang] || {};
     return map[value] != null ? map[value] : value;
   };
 
