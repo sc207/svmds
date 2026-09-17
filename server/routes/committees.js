@@ -187,6 +187,30 @@ router.post('/:id/leader', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* Unassign the leader — a committee is allowed to have none (the leader was
+   never actually required at the DB/POST-/ level, only a stale frontend
+   check on the create/edit form enforced it; see the roster row this
+   person likely still has via addAsMember(), which is intentionally left
+   alone — removing them as leader doesn't remove them as a member). */
+router.delete('/:id/leader', adminTier, async (req, res, next) => {
+  try {
+    const row = await committeeByIdOrCode(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Committee not found' });
+    if (!row.leader_id && !row.leader_devotee_id) return res.json(await hydrate(row));
+
+    const prevLeader = row.leader_id;
+    await run(`UPDATE committees SET leader_id = NULL, leader_devotee_id = NULL, updated_at = datetime('now') WHERE id = ?`, [row.id]);
+    if (prevLeader) {
+      const stillLeads = await queryOne('SELECT 1 AS x FROM committees WHERE leader_id = ? AND is_deleted = 0 LIMIT 1', [prevLeader]);
+      if (!stillLeads) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prevLeader, 'committee_leader']);
+      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prevLeader]);
+    }
+    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',
+      action: 'REVOKE', entityType: 'committee_leader', entityId: String(prevLeader || 'dev:' + row.leader_devotee_id), scopeId: row.code });
+    res.json(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id])));
+  } catch (e) { next(e); }
+});
+
 /* ---------- members (add-or-reuse by mobile, link devotee) ---------- */
 router.post('/:id/members', async (req, res, next) => {
   try {

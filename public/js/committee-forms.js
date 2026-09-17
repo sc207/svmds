@@ -131,14 +131,17 @@
 
 /* ---- committee ---- */
 /* Leader = the ONE shared searchable devotee picker (value in the hidden
-   #cmtLeadSelect input; handleSaveCommittee reads .value unchanged). */
+   #cmtLeadSelect input; handleSaveCommittee reads .value unchanged).
+   Optional — a committee is allowed to have none, so this is not
+   `required` and carries a Remove action (clearable) to unassign one that
+   was already set. */
 function cmtMountLead(selectedId, selectedLabel) {
   const mount = document.getElementById('cmtLeadMount');
   if (!mount || typeof devoteeLinkField !== 'function') return;
   mount.innerHTML = devoteeLinkField({
-    selId: 'cmtLeadSelect', label: window.t('cmt_leader', 'Leader'), required: true,
+    selId: 'cmtLeadSelect', label: window.t('cmt_leader', 'Leader'), clearable: true,
     selectedId: selectedId || '', selectedLabel: selectedLabel || '',
-    hint: 'Pick a devotee from the register, or add a new one — no login account needed.'
+    hint: 'Pick a devotee from the register, or add a new one — no login account needed. Optional; you can assign or change it later.'
   });
 }
 function openAddCommittee() {
@@ -229,7 +232,6 @@ function handleSaveCommittee(e) {
   const size = parseInt(document.getElementById('cmtFieldSize').value, 10);
   const purpose = document.getElementById('cmtFieldPurpose').value.trim();
   if (!name) { cmtToast(window.t('cmt_need_name', 'Name is required.')); return; }
-  if (!leaderId) { cmtToast(window.t('cmt_need_leader', 'Assign a leader.')); return; }
   if (!purpose) { cmtToast(window.t('cmt_need_purpose', 'Purpose is required.')); return; }
   const payload = {
     name, leaderId, expectedSize: size || 20, purpose,
@@ -256,7 +258,11 @@ function handleSaveCommittee(e) {
       name, samaj: payload.samaj, purpose: payload.purpose, expectedSize: payload.expectedSize,
       status: payload.status, notes: payload.notes
     })
-      .then(function () { return leaderId && leaderId !== prevLeader ? window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId }) : null; })
+      .then(function () {
+        if (leaderId && leaderId !== prevLeader) return window.API.post('/committees/' + code + '/leader', { devoteeId: leaderId });
+        if (!leaderId && prevLeader) return window.API.del('/committees/' + code + '/leader');
+        return null;
+      })
       .then(function () { return cmtSyncRoster(code, CMT.editingCmtId, members, leaderId); })
       .then(function () { cmtToast(name + ' — ' + window.t('save') + ' ✓'); return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); })
@@ -653,7 +659,11 @@ function saveCmtSettings(e, cid) {
     window.API.patch('/committees/' + code, {
       name: c.name, purpose: c.purpose, expectedSize: c.expectedSize, status: c.status, notes: c.notes
     })
-      .then(function () { return (c.leaderId && c.leaderId !== prevLeader) ? window.API.post('/committees/' + code + '/leader', { devoteeId: c.leaderId }) : null; })
+      .then(function () {
+        if (c.leaderId && c.leaderId !== prevLeader) return window.API.post('/committees/' + code + '/leader', { devoteeId: c.leaderId });
+        if (!c.leaderId && prevLeader) return window.API.del('/committees/' + code + '/leader');
+        return null;
+      })
       .then(function () { return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); });
   }

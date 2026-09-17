@@ -82,10 +82,10 @@ function evMountIncharge(selectedId, selectedLabel) {
   const mount = document.getElementById('evInchargeMount');
   if (!mount || typeof devoteeLinkField !== 'function') return;
   mount.innerHTML = devoteeLinkField({
-    selId: 'evFieldIncharge', label: window.t('ev_incharge', 'In-charge'),
+    selId: 'evFieldIncharge', label: window.t('ev_incharge', 'In-charge'), clearable: true,
     selectedId: (selectedId && /^DEV-/i.test(selectedId)) ? selectedId : '',
     selectedLabel: selectedLabel || '',
-    hint: 'Pick a devotee — no login account needed.'
+    hint: 'Pick a devotee — no login account needed. Optional; you can assign or change it later.'
   });
 }
 function evAccentOptions(sel) {
@@ -179,7 +179,11 @@ function handleSaveEvent(ev) {
         name, venue: payload.venue, expectedFootfall: payload.expectedFootfall,
         budget: payload.budget, color: payload.color, notes: payload.notes, days
       })
-        .then(function () { return (inChargeDev && inChargeDev !== prevInCharge) ? window.API.post('/events/' + code + '/incharge', { devoteeId: inChargeDev }) : null; })
+        .then(function () {
+          if (inChargeDev && inChargeDev !== prevInCharge) return window.API.post('/events/' + code + '/incharge', { devoteeId: inChargeDev });
+          if (!inChargeDev && prevInCharge) return window.API.del('/events/' + code + '/incharge');
+          return null;
+        })
         .then(function () { return window.__rehydrate && window.__rehydrate('events'); })
         .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
     }

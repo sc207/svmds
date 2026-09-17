@@ -493,10 +493,10 @@ function paneCmtSettings(c) {
     || (typeof cmtLeadById === 'function' && cmtLeadById(c.leaderId) || {}).name || c.leaderId || '—';
   const leaderCell = admin && typeof devoteeLinkField === 'function'
     ? devoteeLinkField({
-        selId: 'setCmtLead', label: window.t('cmt_leader', 'Leader'), required: true,
+        selId: 'setCmtLead', label: window.t('cmt_leader', 'Leader'), clearable: true,
         selectedId: c.leaderId, selectedLabel: leaderName
       })
-    : `<div class="form-group"><label class="form-label">${window.t('cmt_leader', 'Leader')} *</label>` +
+    : `<div class="form-group"><label class="form-label">${window.t('cmt_leader', 'Leader')}</label>` +
       `<input class="form-input" value="${esc(leaderName)}" disabled><input type="hidden" id="setCmtLead" value="${esc(c.leaderId || '')}"></div>`;
   return `
   <div class="flex justify-between items-center mg-pane-head"><div><h2 class="mg-pane-title">${window.t('cmt_settings', 'Committee Settings')}</h2>

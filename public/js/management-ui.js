@@ -1633,8 +1633,8 @@ function paneSettings(m) {
   const leadName = (typeof personById === 'function' && personById(m.leadId) || {}).name
     || (typeof leadById === 'function' && leadById(m.leadId) || {}).name || m.leadId || '—';
   const leadCell = !lockLead && typeof devoteeLinkField === 'function'
-    ? devoteeLinkField({ selId: 'setMgLead', label: 'Management Lead', required: true, selectedId: m.leadId, selectedLabel: leadName })
-    : `<div class="form-group"><label class="form-label">Management Lead *</label>` +
+    ? devoteeLinkField({ selId: 'setMgLead', label: 'Management Lead', clearable: true, selectedId: m.leadId, selectedLabel: leadName })
+    : `<div class="form-group"><label class="form-label">Management Lead</label>` +
       `<input class="form-input" value="${esc(leadName)}" disabled><input type="hidden" id="setMgLead" value="${esc(m.leadId || '')}">` +
       `<div class="mg-muted-xs">Only an administrator can change the Lead.</div></div>`;
 
@@ -1748,7 +1748,11 @@ function saveManagementSettings(e, mgmtId) {
   if (window.API && window.API.online) {
     const code = m.code || m.id;
     window.API.patch('/teams/' + code, { name: m.name, description: m.description, expectedTeamSize: m.expectedTeamSize, status: m.status, notes: m.notes })
-      .then(function () { return (m.leadId && m.leadId !== prevLead) ? window.API.post('/teams/' + code + '/lead', { devoteeId: m.leadId }) : null; })
+      .then(function () {
+        if (m.leadId && m.leadId !== prevLead) return window.API.post('/teams/' + code + '/lead', { devoteeId: m.leadId });
+        if (!m.leadId && prevLead) return window.API.del('/teams/' + code + '/lead');
+        return null;
+      })
       .then(function () { return window.__rehydrate && window.__rehydrate('teams'); })
       .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); });
   }

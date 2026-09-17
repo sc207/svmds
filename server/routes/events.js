@@ -230,4 +230,28 @@ router.post('/:id/incharge', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* Unassign the in-charge — an event is allowed to have none (it always was
+   at the DB/POST-/ level; there just wasn't any way to go back to that
+   state once someone was assigned). Their own roster row from
+   addAsMember(), if any, is left alone — removing them as in-charge
+   doesn't remove them as a guest/roster entry elsewhere. */
+router.delete('/:id/incharge', adminTier, async (req, res, next) => {
+  try {
+    const row = await eventByIdOrCode(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Event not found' });
+    if (!row.in_charge_id && !row.in_charge_devotee_id) return res.json(await withDays(row));
+
+    const prev = row.in_charge_id;
+    await run(`UPDATE events SET in_charge_id = NULL, in_charge_devotee_id = NULL, updated_at = datetime('now') WHERE id = ?`, [row.id]);
+    if (prev) {
+      const still = await queryOne('SELECT 1 AS x FROM events WHERE in_charge_id = ? AND is_deleted = 0 LIMIT 1', [prev]);
+      if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'event_incharge']);
+      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
+    }
+    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Events',
+      action: 'REVOKE', entityType: 'event_incharge', entityId: String(prev || 'dev:' + row.in_charge_devotee_id), scopeId: row.code });
+    res.json(await withDays(await eventByIdOrCode(row.id)));
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

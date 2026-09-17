@@ -139,6 +139,11 @@
     return people.filter(function (x) { return String(x.id) === String(id); })[0] || null;
   }
 
+  /* opts.clearable adds a "Remove" action next to "Add new devotee" — for a
+     field that names ONE person but isn't actually mandatory (committee
+     leader, management lead, event in-charge): it clears the hidden value
+     (and, for an already-saved record, the caller's save handler is
+     responsible for syncing that clear to the backend — see devLinkClear). */
   window.devoteeLinkField = function (opts) {
     opts = opts || {};
     var selId = opts.selId || 'devLinkSel';
@@ -150,7 +155,10 @@
     return '<div class="link-section">' +
       '<div class="link-section-head">' +
         '<p class="ls-title">' + esc(label) + (opts.required ? ' <span class="ls-req">*</span>' : '') + '</p>' +
-        '<button type="button" class="btn-add-devotee" onclick="devLinkAdd(\'' + selId + '\')">Add new devotee</button>' +
+        '<div class="flex gap-2">' +
+          (opts.clearable ? '<button type="button" class="btn-add-devotee" onclick="devLinkClear(\'' + selId + '\')">' + esc(opts.clearLabel || 'Remove') + '</button>' : '') +
+          '<button type="button" class="btn-add-devotee" onclick="devLinkAdd(\'' + selId + '\')">Add new devotee</button>' +
+        '</div>' +
       '</div>' +
       (opts.hint ? '<div class="link-section-hint">' + esc(opts.hint) + '</div>' : '') +
       '<div class="link-field dp-combo" id="' + selId + '__combo">' +
@@ -256,6 +264,16 @@
         commitPick(selId, dev.id, dev.name + (dev.mobile ? ' · ' + dev.mobile : '') + (dev.city ? ' · ' + dev.city : ''));
       }
     });
+  };
+  /* Clears a devoteeLinkField's picked value (see opts.clearable). Only
+     clears the FORM field — the caller's own save handler reads the now-
+     empty hidden input like any other change and is responsible for
+     syncing the removal to the backend (a committee/team/event's "unassign
+     leader/lead/in-charge" DELETE route). */
+  window.devLinkClear = function (selId) {
+    commitPick(selId, '', '');
+    var q = document.getElementById(selId + '__q');
+    if (q) q.focus();
   };
   /** { id, name, firstName, lastName, mobile, city, state } for the chosen person, or null. */
   window.devoteeLinkValue = function (selId) {

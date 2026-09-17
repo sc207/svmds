@@ -355,14 +355,16 @@ function openEditManagement(id) {
 }
 
 /* the Management Lead = the ONE shared searchable devotee picker (id in the
-   hidden #mgLeadSelect input, so handleSaveManagement reads .value unchanged). */
+   hidden #mgLeadSelect input, so handleSaveManagement reads .value unchanged).
+   Optional — a management team is allowed to have none, so this is not
+   `required` and carries a Remove action (clearable) to unassign one. */
 function mgMountLead(selectedId, selectedLabel) {
   const mount = document.getElementById('mgLeadMount');
   if (!mount || typeof devoteeLinkField !== 'function') return;
   mount.innerHTML = devoteeLinkField({
     selId: 'mgLeadSelect', label: window.t ? window.t('mg_select_lead', 'Management Lead') : 'Management Lead',
-    required: true, selectedId: selectedId || '', selectedLabel: selectedLabel || '',
-    hint: 'Pick a devotee from the register, or add a new one — no login account needed.'
+    clearable: true, selectedId: selectedId || '', selectedLabel: selectedLabel || '',
+    hint: 'Pick a devotee from the register, or add a new one — no login account needed. Optional; you can assign or change it later.'
   });
 }
 const MG_MEMBER_ROLES = ['Volunteer', 'Coordinator', 'In-charge'];
@@ -423,7 +425,6 @@ function handleSaveManagement(e) {
   const notes = document.getElementById('mgFieldNotes').value.trim();
 
   if (!name) { mgToast('Management Name is required.'); return; }
-  if (!leadId) { mgToast('Please assign a Management Lead.'); return; }
   if (!size || size < 1) { mgToast('Expected Team Size must be at least 1.'); return; }
   if (!desc) { mgToast('Description is required.'); return; }
 
@@ -446,7 +447,11 @@ function handleSaveManagement(e) {
       : `Management details updated by ${MG.session.userName}`);
     if (!online) { mgToast(`${name} updated.`); return finish(); }
     window.API.patch('/teams/' + code, { name, description: desc, expectedTeamSize: size, status, notes })
-      .then(function () { return (leadId && leadId !== prevLead) ? window.API.post('/teams/' + code + '/lead', { devoteeId: leadId }) : null; })
+      .then(function () {
+        if (leadId && leadId !== prevLead) return window.API.post('/teams/' + code + '/lead', { devoteeId: leadId });
+        if (!leadId && prevLead) return window.API.del('/teams/' + code + '/lead');
+        return null;
+      })
       .then(function () { return mgSyncRoster(code, m.id, members, leadId); })
       .then(function () { mgToast(`${name} updated.`); return window.__rehydrate && window.__rehydrate('teams'); })
       .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
@@ -461,7 +466,7 @@ function handleSaveManagement(e) {
     MG.managements.push(local);
     MG.communication.push({ managementId: id, groupName:'', groupLink:'', broadcastName:'', broadcastLink:'' });
     materialiseMgRoster(id, members, leadId);
-    logActivity(id, `Management created and assigned to ${leadById(leadId)?.name || 'Lead'}`);
+    logActivity(id, leadId ? `Management created and assigned to ${leadById(leadId)?.name || 'Lead'}` : 'Management created');
     if (!online) { mgToast(`${name} created.`); return finish(); }
     window.API.post('/teams', { name, description: desc, expectedTeamSize: size, notes })
       .then(function (t) {

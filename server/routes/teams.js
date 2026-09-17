@@ -191,6 +191,30 @@ router.post('/:id/lead', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* Unassign the lead — a team is allowed to have none (the lead was never
+   actually required at the DB/POST-/ level, only a stale frontend check on
+   the create/edit form enforced it; their own roster row from
+   addAsMember() is left alone — removing them as lead doesn't remove them
+   as a member). */
+router.delete('/:id/lead', adminTier, async (req, res, next) => {
+  try {
+    const row = await teamByIdOrCode(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Team not found' });
+    if (!row.lead_id && !row.lead_devotee_id) return res.json(await hydrate(row));
+
+    const prev = row.lead_id;
+    await run(`UPDATE teams SET lead_id = NULL, lead_devotee_id = NULL, updated_at = datetime('now') WHERE id = ?`, [row.id]);
+    if (prev) {
+      const still = await queryOne('SELECT 1 AS x FROM teams WHERE lead_id = ? AND is_deleted = 0 LIMIT 1', [prev]);
+      if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'management_lead']);
+      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
+    }
+    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
+      action: 'REVOKE', entityType: 'management_lead', entityId: String(prev || 'dev:' + row.lead_devotee_id), scopeId: row.code });
+    res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
+  } catch (e) { next(e); }
+});
+
 /* ---------- members ---------- */
 router.post('/:id/members', async (req, res, next) => {
   try {
