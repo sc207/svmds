@@ -51,7 +51,10 @@ function setMgTab(tab) {
 /* ------------------------------------------------------------
    ROLE CHROME — hides admin-only nav for a Lead
    ------------------------------------------------------------ */
-const LEAD_ALLOWED_PAGES = ['management', 'dashboard', 'calendar'];
+// Derived from ROLE_META (people.js), not hardcoded, so a real management_lead
+// login and this preview chrome can never drift apart.
+const LEAD_ALLOWED_PAGES = (typeof rolePages === 'function' && rolePages('management_lead').length)
+  ? rolePages('management_lead') : ['dashboard', 'management', 'calendar'];
 
 function applyRoleChrome() {
   const lead = !isAdmin();

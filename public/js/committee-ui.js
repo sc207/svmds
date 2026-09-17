@@ -34,7 +34,10 @@ function openCmtMeeting(id) {
 function closeCmtMeeting() { CMT.activeMeetingId = null; renderCommittee(); }
 
 /* ---- role chrome ---- */
-const CMT_ALLOWED_PAGES = ['committees', 'dashboard', 'calendar'];
+// Derived from ROLE_META (people.js), not hardcoded, so a real committee_leader
+// login and this preview chrome can never drift apart.
+const CMT_ALLOWED_PAGES = (typeof rolePages === 'function' && rolePages('committee_leader').length)
+  ? rolePages('committee_leader') : ['dashboard', 'committees', 'calendar'];
 function applyCmtRoleChrome() {
   const lead = CMT.session.role === 'leader';
   document.querySelectorAll('.nav-item[data-page]').forEach(el => {

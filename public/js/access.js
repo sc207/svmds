@@ -211,9 +211,14 @@ function signInAs(id) {
     if (sel) sel.value = 'admin'; changeRoleScope('admin'); return;
   }
   const r = a.roles[0];
+  // Roles with a specific-person module scope (also filters that module's
+  // own data, not just the nav) vs. roles previewed generically (page-shape
+  // only — see changeRoleScope()'s GENERIC_ROLE map, which these values
+  // must match).
   const map = { committee_leader: 'cmt:', pooja_coordinator: 'coord:', management_lead: 'lead:' };
+  const generic = { accountant: 'accountant', event_incharge: 'event_incharge' };
   if (map[r]) { const v = map[r] + id; if (sel) sel.value = v; changeRoleScope(v); }
-  else if (r === 'accountant') { if (sel) sel.value = 'accountant'; changeRoleScope('accountant'); }
+  else if (generic[r]) { if (sel) sel.value = generic[r]; changeRoleScope(generic[r]); }
   else { if (sel) sel.value = 'admin'; changeRoleScope('admin'); }
 }
 

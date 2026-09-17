@@ -6,6 +6,10 @@
 const state = {
   activePage: 'dashboard',
   roleScope: 'admin',
+  // Admin/superadmin "view as" preview — a ROLE_META key (e.g. 'accountant'),
+  // set only when no specific-person module scope (CMT/POOJA/MG session) is
+  // active. See changeRoleScope().
+  previewRole: null,
   currentLang: 'en',
 
   // Devotees Register (Central Person Model)
@@ -67,10 +71,19 @@ function toggleSidebarMenu() {
  * Kept here (not in a module -ui.js) so switchPage can enforce it centrally.
  */
 function currentAllowedPages() {
-  // Preview personas (topbar "view as" switcher) — one restricted module at a time.
+  // Preview personas (topbar "view as" switcher), most specific first.
+  // 1) a specific person's scope — this also drives that module's own data
+  //    filtering (visiblePoojas() etc.), not just the nav.
   if (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader') return ['dashboard', 'committees', 'calendar'];
   if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator') return ['dashboard', 'puja', 'calendar'];
   if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead') return ['dashboard', 'management', 'calendar'];
+  // 2) a generic "what would this role see" preview — page-shape only, no
+  //    specific person's data. Computed from ROLE_META (people.js) so it can
+  //    never drift from what a real login with that role actually sees.
+  if (state.previewRole && typeof rolePages === 'function') {
+    var pr = rolePages(state.previewRole);
+    if (pr.length) return pr.slice();
+  }
   // Real signed-in session — honour the page list the backend computed for this
   // user's roles (accountant, event_incharge, committee_leader, …). '*' or no
   // backend (demo mode) → unrestricted.
@@ -81,19 +94,35 @@ function currentAllowedPages() {
   return null;
 }
 
-/* Trim the sidebar / mobile nav to what the signed-in session may actually open,
-   and bounce off any forbidden page. No-op for admins and demo mode. */
+/** True while the admin/superadmin "view as" switcher is previewing a
+ * restricted role — either a specific person's module scope, or a generic
+ * role-shape preview. */
+function isPreviewActive() {
+  return !!(state.previewRole
+    || (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader')
+    || (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator')
+    || (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead'));
+}
+
+/* Trim the sidebar / mobile nav to what the active session/preview may
+   actually open, and bounce off any forbidden page. Runs once at boot for a
+   real signed-in session, and again on every "view as" change so a preview
+   stays live. No-op (fully open) for admins and demo mode. */
 function applySessionChrome() {
   var allowed = currentAllowedPages();
-  if (!allowed) return;
-  // the "view as" preview switcher is an admin-only tool
+  var preview = isPreviewActive();
+  // The "view as" switcher is an admin-only tool — hide it only for a REAL
+  // restricted login. Never hide it while the admin is merely previewing
+  // one, or they would lose the only way back to "My view — full access".
   var sw = document.getElementById('viewSwitchWrap');
-  if (sw) sw.style.display = 'none';
+  if (sw) sw.style.display = (allowed && !preview) ? 'none' : '';
   document.querySelectorAll('.nav-item[data-page], .mobile-nav-item[data-page]').forEach(function (el) {
-    el.style.display = allowed.indexOf(el.getAttribute('data-page')) === -1 ? 'none' : '';
+    el.style.display = (allowed && allowed.indexOf(el.getAttribute('data-page')) === -1) ? 'none' : '';
   });
   // the sidebar nav is flat: a .nav-group-title followed by its .nav-items as
-  // siblings. Hide a heading when every item under it is now hidden.
+  // siblings. Hide a heading when every item under it is now hidden. (This
+  // also correctly RE-SHOWS everything when allowed goes back to null, e.g.
+  // the admin switching a preview back to "My view — full access".)
   document.querySelectorAll('.sidebar-nav .nav-group-title').forEach(function (title) {
     var anyVisible = false;
     for (var n = title.nextElementSibling; n && !n.classList.contains('nav-group-title'); n = n.nextElementSibling) {
@@ -101,7 +130,7 @@ function applySessionChrome() {
     }
     title.style.display = anyVisible ? '' : 'none';
   });
-  if (allowed.indexOf(state.activePage || 'dashboard') === -1) switchPage('dashboard');
+  if (allowed && allowed.indexOf(state.activePage || 'dashboard') === -1) switchPage('dashboard');
 }
 
 /** True when the active session is allowed to open pageId. */
@@ -142,12 +171,18 @@ function switchPage(pageId) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Scoped User Role Switcher
-// Only one module (Management OR Pooja) is ever in a restricted scope at a time.
-// The sibling module is reset to admin FIRST (silently) and the target scope is
-// activated LAST, so the restricting nav-chrome pass is always the final writer.
+// Admin/superadmin "view as" preview switcher.
+// Only ONE restricted scope is ever active at a time — either a specific
+// person's module scope (Committee Leader / Pooja Coordinator / Management
+// Lead, which also filters that module's own data) or a generic role-shape
+// preview (state.previewRole, page-list only, for roles with no per-module
+// scoped session of their own, e.g. Accountant / Event In-charge). Every
+// other scope is reset FIRST (silently), the target is activated LAST, and
+// applySessionChrome() is called before navigating so the nav reflects the
+// new scope immediately.
 function changeRoleScope(role) {
   state.roleScope = role;
+  state.previewRole = null;
 
   const resetOthers = (except) => {
     if (except !== 'mg' && typeof setMgSession === 'function') setMgSession('admin', null, false);
@@ -155,40 +190,59 @@ function changeRoleScope(role) {
     if (except !== 'cmt' && typeof setCmtSession === 'function') setCmtSession('admin', null, false);
   };
 
-  // Pooja Coordinator scope
+  // Pooja Coordinator scope — a specific person
   if (role.indexOf('coord:') === 0) {
     resetOthers('pj');
     if (typeof setPoojaSession === 'function') setPoojaSession('coordinator', role.slice(6));
+    applySessionChrome();
     return;
   }
-  // Management Lead scope
+  // Management Lead scope — a specific person
   if (role.indexOf('lead:') === 0) {
     resetOthers('mg');
     if (typeof setMgSession === 'function') setMgSession('lead', role.slice(5));
+    applySessionChrome();
     return;
   }
-  // Committee Leader scope
+  // Committee Leader scope — a specific person
   if (role.indexOf('cmt:') === 0) {
     resetOthers('cmt');
     if (typeof setCmtSession === 'function') setCmtSession('leader', role.slice(4));
+    applySessionChrome();
     return;
   }
 
-  // Admin / core-team scopes — every module back to admin
+  // Every specific-person module scope back to admin.
   resetOthers(null);
 
-  const roleTitle = role === 'admin' ? 'Super Admin (Full Platform)' : role === 'pooja_manager' ? 'Pooja Manager' : role === 'accountant' ? 'Temple Accountant' : 'Parking & Operations Lead';
-  showToast(`Context switched to: ${roleTitle}`);
-
-  if (role === 'pooja_manager') {
-    switchPage('puja');
-  } else if (role === 'accountant') {
-    switchPage('donations');
-  } else if (role === 'parking_head') {
-    switchPage('teams');
-  } else {
+  if (role === 'admin') {
+    showToast('Context switched to: Super Admin (Full Platform)');
+    applySessionChrome();
     switchPage('dashboard');
+    return;
   }
+
+  // Generic "what would this role see" preview — page-shape only, driven by
+  // ROLE_META (people.js) via rolePages() so it can never drift from what a
+  // real login with that role actually sees.
+  const GENERIC_ROLE = {
+    pooja_manager: { key: 'pooja_coordinator', label: 'Pooja Coordinator', landing: 'puja' },
+    accountant: { key: 'accountant', label: 'Temple Accountant', landing: 'donations' },
+    event_incharge: { key: 'event_incharge', label: 'Event In-charge', landing: 'events' },
+  };
+  const g = GENERIC_ROLE[role];
+  if (g && typeof rolePages === 'function' && rolePages(g.key).length) {
+    state.previewRole = g.key;
+    showToast(`Context switched to: ${g.label}`);
+    applySessionChrome();
+    switchPage(g.landing);
+    return;
+  }
+
+  // Unknown value — fall back to the admin's own unrestricted view.
+  showToast('Context switched to: Super Admin (Full Platform)');
+  applySessionChrome();
+  switchPage('dashboard');
 }
 
 
