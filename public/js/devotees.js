@@ -10,6 +10,16 @@
    COMPLETED, plus a chronological (FIFO, oldest-first) ledger.
    Single-file module, renders into #devoteesRoot, list <-> profile
    router (no URL routing), admin-only via accGuard().
+
+   The list view filters combine four ways: free-text search, the
+   derived Samaj label (devoteeSamajLabel — from committee membership,
+   not a column), a genuine Committee filter (devoteeInCommittee — any
+   committee, not just samaj-type ones), and Category (a real
+   devotees.category column — Normal/VIP/Guest/Gurudev-Bhuvaji, see
+   devotee-picker.js's DEVOTEE_CATEGORIES — filtered client-side over
+   the already-hydrated state.devotees, same as every other filter
+   here). Category and Committee can be combined with each other and
+   with Samaj/search.
    ============================================================ */
 
 if (typeof window !== 'undefined' && typeof window.t !== 'function') {
@@ -17,7 +27,7 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
   window.onLanguageChange = function () {};
 }
 
-const DEVO = { view: 'list', activeId: null, search: '', samaj: 'all' };
+const DEVO = { view: 'list', activeId: null, search: '', samaj: 'all', committee: 'all', category: 'all' };
 
 function devoToday() { return (typeof MG !== 'undefined' && MG.today) ? MG.today : '2026-09-06'; }
 function devoToast(m) { if (typeof showToast === 'function') showToast(m); }
@@ -37,6 +47,16 @@ function devoTime(t) {
   if (!t) return '';
   return (typeof fmtTime === 'function') ? fmtTime(t) : String(t);
 }
+/* VIP / Gurudev-Bhuvaji stand out (maroon); Guest is a neutral pending
+   badge; Normal is deliberately unbadged — it's the default, not a
+   distinction worth calling out on every single row. */
+function devoCategoryBadge(cat) {
+  const c = cat || 'normal';
+  const label = (typeof devoteeCategoryLabel === 'function') ? devoteeCategoryLabel(c) : c;
+  if (c === 'vip' || c === 'gurudev_bhuvaji') return '<span class="badge badge-maroon">' + esc(label) + '</span>';
+  if (c === 'guest') return '<span class="badge badge-pending">' + esc(label) + '</span>';
+  return '<span class="mg-muted-xs">' + esc(label) + '</span>';
+}
 
 /* ============================================================
    AGGREGATOR — devoteeProfile(devoteeId)
@@ -51,6 +71,7 @@ function devoteeProfile(devoteeId) {
   const mobile = devoDigits(dev.mobile || dev.phone || (per && per.mobile));
   const city = dev.city || (per && per.city) || '';
   const samaj = devoteeSamajLabel(id);   // derived from the Samaj-type committee
+  const category = dev.category || 'normal';   // a real devotees.category column, not derived
   const status = (dev.status || 'active').toLowerCase() === 'inactive' ? 'inactive' : 'active';
   const now = devoToday();
 
@@ -191,7 +212,7 @@ function devoteeProfile(devoteeId) {
   };
 
   return {
-    id, name, mobile, city, samaj, status,
+    id, name, mobile, city, samaj, category, status,
     committees, committeeLead, teams, teamLead, volunteerTeams,
     visits, sevaPoojas, coordPoojas, guestAppearances, events, donations, counts
   };
@@ -332,6 +353,30 @@ function devoteeSamajOptions() {
   return Object.keys(set).sort();
 }
 
+/* Category is a real devotees.category column (migration 015) — a fixed
+   4-value classification, unlike Samaj above which is derived from
+   committee membership. List shared with devotee-picker.js's Add/Edit form
+   (window.DEVOTEE_CATEGORIES) so the filter dropdown and the form option
+   list can never drift apart. */
+function devoteeCategoryFilterOptions() {
+  const cats = (typeof window !== 'undefined' && window.DEVOTEE_CATEGORIES) || ['normal', 'vip', 'guest', 'gurudev_bhuvaji'];
+  return cats.map(c => [c, (typeof devoteeCategoryLabel === 'function') ? devoteeCategoryLabel(c) : c]);
+}
+
+/* Committee filter — every committee (not just samaj-type ones), unlike the
+   derived Samaj filter above. */
+function devoteeCommitteeFilterOptions() {
+  if (typeof CMT === 'undefined' || !Array.isArray(CMT.committees)) return [];
+  return CMT.committees.map(c => ({ id: c.code || c.id, label: devoData(c.name) }));
+}
+function devoteeInCommittee(devId, committeeCode) {
+  if (typeof committeesOfDevotee !== 'function') return false;
+  return committeesOfDevotee(devId).some(function (x) {
+    const c = x.committee;
+    return c && (c.code || c.id) === committeeCode;
+  });
+}
+
 /* ------------------------------------------------------------
    Committee membership from the devotee form
    ------------------------------------------------------------
@@ -427,6 +472,8 @@ function devoteesSetSearch(v) {
   if (el) { el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} }
 }
 function devoteesSetSamaj(v) { DEVO.samaj = v; renderDevotees(); }
+function devoteesSetCommittee(v) { DEVO.committee = v; renderDevotees(); }
+function devoteesSetCategory(v) { DEVO.category = v; renderDevotees(); }
 
 function devoteeListView() {
   const q = (DEVO.search || '').toLowerCase().trim();
@@ -434,6 +481,8 @@ function devoteeListView() {
   const list = all.filter(function (d) {
     const samaj = devoteeSamajLabel(d.id);
     if (DEVO.samaj !== 'all' && samaj !== DEVO.samaj) return false;
+    if (DEVO.committee !== 'all' && !devoteeInCommittee(d.id, DEVO.committee)) return false;
+    if (DEVO.category !== 'all' && (d.category || 'normal') !== DEVO.category) return false;
     if (!q) return true;
     return [d.name, d.mobile, d.phone, d.city, samaj].join(' ').toLowerCase().indexOf(q) !== -1;
   });
@@ -449,6 +498,12 @@ function devoteeListView() {
   const samajOpts = ['<option value="all">' + window.t('all', 'All') + ' ' + window.t('dv_samaj', 'Samaj') + '</option>']
     .concat(devoteeSamajOptions().map(n =>
       '<option value="' + esc(n) + '"' + (DEVO.samaj === n ? ' selected' : '') + '>' + esc(devoData(n)) + '</option>')).join('');
+  const committeeOpts = ['<option value="all">' + window.t('dv_committee_all', 'All Committees') + '</option>']
+    .concat(devoteeCommitteeFilterOptions().map(c =>
+      '<option value="' + esc(c.id) + '"' + (DEVO.committee === c.id ? ' selected' : '') + '>' + esc(c.label) + '</option>')).join('');
+  const categoryOpts = ['<option value="all">' + window.t('dv_category_all', 'All Categories') + '</option>']
+    .concat(devoteeCategoryFilterOptions().map(c =>
+      '<option value="' + esc(c[0]) + '"' + (DEVO.category === c[0] ? ' selected' : '') + '>' + esc(c[1]) + '</option>')).join('');
 
   const rows = list.length ? list.map(function (d) {
     const p = devoteeProfile(d.id);
@@ -462,6 +517,7 @@ function devoteeListView() {
       '<td>' + esc(d.mobile || d.phone || '—') + '</td>' +
       '<td>' + esc(d.city || '—') + '</td>' +
       '<td>' + (function () { const s = devoteeSamajLabel(d.id); return s ? '<span class="badge badge-maroon">' + esc(devoData(s)) + '</span>' : '<span class="mg-muted-xs">—</span>'; })() + '</td>' +
+      '<td>' + devoCategoryBadge(d.category) + '</td>' +
       '<td>' + seq(p.counts.committees) + '</td>' +
       '<td>' + seq(p.counts.teams) + '</td>' +
       '<td>' + split(p.counts.sevaUpcoming, p.counts.sevaPast) + '</td>' +
@@ -476,7 +532,7 @@ function devoteeListView() {
         '<button class="btn btn-outline mg-btn-xs" onclick="openDevotee(\'' + jsq(d.id) + '\')">' + window.t('view', 'Open') + '</button>' +
         '<button class="btn btn-outline mg-btn-xs" onclick="openDevoteeEdit(\'' + jsq(d.id) + '\')">' + window.t('edit', 'Edit') + '</button>' +
       '</div></td></tr>';
-  }).join('') : '<tr><td colspan="14" class="mg-empty-cell">' + window.t('dv_none', 'No devotees match.') + '</td></tr>';
+  }).join('') : '<tr><td colspan="15" class="mg-empty-cell">' + window.t('dv_none', 'No devotees match.') + '</td></tr>';
 
   return '' +
   '<div class="flex justify-between items-center mg-page-head">' +
@@ -500,16 +556,19 @@ function devoteeListView() {
       '<div class="flex gap-2" style="flex-wrap:wrap;">' +
         (typeof exportBar === 'function' ? exportBar('mod-devotees') : '') +
         '<select class="form-select mg-inline-select" onchange="devoteesSetSamaj(this.value)">' + samajOpts + '</select>' +
+        '<select class="form-select mg-inline-select" onchange="devoteesSetCommittee(this.value)">' + committeeOpts + '</select>' +
+        '<select class="form-select mg-inline-select" onchange="devoteesSetCategory(this.value)">' + categoryOpts + '</select>' +
         '<input id="dvSearch" class="form-input mg-inline-search" placeholder="' + window.t('search', 'Search') + '…" value="' + esc(DEVO.search) + '" oninput="devoteesSetSearch(this.value)">' +
       '</div>' +
     '</div>' +
     '<div class="card-body" style="padding:0;">' +
-      '<div class="mg-table-scroll"><table class="custom-table" style="min-width:1180px;">' +
+      '<div class="mg-table-scroll"><table class="custom-table" style="min-width:1280px;">' +
         '<thead><tr>' +
           '<th>' + window.t('dv_col_devotee', 'Devotee') + '</th>' +
           '<th>' + window.t('mobile', 'Mobile') + '</th>' +
           '<th>' + window.t('city', 'City') + '</th>' +
           '<th>' + window.t('dv_samaj', 'Samaj') + '</th>' +
+          '<th>' + window.t('dv_category', 'Category') + '</th>' +
           '<th>' + window.t('dv_committees', 'Committees') + '</th>' +
           '<th>' + window.t('dv_teams', 'Teams') + '</th>' +
           '<th>' + window.t('dv_k_seva', 'Sevarthi') + '</th>' +
@@ -556,11 +615,13 @@ function devoteeProfileView(id) {
   ];
   if (p.committeeLead.length) badges.push('<span class="badge badge-maroon">' + window.t('dv_cmte_lead', 'Committee Lead') + '</span>');
   if (p.teamLead.length) badges.push('<span class="badge badge-maroon">' + window.t('dv_team_lead', 'Team Lead') + '</span>');
+  if (p.category && p.category !== 'normal') badges.push(devoCategoryBadge(p.category));
 
   const grid = [
     kv(window.t('mobile', 'Mobile'), p.mobile || '—'),
     kv(window.t('city', 'City'), p.city || '—'),
     kv(window.t('dv_samaj', 'Samaj'), devoData(p.samaj) || '—'),
+    kv(window.t('dv_category', 'Category'), devoteeCategoryLabel(p.category)),
     kv(window.t('dv_committees', 'Committees'), p.counts.committees),
     kv(window.t('dv_teams', 'Teams'), p.counts.teams),
     kv(window.t('dv_visits', 'Visits to location'), p.visits.total),
@@ -756,6 +817,8 @@ function openDevoteeEdit(id) {
             '<option value="active"' + ((d.status || 'active').toLowerCase() !== 'inactive' ? ' selected' : '') + '>Active</option>' +
             '<option value="inactive"' + ((d.status || '').toLowerCase() === 'inactive' ? ' selected' : '') + '>Inactive</option>' +
           '</select></div>' +
+        '<div class="form-group" style="grid-column:1/-1"><label class="form-label">' + window.t('dv_category', 'Category') + '</label>' +
+          '<select class="form-select" id="dvE_category">' + window.devoteeCategoryFormOptionsHTML(d.category || 'normal') + '</select></div>' +
         devoteeCommitteeChecklist(id) +
       '</form>',
     footer:
@@ -772,13 +835,14 @@ function saveDevoteeEdit(id) {
   if (!name) { devoToast(window.t('dv_need_name', 'Full name is required.')); return; }
   if (mob && mob.length !== 10) { devoToast(window.t('dv_need_mobile', 'Mobile must be 10 digits.')); return; }
   const wantCommittees = devoteeCommitteePicked('dvEditForm');
+  const category = g('dvE_category') || 'normal';
   Object.assign(d, {
     name: name, mobile: mob, phone: mob,     // keep BOTH — templePeople() reads d.phone || d.mobile
-    city: g('dvE_city').trim(), status: g('dvE_status')
+    city: g('dvE_city').trim(), status: g('dvE_status'), category: category
   });
   try {
     if (window.API && window.API.online && typeof window.API.patch === 'function') {
-      window.API.patch('/devotees/' + id, { name: d.name, mobile: mob, city: d.city, status: d.status }).catch(function () {});
+      window.API.patch('/devotees/' + id, { name: d.name, mobile: mob, city: d.city, status: d.status, category: category }).catch(function () {});
     }
   } catch (e) {}
   // committee membership + the derived samaj label are owned by the checklist
@@ -796,7 +860,7 @@ function devoteesExport() {
   const rows = ((typeof state !== 'undefined' && Array.isArray(state.devotees)) ? state.devotees : []).map(function (d) {
     const p = devoteeProfile(d.id);
     return [
-      d.name || '', d.mobile || d.phone || '', d.city || '', p.samaj || '',
+      d.name || '', d.mobile || d.phone || '', d.city || '', p.samaj || '', devoteeCategoryPlainLabel(p.category),
       p.counts.committees, p.counts.teams, p.sevaPoojas.total, p.coordPoojas.total,
       p.volunteerTeams.count, p.guestAppearances.total, p.visits.total,
       p.donations.totalReceived, p.donations.totalPledged, (d.status || 'active')
@@ -806,7 +870,7 @@ function devoteesExport() {
     filename: 'devotees-360',
     title: window.t('dv_export_title', 'Devotees 360° — Register'),
     subtitle: window.t('dv_export_sub', 'All devotees with linked committees, teams, seva, visits and donations'),
-    columns: ['Name', 'Mobile', 'City', 'Samaj', 'Committees', 'Teams', 'Sevarthi', 'Coordinator',
+    columns: ['Name', 'Mobile', 'City', 'Samaj', 'Category', 'Committees', 'Teams', 'Sevarthi', 'Coordinator',
       'Volunteer', 'Guest', 'Visits', 'Total Received (INR)', 'Pledged (INR)', 'Status'],
     rows: rows,
     meta: ['Devotees: ' + ((state.devotees || []).length), 'As of ' + devoToday()]
@@ -832,7 +896,8 @@ function printDevoteeLedger(id) {
     subtitle: window.t('dv_ledger_sub', 'Chronological record of every temple engagement'),
     columns: ['#', window.t('date', 'Date'), window.t('dv_col_type', 'Type'), window.t('dv_col_detail', 'Detail'), window.t('status', 'Status'), window.t('dv_col_amount', 'Amount (₹)')],
     rows: rows,
-    meta: ['Devotee: ' + (dev.name || id), 'Samaj: ' + (devoteeSamajLabel(id) || '—'), 'As of ' + devoToday()]
+    meta: ['Devotee: ' + (dev.name || id), 'Samaj: ' + (devoteeSamajLabel(id) || '—'),
+      'Category: ' + devoteeCategoryPlainLabel(dev.category), 'As of ' + devoToday()]
   });
 }
 

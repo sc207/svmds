@@ -30,6 +30,15 @@ router.get('/', async (req, res, next) => {
       args.push(like, like, like, like);
     }
     if (req.query.status) { where.push('d.status = ?'); args.push(req.query.status); }
+    if (req.query.category) { where.push('d.category = ?'); args.push(String(req.query.category).toLowerCase()); }
+    if (req.query.committeeId) {
+      where.push(`d.id IN (
+        SELECT cm.devotee_id FROM committee_members cm
+        JOIN committees c ON c.id = cm.committee_id
+        WHERE (c.id = ? OR c.code = ?) AND cm.is_deleted = 0 AND cm.devotee_id IS NOT NULL
+      )`);
+      args.push(parseInt(req.query.committeeId, 10) || -1, req.query.committeeId);
+    }
 
     let sql = LIST_SQL + (where.length ? ' AND ' + where.join(' AND ') : '') + ' ORDER BY d.name';
     const limit = Math.min(parseInt(req.query.limit, 10) || 500, 2000);
@@ -63,7 +72,13 @@ function normStatus(s) {
   return String(s || '').toLowerCase() === 'inactive' ? 'inactive' : 'active';
 }
 
-/* POST /   { name, mobile, city?, state?, status?, notes? }
+const CATEGORIES = ['normal', 'vip', 'guest', 'gurudev_bhuvaji'];
+function normCategory(c) {
+  const v = String(c || '').toLowerCase().trim();
+  return CATEGORIES.includes(v) ? v : 'normal';
+}
+
+/* POST /   { name, mobile, city?, state?, status?, category?, notes? }
    Dedupe by mobile; when no mobile, dedupe by lower(name)+lower(city). */
 router.post('/', async (req, res, next) => {
   try {
@@ -99,8 +114,11 @@ router.post('/', async (req, res, next) => {
           ? await queryOne(`SELECT * FROM devotees WHERE lower(trim(name)) = lower(trim(?)) AND lower(trim(city)) = lower(trim(?)) AND is_deleted = 1 LIMIT 1`, [name, city])
           : null);
     if (dead) {
-      await run(`UPDATE devotees SET is_deleted = 0, status = ?, updated_at = datetime('now') WHERE id = ?`,
-        [normStatus(req.body.status), dead.id]);
+      // category is preserved unless the caller explicitly sends a new one —
+      // unlike status, reviving a person shouldn't silently reset their tier.
+      const revivedCategory = req.body.category !== undefined ? normCategory(req.body.category) : dead.category;
+      await run(`UPDATE devotees SET is_deleted = 0, status = ?, category = ?, updated_at = datetime('now') WHERE id = ?`,
+        [normStatus(req.body.status), revivedCategory, dead.id]);
       const row = await findByIdOrCode(dead.id);
       return res.status(200).json({ ...mapDevotee(row), _revived: true });
     }
@@ -109,10 +127,10 @@ router.post('/', async (req, res, next) => {
     let newId;
     try {
       const r = await run(
-        `INSERT INTO devotees (code, name, mobile, city, state, status, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO devotees (code, name, mobile, city, state, status, category, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [code, name, mobile, city, req.body.state || 'Gujarat',
-         normStatus(req.body.status), req.body.notes || '']
+         normStatus(req.body.status), normCategory(req.body.category), req.body.notes || '']
       );
       newId = r.lastInsertRowid;
     } catch (e) {
@@ -153,6 +171,7 @@ router.patch('/:id', async (req, res, next) => {
       sets.push('mobile = ?'); args.push(m);
     }
     if (req.body.status !== undefined) { sets.push('status = ?'); args.push(normStatus(req.body.status)); }
+    if (req.body.category !== undefined) { sets.push('category = ?'); args.push(normCategory(req.body.category)); }
     if (!sets.length) return res.json(mapDevotee(row));
 
     sets.push(`updated_at = datetime('now')`);

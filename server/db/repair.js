@@ -21,6 +21,16 @@ const digits = (v) => String(v == null ? '' : v).replace(/\D/g, '');
 const norm = (s) => String(s == null ? '' : s).trim().toLowerCase();
 const today = () => new Date().toISOString().slice(0, 10);
 
+/* repairDatabase() runs as part of migration 008 itself — on a fresh DB
+   that's long before migration 015 adds devotees.category, so any
+   reference to that column here must tolerate not existing yet. */
+async function columnExists(table, col) {
+  try {
+    const cols = await queryAll(`PRAGMA table_info(${table})`);
+    return cols.some((c) => c.name === col);
+  } catch (e) { return false; }
+}
+
 /* -- FK columns that point at devotees.id (loser -> canonical repoint) -- */
 const DEVOTEE_FKS = [
   ['users', 'devotee_id'],
@@ -79,8 +89,9 @@ async function repairDatabase({ dryRun = false } = {}) {
 
   // ---------- Step 1: merge duplicate devotees ----------
   {
+    const hasCategory = await columnExists('devotees', 'category');
     const rows = await queryAll(
-      `SELECT id, code, name, mobile, city, state FROM devotees WHERE is_deleted = 0`
+      `SELECT id, code, name, mobile, city, state${hasCategory ? ', category' : ''} FROM devotees WHERE is_deleted = 0`
     );
     const groups = new Map();
     for (const d of rows) {
@@ -119,12 +130,19 @@ async function repairDatabase({ dryRun = false } = {}) {
       }
       const losers = members.filter(m => m.id !== canonical.id);
 
-      // backfill canonical blanks from the best loser value
+      // backfill canonical blanks from the best loser value — category isn't
+      // "blank" the way the others are (it's never empty, just possibly still
+      // at the 'normal' default), so it gets the same non-default preference
+      // as state's 'Gujarat' default rather than a plain falsy check.
       const fill = {};
       for (const f of ['name', 'mobile', 'city', 'state']) {
         if (canonical[f] && !(f === 'state' && canonical[f] === 'Gujarat')) continue;
         const donor = losers.find(l => l[f] && !(f === 'state' && l[f] === 'Gujarat'));
         if (donor) fill[f] = donor[f];
+      }
+      if (hasCategory && canonical.category === 'normal') {
+        const catDonor = losers.find(l => l.category && l.category !== 'normal');
+        if (catDonor) fill.category = catDonor.category;
       }
       if (Object.keys(fill).length) {
         const cols = Object.keys(fill);

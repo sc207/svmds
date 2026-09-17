@@ -289,14 +289,38 @@
       '<input class="form-input" name="' + nm + '" value="' + val + '" placeholder="' + esc(fld.placeholder || '') + '"></div>';
   }
 
+  /* Category classification — Normal / VIP / Guest / Gurudev-Bhuvaji. A real
+     devotees.category column (server/db/migrations/015), not a derived label
+     like samaj. Defined once here (loaded before devotees.js, pooja-ui.js,
+     invite-ui.js) so every surface that needs the option list or a display
+     label shares the same source — never redeclare this list elsewhere.
+     Per "data entry stays English": the Add/Edit form's <option> text is the
+     plain hardcoded label (devoteeCategoryPlainLabel / …FormOptionsHTML);
+     filters, table columns and badges use the translated one (…Label). */
+  window.DEVOTEE_CATEGORIES = ['normal', 'vip', 'guest', 'gurudev_bhuvaji'];
+  var DV_CAT_LABELS = { normal: 'Normal', vip: 'VIP', guest: 'Guest', gurudev_bhuvaji: 'Gurudev/Bhuvaji' };
+  window.devoteeCategoryPlainLabel = function (cat) { return DV_CAT_LABELS[cat] || 'Normal'; };
+  window.devoteeCategoryLabel = function (cat) {
+    return (typeof window.t === 'function')
+      ? window.t('dv_cat_' + (cat || 'normal'), window.devoteeCategoryPlainLabel(cat))
+      : window.devoteeCategoryPlainLabel(cat);
+  };
+  window.devoteeCategoryFormOptionsHTML = function (selected) {
+    var sel = selected || 'normal';
+    return window.DEVOTEE_CATEGORIES.map(function (c) {
+      return '<option value="' + c + '"' + (c === sel ? ' selected' : '') + '>' + window.devoteeCategoryPlainLabel(c) + '</option>';
+    }).join('');
+  };
+
   /* The reusable "Add a new devotee" sheet.
        opts = { title?, prefillName?,
                 extraFields?: [ {name,label,type,options,placeholder,value} ],
                 onSaved(devotee, extras) }
-     Identity fields (name / contact / city / state / samaj) go to the shared
-     devotees record; extraFields are role/context inputs the caller attaches
-     to the link (committee-member role, sevarthi notes, guest title, …).
-     Dedupes by mobile; persists to /api/devotees when online. */
+     Identity fields (name / contact / city / state / samaj / category) go to
+     the shared devotees record; extraFields are role/context inputs the
+     caller attaches to the link (committee-member role, sevarthi notes,
+     guest title, …). Dedupes by mobile; persists to /api/devotees when
+     online. */
   window.openDevoteeSheet = function (opts) {
     opts = opts || {};
     var pf = String(opts.prefillName || '').trim();
@@ -325,6 +349,8 @@
             '<div id="dpHint" class="mg-muted-xs" style="margin-top:.3rem"></div></div>' +
           '<div class="form-group"><label class="form-label">City</label><input class="form-input" name="city"></div>' +
           '<div class="form-group"><label class="form-label">State</label><input class="form-input" name="state" value="Gujarat"></div>' +
+          '<div class="form-group" style="grid-column:1/-1"><label class="form-label">' + esc(window.t('dv_category', 'Category')) + '</label>' +
+            '<select class="form-select" name="category">' + window.devoteeCategoryFormOptionsHTML(opts.category) + '</select></div>' +
           cmtPickerHTML +
           extraHTML +
         '</form>',
@@ -359,6 +385,7 @@
     if (mobile.length !== 10) { toast('Contact number must be 10 digits'); return; }
     var city = f.city.value.trim();
     var st = f.state.value.trim() || 'Gujarat';   // NOT `state` — that's the global store
+    var cat = (f.elements['category'] && f.elements['category'].value) || 'normal';
     var extras = {};
     (window.__dpExtra || []).forEach(function (fld) {
       var el = f.elements['x_' + fld.name];
@@ -378,22 +405,22 @@
 
     var online = !!(window.API && window.API.online);
     if (online) {
-      window.API.post('/devotees', { name: name, mobile: mobile, city: city, state: st })
+      window.API.post('/devotees', { name: name, mobile: mobile, city: city, state: st, category: cat })
         .then(function (d) {
-          pushLocal(d.id || d.code, name, mobile, city);
-          finish({ id: d.id || d.code, name: name, mobile: mobile, city: city });
+          pushLocal(d.id || d.code, name, mobile, city, d.category || cat);
+          finish({ id: d.id || d.code, name: name, mobile: mobile, city: city, category: d.category || cat });
         })
         .catch(function (e) { toast((e && e.message) || 'Could not save'); });
     } else {
       var id = 'DEV-' + Date.now().toString().slice(-6);
-      pushLocal(id, name, mobile, city);
-      finish({ id: id, name: name, mobile: mobile, city: city });
+      pushLocal(id, name, mobile, city, cat);
+      finish({ id: id, name: name, mobile: mobile, city: city, category: cat });
     }
 
-    function pushLocal(id, nm, mob, ct) {
+    function pushLocal(id, nm, mob, ct, category) {
       if (typeof state === 'undefined' || !Array.isArray(state.devotees)) return;
       if (!state.devotees.some(function (x) { return digits(x.phone || x.mobile) === digits(mob); })) {
-        state.devotees.unshift({ id: id, name: nm, phone: mob, mobile: mob, city: ct, status: 'active', visits: 0 });
+        state.devotees.unshift({ id: id, name: nm, phone: mob, mobile: mob, city: ct, status: 'active', category: category || 'normal', visits: 0 });
       }
     }
     function finish(dev) {

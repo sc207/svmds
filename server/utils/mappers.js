@@ -60,6 +60,7 @@ function mapDevotee(row) {
     city: row.city || '',
     state: row.state || 'Gujarat',
     status: row.status === 'inactive' ? 'Inactive' : 'Active',
+    category: row.category || 'normal',
     notes: row.notes || '',
     visits: row.visit_count != null ? Number(row.visit_count) : 0,
     createdAt: row.created_at,

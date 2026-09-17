@@ -756,14 +756,44 @@ function invAudienceOptions() {
     count: (typeof cmtMembersOf === 'function' ? cmtMembersOf(c.id).length : 0)
   }));
 }
-/** Recipient rows (name + place + mobile) for a chosen audience committee. */
-function invAudienceRecipients(audienceId) {
-  if (!audienceId || typeof cmtMembersOf !== 'function') return [];
-  return cmtMembersOf(audienceId).map(m => ({
-    name: (m.firstName + ' ' + m.lastName).trim(),
-    place: [m.city, m.state].filter(Boolean).map(x => (typeof tData === 'function' ? tData(x) : x)).join(', '),
-    mobile: m.mobile || ''
-  }));
+/** Category options for the invitation audience filter (devotee-picker.js's
+    shared DEVOTEE_CATEGORIES list). */
+function invCategoryOptions() {
+  const cats = (typeof window !== 'undefined' && window.DEVOTEE_CATEGORIES) || ['normal', 'vip', 'guest', 'gurudev_bhuvaji'];
+  return cats.map(c => [c, (typeof devoteeCategoryLabel === 'function') ? devoteeCategoryLabel(c) : c]);
+}
+/** Recipient rows (name + place + mobile) for a chosen audience committee
+    and/or devotee category — combinable, either alone, or neither (empty).
+    Category is a real devotees.category column (migration 015); committee_
+    members rows don't carry it, so a committee audience is filtered by
+    resolving each member back to their devotee record via devoteeById();
+    category alone (no committee) reads state.devotees directly — the
+    temple-wide "every VIP, whichever committee (or none)" case. */
+function invAudienceRecipients(audienceId, category) {
+  const cat = category || '';
+  if (audienceId && typeof cmtMembersOf !== 'function') return [];
+  if (audienceId) {
+    let rows = cmtMembersOf(audienceId);
+    if (cat) {
+      rows = rows.filter(m => {
+        const dev = (typeof devoteeById === 'function') ? devoteeById(m.devoteeId) : null;
+        return (dev ? (dev.category || 'normal') : 'normal') === cat;
+      });
+    }
+    return rows.map(m => ({
+      name: (m.firstName + ' ' + m.lastName).trim(),
+      place: [m.city, m.state].filter(Boolean).map(x => (typeof tData === 'function' ? tData(x) : x)).join(', '),
+      mobile: m.mobile || ''
+    }));
+  }
+  if (cat && typeof state !== 'undefined' && Array.isArray(state.devotees)) {
+    return state.devotees.filter(d => (d.category || 'normal') === cat).map(d => ({
+      name: d.name || '',
+      place: [d.city, d.state].filter(Boolean).map(x => (typeof tData === 'function' ? tData(x) : x)).join(', '),
+      mobile: d.mobile || d.phone || ''
+    }));
+  }
+  return [];
 }
 
 function panePoojaInvitation(p) {
@@ -777,7 +807,8 @@ function panePoojaInvitation(p) {
   const accentOpts = POOJA.accentPalette.map(a =>
     `<option value="${a.hex}" ${a.hex === inv.accent ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
   const audOpts = invAudienceOptions();
-  const initRcpts = inv.audience ? invAudienceRecipients(inv.audience) : [];
+  const catOpts = invCategoryOptions();
+  const initRcpts = (inv.audience || inv.audienceCategory) ? invAudienceRecipients(inv.audience, inv.audienceCategory) : [];
   const audCount = initRcpts.length;
 
   return `
@@ -822,6 +853,14 @@ function panePoojaInvitation(p) {
             <span class="mg-muted-xs">${window.t('pj_inv_aud_hint', 'Pick a samaj / committee to generate a personalised card (name, city, state) for every member — one page each in the PDF.')}</span>
           </div>
           <div class="form-group">
+            <label class="form-label" for="invAudienceCategory">${window.t('pj_inv_aud_category', 'Category')}</label>
+            <select class="form-select" id="invAudienceCategory" onchange="updateInvitationPreview()">
+              <option value="">${window.t('pj_inv_aud_category_all', 'All categories')}</option>
+              ${catOpts.map(o => `<option value="${o[0]}" ${o[0] === (inv.audienceCategory || '') ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}
+            </select>
+            <span class="mg-muted-xs">${window.t('pj_inv_aud_cat_hint', 'Narrow the audience above to one devotee category — combine with a committee (e.g. "VIP members of Rabari Samaj Committee"), or leave the committee as Open/public and pick just a category to invite every matching devotee temple-wide.')}</span>
+          </div>
+          <div class="form-group">
             <label class="form-label" for="invAccent">${window.t('pj_inv_accent', 'Accent Colour')}</label>
             <select class="form-select" id="invAccent" onchange="updateInvitationPreview()">${accentOpts}</select>
           </div>
@@ -864,6 +903,7 @@ function readInvitationOpts(p) {
     accent: g('invAccent').value,
     lang: g('invLangSel') ? g('invLangSel').value : (p.invitation && p.invitation.lang) || '',
     audience: g('invAudience') ? g('invAudience').value : (p.invitation && p.invitation.audience) || '',
+    audienceCategory: g('invAudienceCategory') ? g('invAudienceCategory').value : (p.invitation && p.invitation.audienceCategory) || '',
     headline: g('invHeadline').value,
     inviteLine: g('invLine').value,
     blessing: g('invBlessing').value,
@@ -889,7 +929,7 @@ function updateInvitationPreview() {
   const box = document.getElementById('pjInvitePreview');
   if (!p || !box) return;
   const opts = readInvitationOpts(p);
-  const rcpts = invAudienceRecipients(opts.audience);
+  const rcpts = invAudienceRecipients(opts.audience, opts.audienceCategory);
   box.innerHTML = invitationPreviewHTML(p, opts, rcpts);
   const zipBtn = document.getElementById('pjInvZipBtn');
   if (zipBtn) zipBtn.hidden = !rcpts.length;
@@ -920,7 +960,7 @@ function previewInvitation(id) {
   const p = poojaById(id);
   if (!p) return;
   const opts = readInvitationOpts(p);
-  const rcpts = invAudienceRecipients(opts && opts.audience);
+  const rcpts = invAudienceRecipients(opts && opts.audience, opts && opts.audienceCategory);
   const note = rcpts.length ? `<div class="pj-invite-batch-note">${rcpts.length} ${window.t('cmt_members', 'members')} — ${window.t('pj_inv_aud_pdf', 'Print / Save PDF generates all')} ${rcpts.length} (${window.t('pj_inv_aud_onepage', 'one invitation per page')})</div>` : '';
   openSheet({
     title: `Invitation — ${p.name}`,
@@ -941,10 +981,17 @@ function invitationCardSet(id) {
   const p = poojaById(id);
   if (!p) return null;
   const opts = (POOJA.activePoojaId === id) ? readInvitationOpts(p) : Object.assign({}, p.invitation);
-  const rcpts = invAudienceRecipients(opts && opts.audience);
+  const rcpts = invAudienceRecipients(opts && opts.audience, opts && opts.audienceCategory);
   if (rcpts.length) {
-    const cmt = (typeof cmtById === 'function') ? cmtById(opts.audience) : null;
-    const cmtName = cmt ? (cmt.name || cmt.samaj || 'Committee') : 'Committee';
+    // committee, category, or both — name whichever is set (e.g.
+    // "VIP — Rabari Samaj Committee") instead of always "Committee" even
+    // for a temple-wide category-only audience.
+    const cmt = (opts.audience && typeof cmtById === 'function') ? cmtById(opts.audience) : null;
+    const cmtOnlyName = cmt ? (cmt.name || cmt.samaj || 'Committee') : '';
+    const catName = opts.audienceCategory
+      ? ((typeof devoteeCategoryLabel === 'function') ? devoteeCategoryLabel(opts.audienceCategory) : opts.audienceCategory)
+      : '';
+    const cmtName = [catName, cmtOnlyName].filter(Boolean).join(' — ') || 'Committee';
     const items = rcpts.map(r => ({ markup: invitationMarkup(p, Object.assign({}, opts, { recipient: r })), recipient: r }));
     return {
       cards: items.map(x => x.markup), items,

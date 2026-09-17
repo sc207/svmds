@@ -24,7 +24,7 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
 var CIV = {
   selectedIds: [],
   search: '',
-  opts: { template: 'royal', accent: '#6B1F2A', lang: '', headline: '', inviteLine: '', blessing: '', audience: '', showTime: true }
+  opts: { template: 'royal', accent: '#6B1F2A', lang: '', headline: '', inviteLine: '', blessing: '', audience: '', audienceCategory: '', showTime: true }
 };
 
 /* ---- pooja selection ---- */
@@ -118,6 +118,7 @@ function readCombinedInvitationOpts() {
     accent: g('civAccent').value,
     lang: g('civLangSel') ? g('civLangSel').value : '',
     audience: g('civAudience') ? g('civAudience').value : '',
+    audienceCategory: g('civAudienceCategory') ? g('civAudienceCategory').value : '',
     headline: g('civHeadline').value,
     inviteLine: g('civLine').value,
     blessing: g('civBlessing').value,
@@ -258,7 +259,7 @@ function combinedInvitationCardSet() {
   var poojas = selectedPoojasSorted();
   if (!poojas.length) return null;
   var opts = readCombinedInvitationOpts();
-  var rcpts = invAudienceRecipients(opts.audience);
+  var rcpts = invAudienceRecipients(opts.audience, opts.audienceCategory);
   var baseTitle = window.t('civ_title', 'Combined Invitation');
   var chunks = civChunk(poojas, civCapacity(!!rcpts.length, opts.showTime));
   var pagesPerRecipient = chunks.length;
@@ -270,8 +271,15 @@ function combinedInvitationCardSet() {
   }
 
   if (rcpts.length) {
-    var cmt = (typeof cmtById === 'function') ? cmtById(opts.audience) : null;
-    var cmtName = cmt ? (cmt.name || cmt.samaj || 'Committee') : 'Committee';
+    // committee, category, or both — build a label naming whichever is set
+    // (e.g. "VIP — Rabari Samaj Committee") instead of always saying
+    // "Committee" even for a temple-wide category-only audience.
+    var cmt = (opts.audience && typeof cmtById === 'function') ? cmtById(opts.audience) : null;
+    var cmtOnlyName = cmt ? (cmt.name || cmt.samaj || 'Committee') : '';
+    var catName = opts.audienceCategory
+      ? ((typeof devoteeCategoryLabel === 'function') ? devoteeCategoryLabel(opts.audienceCategory) : opts.audienceCategory)
+      : '';
+    var cmtName = [catName, cmtOnlyName].filter(Boolean).join(' — ') || 'Committee';
     var items = rcpts.map(function (r) {
       var markups = chunks.map(function (chunk, i) { return pageMarkup(chunk, i, r); });
       return { markups: markups, recipient: r };
@@ -403,6 +411,7 @@ function renderInvitePage() {
     return '<option value="' + a.hex + '" ' + (a.hex === CIV.opts.accent ? 'selected' : '') + '>' + esc(a.name) + '</option>';
   }).join('');
   var audOpts = invAudienceOptions();
+  var catOpts = invCategoryOptions();
   var L0 = invLang(CIV.opts);
 
   root.innerHTML = `
@@ -457,6 +466,14 @@ function renderInvitePage() {
                 '</optgroup>') : ''}
             </select>
             <span class="mg-muted-xs">${window.t('pj_inv_aud_hint', 'Pick a samaj / committee to generate a personalised card (name, city, state) for every member — one page each in the PDF.')}</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="civAudienceCategory">${window.t('pj_inv_aud_category', 'Category')}</label>
+            <select class="form-select" id="civAudienceCategory" onchange="updateCombinedInvitationPreview()">
+              <option value="">${window.t('pj_inv_aud_category_all', 'All categories')}</option>
+              ${catOpts.map(function (o) { return '<option value="' + o[0] + '" ' + (o[0] === CIV.opts.audienceCategory ? 'selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('')}
+            </select>
+            <span class="mg-muted-xs">${window.t('pj_inv_aud_cat_hint', 'Narrow the audience above to one devotee category — combine with a committee (e.g. "VIP members of Rabari Samaj Committee"), or leave the committee as Open/public and pick just a category to invite every matching devotee temple-wide.')}</span>
           </div>
           <div class="form-group">
             <label class="mg-check-inline">

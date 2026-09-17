@@ -66,7 +66,7 @@
         var mob = d.mobile || d.phone || '';
         return { id: d.code || d.id, rowId: d.rowId, code: d.code || d.id, name: d.name,
                  phone: mob, mobile: mob, city: d.city, status: d.status,
-                 visits: d.visits || 0 };
+                 category: d.category || 'normal', visits: d.visits || 0 };
       }));
       if (typeof renderDevotees === 'function') renderDevotees();
       log('devotees: ' + state.devotees.length);
