@@ -2608,6 +2608,15 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 }
 
 /* --- Invitation designer layout --- */
+/* Combined Invitation page (invite-ui.js) — pooja checklist + the
+   pj-invite-controls designer side by side; collapses with it below. */
+.civ-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
 .pj-invite-controls {
   display: grid;
   grid-template-columns: minmax(340px, 400px) 1fr;
@@ -2806,6 +2815,7 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 @media (max-width: 900px) {
   .pj-invite-controls { grid-template-columns: 1fr; }
   .pj-invite-stage { position: static; }
+  .civ-layout { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
   .pj-session-row { grid-template-columns: 1fr 1fr; }

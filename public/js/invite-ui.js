@@ -275,7 +275,7 @@ function renderInvitePage() {
     </div>
   </div>
 
-  <div style="display:grid;grid-template-columns:320px 1fr;gap:1.25rem;align-items:start;">
+  <div class="civ-layout">
     <div class="card">
       <div class="card-body">
         <h3 class="mg-pane-title">${window.t('civ_pick_poojas', 'Select Poojas')}</h3>
