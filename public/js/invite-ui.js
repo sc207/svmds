@@ -130,7 +130,38 @@ function readCombinedInvitationOpts() {
    multi-session pooja shows a first–last date range (matching
    dateRangeText()'s style) so a card with several poojas stays a compact
    programme overview instead of an itemized per-session list — full
-   session detail is what the per-pooja Invitation tab is for. ---- */
+   session detail is what the per-pooja Invitation tab is for.
+
+   Sized as a proper A4 page (`pj-invite--a4`, styles.css) rather than the
+   per-pooja card's A5 — a programme listing several/many poojas needs real
+   page room instead of being force-shrunk into an A5 box on export (that
+   used to make the exported card unreadably cramped, or silently clip
+   poojas past what an A5 box could hold). Callers chunk the selection into
+   CIV_A4_ROWS_PER_PAGE-sized groups (civChunk) so a long selection becomes
+   several clean A4 pages instead of one overflowing card — `opts.pageLabel`
+   ('2 / 3') is stamped on continuation pages when there's more than one. ---- */
+var CIV_A4_ROWS_PER_PAGE = 8;
+
+function civChunk(arr, n) {
+  var out = [];
+  for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out.length ? out : [[]];
+}
+
+/* Compact date for the programme list ("Tue, 2 Feb 2027") — invDateLoc()
+   (pooja-ui.js) spells the weekday/month out in full, which reads fine for
+   a single-pooja card's one date but wraps every row of a long programme
+   list onto two lines. Left as its own local helper so pooja-ui.js and the
+   per-pooja invitation (still using the long form) stay untouched. */
+function civDateLoc(iso, lang) {
+  if (!iso) return '';
+  var p = iso.split('-').map(Number);
+  var d = new Date(p[0], p[1] - 1, p[2]);
+  var loc = lang === 'gu' ? 'gu-IN' : lang === 'hi' ? 'hi-IN' : 'en-GB';
+  try { return d.toLocaleDateString(loc, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); }
+  catch (e) { return iso; }
+}
+
 function combinedInvitationMarkup(poojas, opts) {
   opts = Object.assign({ template: 'royal', accent: '#6B1F2A', headline: '', inviteLine: '', blessing: '', lang: '' }, opts || {});
   var L = invLang(opts);
@@ -139,8 +170,8 @@ function combinedInvitationMarkup(poojas, opts) {
     var first = sess[0], last = sess[sess.length - 1];
     var multi = p.scheduleMode === 'multi' && sess.length > 1;
     var dateTxt = !first ? ivt(L, 'tba')
-      : multi ? (invDateLoc(first.date, L) + ' – ' + invDateLoc(last.date, L))
-              : invDateLoc(first.date, L);
+      : multi ? (civDateLoc(first.date, L) + ' – ' + civDateLoc(last.date, L))
+              : civDateLoc(first.date, L);
     var timeTxt = (!multi && first && first.startTime) ? (fmtTime(first.startTime) + '–' + fmtTime(first.endTime)) : '';
     var venueTxt = p.defaultVenue || (first && first.venue) || '';
     return '<div class="pj-invite-schedule-row">' +
@@ -148,13 +179,14 @@ function combinedInvitationMarkup(poojas, opts) {
       '<span>' + dateTxt + (timeTxt ? ' · ' + timeTxt : '') + (venueTxt ? ' · ' + esc(pjLoc(venueTxt)) : '') + '</span>' +
       '</div>';
   }).join('');
+  var pageNote = opts.pageLabel ? ' · ' + esc(opts.pageLabel) : '';
   var programme = '<div class="pj-invite-schedule">' +
-    '<span class="pj-invite-schedule-h">' + esc(ivt(L, 'programme')) + '</span>' +
+    '<span class="pj-invite-schedule-h">' + esc(ivt(L, 'programme')) + pageNote + '</span>' +
     (rows || '<div class="pj-invite-schedule-row"><span>' + esc(ivt(L, 'tba')) + '</span></div>') +
     '</div>';
 
   return `
-  <div class="pj-invite pj-invite--${esc(opts.template)}" style="--c:${esc(opts.accent)}" data-lang="${L}">
+  <div class="pj-invite pj-invite--${esc(opts.template)} pj-invite--a4" style="--c:${esc(opts.accent)}" data-lang="${L}">
     <span class="pj-invite-corner c-tl"></span><span class="pj-invite-corner c-tr"></span>
     <span class="pj-invite-corner c-bl"></span><span class="pj-invite-corner c-br"></span>
     <img class="pj-invite-hero" src="${(typeof assetURL === 'function') ? assetURL('assets/temple.png') : 'assets/temple.png'}" alt="" aria-hidden="true" onerror="this.style.display='none'">
@@ -178,14 +210,56 @@ function combinedInvitationMarkup(poojas, opts) {
   </div>`;
 }
 
-function combinedInvitationPreviewHTML(poojas, opts, rcpts) {
-  if (!poojas || !poojas.length) {
+/* ---- output — reuses printInvitationHTML / downloadInvitationPDF (with
+   pageSize:'A4') verbatim, exactly like invitationCardSet() does for a
+   single pooja, just built from the current multi-pooja selection chunked
+   across as many A4 pages as it takes. combinedInvitationCardSet() is the
+   single source of truth for both the live preview and every export path,
+   so what's previewed is always exactly what prints/downloads. ---- */
+function combinedInvitationCardSet() {
+  var poojas = selectedPoojasSorted();
+  if (!poojas.length) return null;
+  var opts = readCombinedInvitationOpts();
+  var rcpts = invAudienceRecipients(opts.audience);
+  var baseTitle = window.t('civ_title', 'Combined Invitation');
+  var chunks = civChunk(poojas, CIV_A4_ROWS_PER_PAGE);
+  var pagesPerRecipient = chunks.length;
+
+  function pageMarkup(chunk, pageIdx, recipient) {
+    var o = Object.assign({}, opts, recipient ? { recipient: recipient } : {});
+    if (pagesPerRecipient > 1) o.pageLabel = (pageIdx + 1) + ' / ' + pagesPerRecipient;
+    return combinedInvitationMarkup(chunk, o);
+  }
+
+  if (rcpts.length) {
+    var cmt = (typeof cmtById === 'function') ? cmtById(opts.audience) : null;
+    var cmtName = cmt ? (cmt.name || cmt.samaj || 'Committee') : 'Committee';
+    var items = rcpts.map(function (r) {
+      var markups = chunks.map(function (chunk, i) { return pageMarkup(chunk, i, r); });
+      return { markups: markups, recipient: r };
+    });
+    var cards = items.reduce(function (a, it) { return a.concat(it.markups); }, []);
+    return {
+      cards: cards, items: items,
+      title: baseTitle + ' - ' + cmtName, poojaName: baseTitle,
+      audienceCount: rcpts.length, pagesPerRecipient: pagesPerRecipient, cmtName: cmtName
+    };
+  }
+  var markups = chunks.map(function (chunk, i) { return pageMarkup(chunk, i, null); });
+  return {
+    cards: markups, items: [{ markups: markups, recipient: null }],
+    title: baseTitle, poojaName: baseTitle,
+    audienceCount: 0, pagesPerRecipient: pagesPerRecipient, cmtName: ''
+  };
+}
+
+function combinedInvitationPreviewHTML(set) {
+  if (!set) {
     return '<div class="mg-pad-note">' + esc(window.t('civ_empty_preview', 'Select one or more poojas to build the combined card.')) + '</div>';
   }
-  if (!rcpts || !rcpts.length) return combinedInvitationMarkup(poojas, opts);
-  return rcpts.map(function (r, i) {
-    return '<div class="inv-pv"><span class="inv-pv-n">' + (i + 1) + ' / ' + rcpts.length + '</span>' +
-      combinedInvitationMarkup(poojas, Object.assign({}, opts, { recipient: r })) + '</div>';
+  if (set.cards.length === 1) return set.cards[0];
+  return set.cards.map(function (markup, i) {
+    return '<div class="inv-pv"><span class="inv-pv-n">' + (i + 1) + ' / ' + set.cards.length + '</span>' + markup + '</div>';
   }).join('');
 }
 
@@ -194,59 +268,85 @@ function updateCombinedInvitationPreview() {
   if (!box) return;
   var opts = readCombinedInvitationOpts();
   CIV.opts = opts;
-  var poojas = selectedPoojasSorted();
-  var rcpts = invAudienceRecipients(opts.audience);
-  box.innerHTML = combinedInvitationPreviewHTML(poojas, opts, rcpts);
+  var set = combinedInvitationCardSet();
+  box.innerHTML = combinedInvitationPreviewHTML(set);
   var zipBtn = document.getElementById('civZipBtn');
-  if (zipBtn) zipBtn.hidden = !rcpts.length;
+  if (zipBtn) zipBtn.hidden = !set || !set.audienceCount;
   var note = document.getElementById('civBatchNote');
   if (note) {
-    note.hidden = !rcpts.length;
-    if (rcpts.length) note.textContent =
-      rcpts.length + ' ' + window.t('cmt_members', 'members') + ' — ' +
-      window.t('pj_inv_aud_pdf', 'Print / Save PDF generates all') + ' ' + rcpts.length +
-      ' (' + window.t('pj_inv_aud_onepage', 'one invitation per page') + ')';
+    var hasAudience = !!(set && set.audienceCount);
+    note.hidden = !hasAudience;
+    if (hasAudience) {
+      var pages = set.pagesPerRecipient > 1 ? ' · ' + set.pagesPerRecipient + ' ' + window.t('civ_pages_total', 'pages') + ' ' + window.t('civ_pages_each', 'each') : '';
+      note.textContent =
+        set.audienceCount + ' ' + window.t('cmt_members', 'members') + pages + ' — ' +
+        window.t('pj_inv_aud_pdf', 'Print / Save PDF generates all') + ' ' + set.cards.length +
+        ' (' + window.t('pj_inv_aud_onepage', 'one invitation per page') + ')';
+    }
   }
-}
-
-/* ---- output — reuses printInvitationHTML / downloadInvitationPDF /
-   downloadInvitationZIP verbatim, exactly like invitationCardSet() does for
-   a single pooja, just built from the current multi-pooja selection. ---- */
-function combinedInvitationCardSet() {
-  var poojas = selectedPoojasSorted();
-  if (!poojas.length) return null;
-  var opts = readCombinedInvitationOpts();
-  var rcpts = invAudienceRecipients(opts.audience);
-  var baseTitle = window.t('civ_title', 'Combined Invitation');
-  if (rcpts.length) {
-    var cmt = (typeof cmtById === 'function') ? cmtById(opts.audience) : null;
-    var cmtName = cmt ? (cmt.name || cmt.samaj || 'Committee') : 'Committee';
-    var items = rcpts.map(function (r) {
-      return { markup: combinedInvitationMarkup(poojas, Object.assign({}, opts, { recipient: r })), recipient: r };
-    });
-    return {
-      cards: items.map(function (x) { return x.markup; }), items,
-      title: baseTitle + ' - ' + cmtName, count: rcpts.length, cmtName, poojaName: baseTitle
-    };
-  }
-  var only = combinedInvitationMarkup(poojas, opts);
-  return { cards: [only], items: [{ markup: only, recipient: null }], title: baseTitle, count: 1, cmtName: '', poojaName: baseTitle };
 }
 
 function printCombinedInvitation() {
   var set = combinedInvitationCardSet();
   if (!set) { pjToast(window.t('civ_need_pooja', 'Select at least one pooja first.')); return; }
-  printInvitationHTML(set.cards, set.title);
+  printInvitationHTML(set.cards, set.title, 'A4');
 }
 function downloadCombinedInvitationPDF() {
   var set = combinedInvitationCardSet();
   if (!set) { pjToast(window.t('civ_need_pooja', 'Select at least one pooja first.')); return; }
-  downloadInvitationPDF(set.cards, set.title);
+  downloadInvitationPDF(set.cards, set.title, null, 'A4');
 }
-function downloadCombinedInvitationZip() {
+/* One PDF per recipient (may itself be several A4 pages when the selection
+   spans more than CIV_A4_ROWS_PER_PAGE poojas) — downloadInvitationZIP()
+   (pooja-ui.js) only ever builds a single-page PDF per recipient, so this
+   composes its own multi-page-per-recipient version from the exact same
+   shared PDF services (ensurePdfLibs/renderInvitationImages/invPdfDocDef/
+   ensureZipLib) instead of editing that shared function. */
+async function downloadCombinedInvitationZip() {
   var set = combinedInvitationCardSet();
   if (!set) { pjToast(window.t('civ_need_pooja', 'Select at least one pooja first.')); return; }
-  downloadInvitationZIP(set);
+  if (!set.items.length || !set.audienceCount) return;
+
+  invBusy('.js-inv-zip', true);
+  var done = function () { invBusy('.js-inv-zip', false); };
+
+  var libs, JSZip;
+  try { libs = await ensurePdfLibs(); JSZip = await ensureZipLib(); }
+  catch (e) {
+    done();
+    pjToast(window.t('pj_inv_dl_offline', 'PDF engine unavailable — opening print view instead.'));
+    printInvitationHTML(set.cards, set.title, 'A4');
+    return;
+  }
+
+  try {
+    var zip = new JSZip();
+    var used = {};
+    for (var i = 0; i < set.items.length; i++) {
+      var it = set.items[i];
+      var images = await renderInvitationImages(it.markups, function (n, tot) {
+        if (set.items.length > 3) pjToast(window.t('pj_inv_zip_prog', 'Packing') + ' ' + (i + 1) + '/' + set.items.length + '…');
+      });
+      if (!images.length) continue;
+      var blob = await new Promise(function (res) { libs.pdfMake.createPdf(invPdfDocDef(images, 'A4')).getBlob(res); });
+      var r = it.recipient;
+      var base = invFileName([set.poojaName, r && r.name, r && r.mobile]) || (set.poojaName + ' ' + (i + 1));
+      var name = base + '.pdf', k = 2;
+      while (used[name.toLowerCase()]) name = base + ' (' + (k++) + ').pdf';
+      used[name.toLowerCase()] = 1;
+      zip.file(name, blob);
+    }
+    var zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    var zipName = (invFileName([set.title]) || (set.poojaName + ' invitations')) + '.zip';
+    invTriggerDownload(zipBlob, zipName);
+    pjToast(set.items.length + ' ' + window.t('pj_inv_zip_ok', 'invitation PDFs saved as a ZIP.'));
+  } catch (e) {
+    console.error('combined invitation ZIP failed', e);
+    pjToast(window.t('pj_inv_zip_fail', 'ZIP generation failed — opening print view instead.'));
+    printInvitationHTML(set.cards, set.title, 'A4');
+  } finally {
+    done();
+  }
 }
 
 /* ---- page shell ---- */
