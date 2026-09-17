@@ -1291,7 +1291,12 @@ function printInvitationHTML(cards, title) {
           'break-inside:avoid !important;page-break-inside:avoid !important;' +
           'break-after:auto !important;page-break-after:auto !important;' +
           '-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}' +
-        '.pj-invite-frame{margin:8mm !important;min-height:0 !important}' +
+        /* min-height (not 0): otherwise the frame is only as tall as its
+           own content, so a lightly-filled card's ceremonial border stops
+           short and the closing blessing/foot line sits high with a large
+           blank gap below it instead of at the bottom of the printed
+           page. */
+        '.pj-invite-frame{margin:8mm !important;min-height:calc(210mm - 16mm) !important}' +
       '}'
   });
 }

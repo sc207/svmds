@@ -2860,7 +2860,13 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
     width: 148mm; min-height: 210mm;
     border-radius: 0; box-shadow: none; border: 0;
   }
-  .pj-invite-frame { min-height: 0; margin: 8mm; }
+  /* min-height (not 0): without it the frame is only as tall as its own
+     content, so on a lightly-filled card the ceremonial border stops short
+     and the closing blessing/foot line sits high with a large blank gap
+     below it instead of at the bottom of the printed page — every
+     .pj-invite card (per-pooja invitation, event notice, combined) shares
+     this rule and this bug. */
+  .pj-invite-frame { min-height: calc(210mm - 16mm); margin: 8mm; }
   .pj-invite--civ .pj-invite-frame { min-height: calc(210mm - 16mm); }
 }
 
@@ -2878,15 +2884,17 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
   margin: 0 !important; border-radius: 0 !important; box-shadow: none !important;
   overflow: hidden !important;
 }
-.pj-pdf-stage .pj-invite-frame { min-height: 0 !important; }
-/* ...except the Combined Invitation card: with fewer poojas on a page (the
-   last, partly-filled chunk especially) its frame no longer had enough of
-   its own content to reach the card's fixed height, so margin-top:auto on
-   .pj-invite-blessing had no free space to push into and the closing
-   blessing/foot line sat right under the last row with a large blank gap
-   below it instead of at the bottom of the card. Restoring the frame's
-   min-height (sized for civ's own smaller margin) gives it that space back
-   so the blessing/foot line always lands flush against the bottom. */
+/* min-height (not 0): without it the frame is only as tall as its own
+   content, so on a lightly-filled card (a single-session pooja with little
+   guest/sevarthi info, a short event notice, a combined card's last, only
+   partly-filled page) the ceremonial border stops short and the closing
+   blessing/foot line sits high with a large blank gap below it instead of
+   at the bottom of the card, since margin-top:auto on .pj-invite-blessing
+   has no free space to push into. Every .pj-invite card shares this rule
+   and this bug — the per-pooja invitation, the event notice, and combined. */
+.pj-pdf-stage .pj-invite-frame { min-height: calc(402px * 210 / 148 - 36px) !important; }
+/* Combined Invitation's own smaller margin (12px, not 18px) needs its own
+   matching min-height. */
 .pj-pdf-stage .pj-invite--civ .pj-invite-frame { min-height: calc(402px * 210 / 148 - 24px) !important; }
 .pj-pdf-stage .pj-invite-frame::after { border-color: rgba(120, 92, 62, 0.30) !important; }
 .pj-pdf-stage .pj-invite-schedule-row { border-bottom-color: rgba(120, 92, 62, 0.38) !important; }
