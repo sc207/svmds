@@ -139,8 +139,15 @@ function readCombinedInvitationOpts() {
    the room instead. Callers chunk the selection into CIV_ROWS_PER_PAGE-sized
    groups (civChunk) so a long selection becomes several clean A5 pages
    instead of one overflowing/shrunk card — `opts.pageLabel` ('2 / 3') is
-   stamped on continuation pages when there's more than one. ---- */
+   stamped on continuation pages when there's more than one.
+
+   Two capacities, empirically measured against the offscreen render's fixed
+   A5 box: a personalised card carries the extra recipient block ("To Karan
+   Chauhan સપરિવાર") above the programme, so it only safely fits 3 rows (6
+   poojas); the open/public card has no recipient block and that room goes
+   to a 4th row (8 poojas) instead. ---- */
 var CIV_ROWS_PER_PAGE = 6;
+var CIV_ROWS_PER_PAGE_OPEN = 8;
 
 function civChunk(arr, n) {
   var out = [];
@@ -239,7 +246,7 @@ function combinedInvitationCardSet() {
   var opts = readCombinedInvitationOpts();
   var rcpts = invAudienceRecipients(opts.audience);
   var baseTitle = window.t('civ_title', 'Combined Invitation');
-  var chunks = civChunk(poojas, CIV_ROWS_PER_PAGE);
+  var chunks = civChunk(poojas, rcpts.length ? CIV_ROWS_PER_PAGE : CIV_ROWS_PER_PAGE_OPEN);
   var pagesPerRecipient = chunks.length;
 
   function pageMarkup(chunk, pageIdx, recipient) {
