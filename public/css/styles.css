@@ -2830,7 +2830,15 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 
 /* --- Cream: modern / editorial --- */
 .pj-invite--cream { background: #FBF6EC; box-shadow: 0 20px 50px rgba(58,42,26,0.13); }
-.pj-invite--cream .pj-invite-frame { border-width: 1px; margin: 22px; padding: 26px 24px 20px; }
+/* min-height matches Cream's own larger margin (22px, not the base card's
+   18px) — same class of bug as Combined Invitation's --civ frame (fixed
+   separately): without it, the frame falls back to the base rule's
+   min-height (sized for 18px margins), which is now TOO TALL for Cream's
+   22px margin and pushes the outer card slightly past its intended A5
+   proportion in the live preview, or leaves an uneven margin in the
+   Download-PDF export (whose offscreen render clamps the card to a fixed
+   height, so the frame's wrong min-height eats into the wrong side). */
+.pj-invite--cream .pj-invite-frame { border-width: 1px; margin: 22px; padding: 26px 24px 20px; min-height: calc(402px * 210 / 148 - 44px); }
 .pj-invite--cream .pj-invite-frame::after { display: none; }
 .pj-invite--cream .pj-invite-corner { opacity: 0.4; }
 .pj-invite--cream .pj-invite-watermark { opacity: 0.04; }
@@ -2903,9 +2911,11 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
    has no free space to push into. Every .pj-invite card shares this rule
    and this bug — the per-pooja invitation, the event notice, and combined. */
 .pj-pdf-stage .pj-invite-frame { min-height: calc(402px * 210 / 148 - 36px) !important; }
-/* Combined Invitation's own smaller margin (12px, not 18px) needs its own
+/* Combined Invitation's own smaller margin (12px, not 18px), and the Cream
+   template's own larger margin (22px, not 18px), each need their own
    matching min-height. */
 .pj-pdf-stage .pj-invite--civ .pj-invite-frame { min-height: calc(402px * 210 / 148 - 24px) !important; }
+.pj-pdf-stage .pj-invite--cream .pj-invite-frame { min-height: calc(402px * 210 / 148 - 44px) !important; }
 .pj-pdf-stage .pj-invite-frame::after { border-color: rgba(120, 92, 62, 0.30) !important; }
 .pj-pdf-stage .pj-invite-schedule-row { border-bottom-color: rgba(120, 92, 62, 0.38) !important; }
 .pj-pdf-stage .pj-invite-recipient strong em,
