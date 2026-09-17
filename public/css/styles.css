@@ -2777,6 +2777,10 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
    size. events-ui.js's day list and the per-pooja multi-session schedule
    never wrap their rows in this class, so they're unaffected. */
 .pj-invite-schedule-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
+/* Day+date on its own line, time on the next — a forced break instead of
+   natural wrapping, which could land mid-time-range ("9:00 AM–" / "12:00
+   PM"). Only combinedInvitationMarkup emits these two classes. */
+.pj-invite-schedule-dt, .pj-invite-schedule-tm { display: block; }
 
 /* Combined Invitation only (invite-ui.js, `pj-invite--civ`) — a programme
    listing several poojas needs the header/footer ceremonial chrome trimmed

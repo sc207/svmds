@@ -197,9 +197,13 @@ function combinedInvitationMarkup(poojas, opts) {
       : multi ? (civDateLoc(first.date, L) + ' – ' + civDateLoc(last.date, L))
               : civDateLoc(first.date, L);
     var timeTxt = (!multi && first && first.startTime) ? (fmtTime(first.startTime) + '–' + fmtTime(first.endTime)) : '';
+    // Day+date and time as two explicit lines (not left to wrap naturally) —
+    // natural wrapping could break mid-time-range ("9:00 AM–" / "12:00 PM"),
+    // which read poorly; a forced break always lands between the two.
     return '<div class="pj-invite-schedule-row">' +
       '<strong>' + esc(civLoc(p.name, L)) + '</strong>' +
-      '<span>' + dateTxt + (timeTxt ? ' · ' + timeTxt : '') + '</span>' +
+      '<span class="pj-invite-schedule-dt">' + dateTxt + '</span>' +
+      (timeTxt ? '<span class="pj-invite-schedule-tm">' + timeTxt + '</span>' : '') +
       '</div>';
   }).join('');
   var pageNote = opts.pageLabel ? ' · ' + esc(opts.pageLabel) : '';
