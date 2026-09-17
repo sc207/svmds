@@ -23,7 +23,20 @@
   }
 
   /* Every role can open the Unified Calendar (it self-restricts to poojas /
-     events / annual events for non-admins — see calendar.js). */
+     events / annual events for non-admins — see calendar.js).
+
+     Devotees 360°, Combined Invitation ('invite') and Dhaja Pooja are
+     deliberately absent from every scoped role's page list — admin-only by
+     design, not an oversight from adding them without updating this list:
+       - devotees   surfaces every devotee's full profile temple-wide
+                     (donations, visits, every committee) — no scoping built.
+       - invite     its committee/category audience picker isn't scoped to
+                     "my committee" the way the pooja list it draws from
+                     already is, so opening it would leak full committee
+                     rosters and devotee categories to a scoped role.
+       - dhaja      has no coordinator role of its own at all.
+     Adding a new nav page? Decide its role visibility here deliberately —
+     don't just leave it out and have it land here "by accident" again. */
   var ROLE_META = {
     superadmin:        { icon: '🛡️', pages: ['*'] },
     admin:             { icon: '🛡️', pages: ['*'] },

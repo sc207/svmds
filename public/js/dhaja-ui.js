@@ -6,6 +6,12 @@
 function renderDhaja() {
   const root = document.getElementById('dhajaRoot');
   if (!root) return;
+  // Admin-only page (dhaja is deliberately not in any scoped role's page
+  // list — no coordinator role exists for it). Without this guard the
+  // sponsor names/mobiles/pledge amounts below would still render into the
+  // DOM for a scoped session even though #page-dhaja itself stays hidden —
+  // inspectable via devtools despite never appearing in that user's nav.
+  if (typeof accGuard === 'function' && !accGuard(root, 'dhaja')) return;
   root.innerHTML = viewDhaja();
 }
 

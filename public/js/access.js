@@ -18,15 +18,25 @@ function accRoleList() { return (typeof accountRoles === 'function') ? accountRo
 /* Fixed role model — Role → pages it may open → dashboard it sees.
    Rendered only inside Accounts & Access, which is already a superadmin/
    admin-only page (accGuard → canOpenPage('admin')). Shared by the seed
-   renderer here and the API renderer in access-api.js. */
+   renderer here and the API renderer in access-api.js.
+
+   Devotees 360°, Combined Invitation and Dhaja Pooja are deliberately in
+   NO scoped role's page list (see people.js ROLE_META) — not an oversight
+   left over from adding them, a considered call: Devotees 360° surfaces
+   every devotee's full profile temple-wide (donations, visits, every
+   committee) with no scoping built; Combined Invitation's committee/
+   category audience picker isn't scoped to "my committee" the way the
+   Pooja list it draws from already is, so it would leak full committee
+   rosters and devotee categories; Dhaja Pooja has no coordinator role of
+   its own at all. Revisit if any of those get real per-user scoping. */
 var ACC_DASH_NOTE = {
   superadmin:        'Full cockpit — KPIs, every module tile, “needs attention”, today across the temple, activity feed',
   admin:             'Full cockpit — KPIs, every module tile, “needs attention”, today across the temple, activity feed',
   management_lead:   'Scoped mini-dashboard — only the team(s) assigned to this lead',
   pooja_coordinator: 'Scoped mini-dashboard — only the pooja(s) assigned to this coordinator',
   committee_leader:  'Scoped mini-dashboard — only the committee(s) this leader runs',
-  event_incharge:    'Full cockpit for now — a scoped “my events” view is not built yet',
-  accountant:        'Full cockpit for now — a scoped “my ledger” view is not built yet'
+  event_incharge:    'Scoped mini-dashboard — only the event(s) assigned to this in-charge',
+  accountant:        'Scoped mini-dashboard — temple-wide donations/expenses summary (an accountant’s role is temple finance, not a personal subset)'
 };
 var ACC_CAL_NOTE = {
   admin:             'All categories — poojas, meetings, events, annual, pledges, visits',
