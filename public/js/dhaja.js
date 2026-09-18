@@ -29,8 +29,15 @@ const DHAJA = {
 
 function dhajaToday() { return (typeof MG !== 'undefined' && MG.today) ? MG.today : DHAJA.today; }
 function dhajaToast(m) { if (typeof showToast === 'function') showToast(m); }
+/** Who may manage (not just view) Dhaja Pooja: an unrestricted session, or
+ * a Pooja Coordinator (real login or "view as" preview) — a dhaja is a type
+ * of pooja, and dhaja has no finer scoping of its own to filter by, so a
+ * coordinator gets the same full access here as any other pooja. */
 function dhajaIsAdmin() {
-  return !((typeof currentAllowedPages === 'function') && currentAllowedPages() !== null);
+  if (!((typeof currentAllowedPages === 'function') && currentAllowedPages() !== null)) return true;
+  if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator') return true;
+  // generic "as Pooja Coordinator" preview (no specific person) — same access.
+  return !!(typeof state !== 'undefined' && state.previewRole === 'pooja_coordinator');
 }
 
 const dhajaCampaignById = id => DHAJA.campaigns.find(c => c && (c.id === id || c.code === id));

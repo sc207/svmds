@@ -5,57 +5,123 @@
 function renderEvents() {
   const root = document.getElementById('eventsRoot');
   if (!root) return;
-  root.innerHTML = (EV.view === 'workspace' && EV.activeEventId && eventById(EV.activeEventId))
+  root.innerHTML = (EV.view === 'workspace' && EV.activeEventId && canOpenEvent(EV.activeEventId))
     ? viewEventWorkspace() : viewEventsDirectory();
+  applyEvRoleChrome();
 }
-function openEvent(id) { EV.activeEventId = id; EV.view = 'workspace'; EV.activeTab = 'overview'; renderEvents(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function openEvent(id) {
+  if (!canOpenEvent(id)) { evToast('Access denied — this event is not assigned to you.'); return; }
+  EV.activeEventId = id; EV.view = 'workspace'; EV.activeTab = 'overview'; renderEvents(); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 function backToEventsDirectory() { EV.view = 'directory'; EV.activeEventId = null; renderEvents(); }
 function setEventTab(tab) { EV.activeTab = tab; renderEvents(); }
 
+/* ---- role chrome — hides admin-only nav/catalog for an In-charge ---- */
+// Derived from ROLE_META (people.js), not hardcoded, so a real event_incharge
+// login and this preview chrome can never drift apart.
+const EV_ALLOWED_PAGES = (typeof rolePages === 'function' && rolePages('event_incharge').length)
+  ? rolePages('event_incharge') : ['dashboard', 'events', 'calendar'];
+
+function applyEvRoleChrome() {
+  const incharge = !isEvAdmin();
+  document.querySelectorAll('.nav-item[data-page], .mobile-nav-item[data-page]').forEach(el => {
+    const p = el.getAttribute('data-page');
+    el.style.display = (incharge && EV_ALLOWED_PAGES.indexOf(p) === -1) ? 'none' : '';
+  });
+  document.querySelectorAll('[data-admin-only]').forEach(el => { el.style.display = incharge ? 'none' : ''; });
+  document.querySelectorAll('.nav-group-title').forEach(g => { g.style.display = incharge ? 'none' : ''; });
+  const banner = document.getElementById('eventScopeBanner');
+  if (banner) {
+    banner.style.display = incharge ? 'flex' : 'none';
+    if (incharge) {
+      const mine = visibleEvents().map(e => e.name).join(', ') || 'no events assigned yet';
+      banner.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span><strong>${window.t('ev_incharge_access', 'Event In-charge access.')}</strong> ${esc(mine)}</span>`;
+    }
+  }
+}
+
+/**
+ * Switch session role.
+ * @param {'admin'|'incharge'} role
+ * @param {string|null} inChargeId  devotee id when role === 'incharge'
+ * @param {boolean} announce        toast + jump to the Events page (default true)
+ */
+function setEvSession(role, inChargeId, announce) {
+  const speak = announce !== false;
+  if (role === 'admin') {
+    EV.session = { role: 'admin', userId: 'DEV-001', userName: 'Administrator' };
+    if (speak) evToast('Context switched to: Super Admin (Full Platform)');
+  } else {
+    const p = (typeof evInchargeById === 'function' && evInchargeById(inChargeId)) || { id: inChargeId || '', name: 'Event In-charge' };
+    EV.session = { role: 'incharge', userId: p.id, userName: p.name };
+    if (speak) evToast(`Context switched to: ${p.name} (Event In-charge)`);
+  }
+  const nameEl = document.getElementById('topbarUserName');
+  if (nameEl) nameEl.textContent = EV.session.userName;
+  EV.view = 'directory'; EV.activeEventId = null;
+  renderEvents();
+  if (typeof renderDashboard === 'function') renderDashboard();
+  if (speak && typeof switchPage === 'function') switchPage('events');
+}
+
+/** Populate the topbar role selector with one entry per Event In-charge. */
+function populateEvRoleOptions() {
+  const grp = document.getElementById('roleEventGroup');
+  if (!grp) return;
+  const ids = [...new Set(EV.events.map(e => e.inChargeId).filter(Boolean))];
+  grp.innerHTML = ids.map(id => {
+    const p = evInchargeById(id);
+    const owns = EV.events.filter(e => e.inChargeId === id);
+    if (!p || !owns.length) return '';
+    return `<option value="incharge:${id}">${esc(p.name)} — ${esc(owns.map(e => e.name).join(', '))}</option>`;
+  }).join('');
+}
+
 function viewEventsDirectory() {
-  const list = EV.events.slice().sort((a, b) => ((evFirstDay(a) || {}).date || '').localeCompare((evFirstDay(b) || {}).date || ''));
+  const admin = isEvAdmin();
+  const list = visibleEvents().slice().sort((a, b) => ((evFirstDay(a) || {}).date || '').localeCompare((evFirstDay(b) || {}).date || ''));
   const monthKey = evToday().slice(0, 7);
   const nowKey = evToday() + ' ' + evNow();
   const upcoming = list.filter(e => evDays(e).some(d => (d.date + ' ' + d.endTime) >= nowKey)).length;
   const footfall = list.filter(e => (evFirstDay(e) || {}).date && (evFirstDay(e).date.indexOf(monthKey) === 0)).reduce((s, e) => s + (e.expectedFootfall || 0), 0);
 
-  const hasFestivals = list.length > 0 || EV.eventTypes.length > 0;
-
   return `
   <div class="flex justify-between items-center mg-page-head">
     <div>
-      <h1 class="banner-title mg-page-title">📅 ${window.t('ev_title', 'Temple Events')}</h1>
+      <h1 class="banner-title mg-page-title">📅 ${admin ? window.t('ev_title', 'Temple Events') : window.t('ev_my_title', 'My Events')}</h1>
       <p class="mg-page-sub">${window.t('ev_sub', 'Festivals, mahotsavs and seva programmes')}</p>
     </div>
     <div class="flex gap-2">
       ${typeof exportBar === 'function' ? exportBar('mod-events') : ''}
-      <button class="btn btn-primary" onclick="openAddEvent()">
+      ${admin ? `<button class="btn btn-primary" onclick="openAddEvent()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         ${window.t('ev_add', 'Add Event')}
-      </button>
+      </button>` : ''}
     </div>
   </div>
 
-  ${typeof annualEventsSection === 'function' ? annualEventsSection() : ''}
+  ${admin && typeof annualEventsSection === 'function' ? annualEventsSection() : ''}
 
   <div class="section-title mg-mt"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>${window.t('ev_festival_title', 'Festival programmes & mahotsavs')}</span></div>
   <p class="mg-page-sub" style="margin-top:-.4rem">${window.t('ev_festival_sub', 'One-off multi-day programmes with a venue, in-charge, budget and expected footfall — separate from the recurring Tithi calendar above.')}</p>
 
-  ${!hasFestivals ? `
+  ${!list.length ? `
   <div class="card mg-mt"><div class="card-body" style="text-align:center;padding:2rem 1rem">
     <div style="font-size:1.8rem">🎪</div>
-    <p class="mg-page-sub">${window.t('ev_festival_empty', 'No festival programmes yet. Use “Add Event” to plan a mahotsav, dayro or seva programme.')}</p>
-    <button class="btn btn-primary mg-btn-xs" onclick="openAddEvent()">+ ${window.t('ev_add', 'Add Event')}</button>
+    <p class="mg-page-sub">${admin ? window.t('ev_festival_empty', 'No festival programmes yet. Use “Add Event” to plan a mahotsav, dayro or seva programme.') : window.t('ev_festival_empty_scoped', 'No event has been assigned to your account yet. Please contact the temple administrator.')}</p>
+    ${admin ? `<button class="btn btn-primary mg-btn-xs" onclick="openAddEvent()">+ ${window.t('ev_add', 'Add Event')}</button>` : ''}
   </div></div>` : `
   <div class="stats-grid">
     ${kpiCard(window.t('ev_kpi_total', 'Total Events'), list.length, window.t('ev_kpi_total_meta', 'On the calendar'), '📅')}
     ${kpiCard(window.t('ev_kpi_upcoming', 'Upcoming'), upcoming, window.t('ev_kpi_upcoming_meta', 'Still to come'), '⏭️')}
     ${kpiCard(window.t('ev_kpi_footfall', 'Expected Footfall'), locNum(footfall), locMonthYear(+monthKey.split('-')[0], +monthKey.split('-')[1] - 1), '👥')}
-    ${kpiCard(window.t('ev_kpi_types', 'Event Types'), EV.eventTypes.length, window.t('ev_kpi_types_meta', 'Master list'), '📜')}
+    ${admin ? kpiCard(window.t('ev_kpi_types', 'Event Types'), EV.eventTypes.length, window.t('ev_kpi_types_meta', 'Master list'), '📜') : ''}
   </div>
 
-  ${list.length ? `<div class="mg-card-grid">${list.map(e => eventCard(e)).join('')}</div>` : ''}
+  <div class="mg-card-grid">${list.map(e => eventCard(e)).join('')}</div>`}
 
+  ${admin ? `
   <div class="card mg-mt">
     <div class="card-header flex justify-between items-center">
       <div class="card-title">${window.t('ev_type_catalog', 'Event Type Master List')} (${EV.eventTypes.length})</div>
@@ -72,7 +138,8 @@ function viewEventsDirectory() {
           <button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="confirmDeleteEventType('${t.id}')">${window.t('delete')}</button></span></div>
       </div>`;
     }).join('')}</div>` : `<p class="mg-muted-xs">${window.t('ev_type_empty', 'Optional — add reusable categories (Navratri, Annakut, Dayro…) to group festival programmes. Not needed for the Tithi calendar.')}</p>`}</div>
-  </div>`}`;
+  </div>` : ''}
+  `;
 }
 
 function eventCard(e) {

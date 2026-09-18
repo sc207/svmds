@@ -71,15 +71,24 @@ function toggleSidebarMenu() {
  * Kept here (not in a module -ui.js) so switchPage can enforce it centrally.
  */
 function currentAllowedPages() {
+  // ROLE_META (people.js) via rolePages() — the single source of truth every
+  // branch below reads from, so none of them can drift from what a real
+  // login with that role actually sees. '' falls back to a hardcoded list
+  // only for legacy/offline harnesses where people.js never loaded.
+  var rp = function (role, fallback) {
+    return (typeof rolePages === 'function' && rolePages(role).length) ? rolePages(role) : fallback;
+  };
   // Preview personas (topbar "view as" switcher), most specific first.
   // 1) a specific person's scope — this also drives that module's own data
   //    filtering (visiblePoojas() etc.), not just the nav.
-  if (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader') return ['dashboard', 'committees', 'calendar'];
-  if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator') return ['dashboard', 'puja', 'calendar'];
-  if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead') return ['dashboard', 'management', 'calendar'];
+  if (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader') return rp('committee_leader', ['dashboard', 'committees', 'calendar']);
+  if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator') return rp('pooja_coordinator', ['dashboard', 'puja', 'calendar']);
+  if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead') return rp('management_lead', ['dashboard', 'management', 'calendar']);
+  if (typeof EV !== 'undefined' && EV.session && EV.session.role === 'incharge') return rp('event_incharge', ['dashboard', 'events', 'calendar']);
   // 2) a generic "what would this role see" preview — page-shape only, no
-  //    specific person's data. Computed from ROLE_META (people.js) so it can
-  //    never drift from what a real login with that role actually sees.
+  //    specific person's data (also covers the "specific Accountant" preview,
+  //    which personalises the toast/topbar name only — accountant has no
+  //    ownable data of its own to scope).
   if (state.previewRole && typeof rolePages === 'function') {
     var pr = rolePages(state.previewRole);
     if (pr.length) return pr.slice();
@@ -101,7 +110,8 @@ function isPreviewActive() {
   return !!(state.previewRole
     || (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader')
     || (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator')
-    || (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead'));
+    || (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead')
+    || (typeof EV !== 'undefined' && EV.session && EV.session.role === 'incharge'));
 }
 
 /* Trim the sidebar / mobile nav to what the active session/preview may
@@ -188,6 +198,7 @@ function changeRoleScope(role) {
     if (except !== 'mg' && typeof setMgSession === 'function') setMgSession('admin', null, false);
     if (except !== 'pj' && typeof setPoojaSession === 'function') setPoojaSession('admin', null, false);
     if (except !== 'cmt' && typeof setCmtSession === 'function') setCmtSession('admin', null, false);
+    if (except !== 'ev' && typeof setEvSession === 'function') setEvSession('admin', null, false);
   };
 
   // Pooja Coordinator scope — a specific person
@@ -211,6 +222,14 @@ function changeRoleScope(role) {
     applySessionChrome();
     return;
   }
+  // Event In-charge scope — a specific person (also filters EV.events to
+  // just their own, mirroring the three modules above).
+  if (role.indexOf('incharge:') === 0) {
+    resetOthers('ev');
+    if (typeof setEvSession === 'function') setEvSession('incharge', role.slice(9));
+    applySessionChrome();
+    return;
+  }
 
   // Every specific-person module scope back to admin.
   resetOthers(null);
@@ -218,7 +237,26 @@ function changeRoleScope(role) {
   if (role === 'admin') {
     showToast('Context switched to: Super Admin (Full Platform)');
     applySessionChrome();
+    if (typeof renderDashboard === 'function') renderDashboard();
     switchPage('dashboard');
+    return;
+  }
+
+  // Accountant scope — a specific person. Accountant has no ownable data of
+  // its own to filter by (temple-wide by design — donations/expenses aren't
+  // assigned to one accountant), so this only personalises the toast/topbar
+  // name on top of the same page-shape as the generic Accountant preview.
+  if (role.indexOf('acct:') === 0) {
+    const id = role.slice(5);
+    const a = (typeof accountById === 'function') ? accountById(id) : null;
+    const name = (a && a.name) || 'Temple Accountant';
+    state.previewRole = 'accountant';
+    const nameEl = document.getElementById('topbarUserName');
+    if (nameEl) nameEl.textContent = name;
+    showToast(`Context switched to: ${name} (Temple Accountant)`);
+    applySessionChrome();
+    if (typeof renderDashboard === 'function') renderDashboard();
+    switchPage('donations');
     return;
   }
 
@@ -235,6 +273,7 @@ function changeRoleScope(role) {
     state.previewRole = g.key;
     showToast(`Context switched to: ${g.label}`);
     applySessionChrome();
+    if (typeof renderDashboard === 'function') renderDashboard();
     switchPage(g.landing);
     return;
   }
@@ -242,6 +281,7 @@ function changeRoleScope(role) {
   // Unknown value — fall back to the admin's own unrestricted view.
   showToast('Context switched to: Super Admin (Full Platform)');
   applySessionChrome();
+  if (typeof renderDashboard === 'function') renderDashboard();
   switchPage('dashboard');
 }
 

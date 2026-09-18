@@ -11,6 +11,13 @@ if (typeof window !== 'undefined' && typeof window.t !== 'function') {
 }
 
 const EV = {
+  /* Session / permission context — mirrors CMT/POOJA/MG. */
+  session: {
+    role: 'admin',        // 'admin' | 'incharge'
+    userId: 'DEV-001',    // devotee id of the previewed/logged-in person
+    userName: 'Administrator'
+  },
+
   view: 'directory',            // 'directory' | 'workspace'
   activeEventId: null,
   activeTab: 'overview',
@@ -42,6 +49,13 @@ function evToast(m) { if (typeof showToast === 'function') showToast(m); }
 
 const evTypeById  = id => EV.eventTypes.find(t => t.id === id);
 const eventById    = id => EV.events.find(e => e.id === id);
+const isEvAdmin = () => !EV.session || EV.session.role === 'admin';
+/** Events the current session (real login or "view as" preview) may open. */
+function visibleEvents() {
+  if (isEvAdmin()) return EV.events;
+  return EV.events.filter(e => e.inChargeId === EV.session.userId);
+}
+function canOpenEvent(id) { return visibleEvents().some(e => e.id === id); }
 const evInchargeById = id => (typeof personById === 'function' ? personById(id) : null)
   || EV.incharges.find(i => i.id === id)
   || (typeof cmtLeadById === 'function' ? cmtLeadById(id) : null);

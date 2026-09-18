@@ -209,6 +209,7 @@ function handleSaveEvent(ev) {
   const f = days.slice().sort((a, b) => a.date.localeCompare(b.date))[0];
   if (f) { const p = f.date.split('-').map(Number); EV.calendarYear = p[0]; EV.calendarMonth = p[1] - 1; }
   closeModal('modalEvent');
+  if (typeof populateEvRoleOptions === 'function') populateEvRoleOptions();
   renderEvents();
 }
 function confirmDeleteEvent(id) {
@@ -224,6 +225,7 @@ function confirmDeleteEvent(id) {
       EV.activity = EV.activity.filter(a => a.eventId !== id);
       if (EV.activeEventId === id) { EV.activeEventId = null; EV.view = 'directory'; }
       evToast(window.t('ev_deleted', 'Event deleted.'));
+      if (typeof populateEvRoleOptions === 'function') populateEvRoleOptions();
       renderEvents();
       if (window.API && window.API.online && wasSynced) window.API.del('/events/' + code).catch(function (err) { evToast((err && err.message) || 'Delete failed to sync'); });
     }
@@ -297,5 +299,6 @@ function confirmDeleteEventType(id) {
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('eventsRoot')) return;
   renderEvents();
+  if (typeof populateEvRoleOptions === 'function') populateEvRoleOptions();
   if (typeof onLanguageChange === 'function') onLanguageChange(() => renderEvents());
 });

@@ -8,9 +8,12 @@
    The donation flows into every existing donation total / report / certificate
    path unchanged.
 
-   Reads: any session. Writes: admin tier. Every write returns the fully
-   hydrated row. (FEATURE_INTEGRATION.md — person = ensureDevotee, codes =
-   nextCode, DB is the final safety layer.) */
+   Reads: any session. Writes: admin tier + pooja_coordinator (a dhaja is a
+   type of pooja — ROLE_PAGES/ROLE_META give a Pooja Coordinator the 'dhaja'
+   page too, and the frontend gives them full manage UI there; this must stay
+   in lockstep or a real coordinator gets 403s the page told them they could
+   do). Every write returns the fully hydrated row. (FEATURE_INTEGRATION.md
+   — person = ensureDevotee, codes = nextCode, DB is the final safety layer.) */
 const express = require('express');
 const crypto = require('crypto');
 const { queryAll, queryOne, run } = require('../db/connection');
@@ -24,7 +27,7 @@ const { getSettings } = require('../services/settingsStore');
 const { mapAnnualEvent, mapDhajaCampaign, mapDhajaPooja } = require('../utils/mappers');
 
 const router = express.Router();
-const adminTier = requireRole('superadmin', 'admin');
+const dhajaWriter = requireRole('superadmin', 'admin', 'pooja_coordinator');
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -114,7 +117,7 @@ router.get('/campaigns/:id', async (req, res, next) => {
 });
 
 /* POST /campaigns  { name, nameGu?, targetCount?, startDate?, endDate?, annualEventId? } */
-router.post('/campaigns', adminTier, async (req, res, next) => {
+router.post('/campaigns', dhajaWriter, async (req, res, next) => {
   try {
     const b = req.body || {};
     const name = String(b.name || '').trim();
@@ -157,7 +160,7 @@ router.post('/campaigns', adminTier, async (req, res, next) => {
 });
 
 /* PATCH /campaigns/:id  { name?, nameGu?, targetCount?, status?, startDate?, endDate?, notes? } */
-router.patch('/campaigns/:id', adminTier, async (req, res, next) => {
+router.patch('/campaigns/:id', dhajaWriter, async (req, res, next) => {
   try {
     const row = await campaignByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Campaign not found' });
@@ -189,7 +192,7 @@ router.patch('/campaigns/:id', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.delete('/campaigns/:id', adminTier, async (req, res, next) => {
+router.delete('/campaigns/:id', dhajaWriter, async (req, res, next) => {
   try {
     const row = await campaignByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Campaign not found' });
@@ -249,7 +252,7 @@ async function resolveCategory() {
 /* POST /
    { campaignId? | annualEventId?, devoteeId? | firstName,lastName,mobile,city,state?,
      amount, date?, scheduledDate?, notes? } */
-router.post('/', adminTier, async (req, res, next) => {
+router.post('/', dhajaWriter, async (req, res, next) => {
   try {
     const b = req.body || {};
     const amount = Number(b.amount || 0);
@@ -374,7 +377,7 @@ router.post('/', adminTier, async (req, res, next) => {
 });
 
 /* PATCH /:id  { status?, performedDate?, scheduledDate?, notes? } */
-router.patch('/:id', adminTier, async (req, res, next) => {
+router.patch('/:id', dhajaWriter, async (req, res, next) => {
   try {
     const row = await poojaByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Sponsorship not found' });
@@ -420,7 +423,7 @@ router.patch('/:id', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.delete('/:id', adminTier, async (req, res, next) => {
+router.delete('/:id', dhajaWriter, async (req, res, next) => {
   try {
     const row = await poojaByIdOrCode(req.params.id);
     if (!row) return res.status(404).json({ error: 'Sponsorship not found' });

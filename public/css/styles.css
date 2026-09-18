@@ -1539,8 +1539,8 @@ input, select, textarea { font-family: inherit; outline: none; }
 }
 .nav-item-featured.active::after { display: none; }
 
-/* Lead / Pooja-coordinator scope banner */
-#leadScopeBanner, #poojaScopeBanner, #committeeScopeBanner {
+/* Lead / Pooja-coordinator / Committee-leader / Event-in-charge scope banner */
+#leadScopeBanner, #poojaScopeBanner, #committeeScopeBanner, #eventScopeBanner {
   display: none;
   align-items: center;
   gap: 0.6rem;

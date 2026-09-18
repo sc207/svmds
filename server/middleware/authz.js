@@ -6,14 +6,15 @@ const { queryAll, queryOne } = require('../db/connection');
 // Every role can open the Unified Calendar; it self-restricts its categories
 // for non-admins on the client (public/js/calendar.js).
 //
-// devotees / invite / dhaja are deliberately absent from every scoped
-// role's list here too (must stay a mirror of ROLE_META) — see the matching
-// comment in public/js/people.js for why each one is admin-only.
+// devotees / invite are deliberately absent from every scoped role's list
+// here too (must stay a mirror of ROLE_META) — see the matching comment in
+// public/js/people.js for why each one is admin-only. dhaja IS in
+// pooja_coordinator's list — a dhaja is a type of pooja.
 const ROLE_PAGES = {
   superadmin:        ['*'],
   admin:             ['*'],
   management_lead:   ['dashboard', 'management', 'calendar'],
-  pooja_coordinator: ['dashboard', 'puja', 'calendar'],
+  pooja_coordinator: ['dashboard', 'puja', 'dhaja', 'calendar'],
   committee_leader:  ['dashboard', 'committees', 'calendar'],
   event_incharge:    ['dashboard', 'events', 'calendar'],
   accountant:        ['dashboard', 'donations', 'expenses', 'reports', 'calendar'],

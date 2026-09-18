@@ -29,6 +29,17 @@ function activePersona() {
     return { kind: 'pooja_coordinator', roles: ['pooja_coordinator'], name: POOJA.session.userName, id: POOJA.session.userId };
   if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead')
     return { kind: 'management_lead', roles: ['management_lead'], name: MG.session.userName, id: MG.session.userId };
+  if (typeof EV !== 'undefined' && EV.session && EV.session.role === 'incharge')
+    return { kind: 'event_incharge', roles: ['event_incharge'], name: EV.session.userName, id: EV.session.userId };
+  // Generic "what would this role see" preview (topbar dropdown) — either no
+  // specific person at all, or the Accountant's "specific person" preview
+  // (which only personalises the name, since accountant has no ownable data
+  // — see changeRoleScope()'s acct: branch, app.js).
+  if (typeof state !== 'undefined' && state.previewRole) {
+    var previewName = (document.getElementById('topbarUserName') || {}).textContent
+      || (typeof roleLabel === 'function' ? roleLabel(state.previewRole) : state.previewRole);
+    return { kind: state.previewRole, roles: [state.previewRole], name: previewName, id: 'DEV-001' };
+  }
 
   var s = (typeof window !== 'undefined' && window.__SESSION) || null;
   if (s && s.user) {

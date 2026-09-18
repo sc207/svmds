@@ -448,6 +448,16 @@
     try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) {}
     try { if (typeof renderUnifiedCalendar === 'function') renderUnifiedCalendar(); } catch (e) {}
     try { if (typeof syncEntitySelects === 'function') syncEntitySelects(); } catch (e) {}
+    // "view as" preview dropdown's per-person optgroups — re-derive after any
+    // hydration step, same reason renderDashboard() re-runs here: the data
+    // they're built from (leaders/coordinators/in-charges, ACCOUNTS) only
+    // arrives async, so these stayed empty until an unrelated save touched
+    // them for the first time.
+    try { if (typeof populateLeadRoleOptions === 'function') populateLeadRoleOptions(); } catch (e) {}
+    try { if (typeof populateCoordRoleOptions === 'function') populateCoordRoleOptions(); } catch (e) {}
+    try { if (typeof populateCmtRoleOptions === 'function') populateCmtRoleOptions(); } catch (e) {}
+    try { if (typeof populateEvRoleOptions === 'function') populateEvRoleOptions(); } catch (e) {}
+    try { if (typeof populateAcctRoleOptions === 'function') populateAcctRoleOptions(); } catch (e) {}
   }
 
   // one hydrate step per module — used for both the full boot load and the

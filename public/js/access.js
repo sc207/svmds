@@ -211,15 +211,22 @@ function signInAs(id) {
     if (sel) sel.value = 'admin'; changeRoleScope('admin'); return;
   }
   const r = a.roles[0];
-  // Roles with a specific-person module scope (also filters that module's
-  // own data, not just the nav) vs. roles previewed generically (page-shape
-  // only — see changeRoleScope()'s GENERIC_ROLE map, which these values
-  // must match).
-  const map = { committee_leader: 'cmt:', pooja_coordinator: 'coord:', management_lead: 'lead:' };
-  const generic = { accountant: 'accountant', event_incharge: 'event_incharge' };
+  // Every scoped role previews as a specific person now — committee_leader/
+  // pooja_coordinator/management_lead/event_incharge also filter that
+  // module's own data (not just the nav); accountant has no ownable data of
+  // its own (temple-wide by design — see ACC_DASH_NOTE below), so its
+  // "specific person" preview only personalises the toast/topbar name.
+  // Values must match changeRoleScope()'s prefix handling.
+  const map = { committee_leader: 'cmt:', pooja_coordinator: 'coord:', management_lead: 'lead:', event_incharge: 'incharge:', accountant: 'acct:' };
   if (map[r]) { const v = map[r] + id; if (sel) sel.value = v; changeRoleScope(v); }
-  else if (generic[r]) { if (sel) sel.value = generic[r]; changeRoleScope(generic[r]); }
   else { if (sel) sel.value = 'admin'; changeRoleScope('admin'); }
+}
+
+/** Populate the topbar role selector with one entry per Accountant account. */
+function populateAcctRoleOptions() {
+  const grp = document.getElementById('roleAcctGroup');
+  if (!grp || typeof accountsWithRole !== 'function') return;
+  grp.innerHTML = accountsWithRole('accountant').map(a => `<option value="acct:${a.id}">${esc(a.name)}</option>`).join('');
 }
 
 function exportAccountsCSV() {   /* back-compat shim */
