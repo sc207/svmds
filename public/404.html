@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Page Not Found — Shri Vihat Meldi Mata Mandir</title>
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  html, body { height: 100%; }
+  body {
+    margin: 0; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(201,162,74,.22), transparent 46%),
+      radial-gradient(circle at 84% 88%, rgba(201,106,32,.16), transparent 46%),
+      linear-gradient(160deg, #FBF6EC, #EFE3CF);
+    font-family: var(--font-body);
+    color: var(--dark-brown);
+  }
+  .nf-card {
+    position: relative; width: 100%; max-width: 460px;
+    background: var(--ivory-card); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg); padding: 2.4rem 2rem 2rem; text-align: center;
+    overflow: hidden;
+  }
+  .nf-corner { position: absolute; width: 36px; height: 36px; pointer-events: none;
+    background: linear-gradient(var(--antique-gold), var(--antique-gold)) left top/100% 2.5px no-repeat,
+                linear-gradient(var(--antique-gold), var(--antique-gold)) left top/2.5px 100% no-repeat; }
+  .nf-corner.tl { top: 12px; left: 12px; }
+  .nf-corner.tr { top: 12px; right: 12px; transform: scaleX(-1); }
+  .nf-corner.bl { bottom: 12px; left: 12px; transform: scaleY(-1); }
+  .nf-corner.br { bottom: 12px; right: 12px; transform: scale(-1); }
+  .nf-emblem { width: 58px; height: 58px; border-radius: 50%; object-fit: cover; border: 2px solid var(--antique-gold); margin-bottom: .9rem; box-shadow: var(--shadow-sm); }
+  .nf-temple { font-family: var(--font-heading); font-size: .85rem; font-weight: 700; color: var(--primary-maroon); letter-spacing: .3px; margin: 0 0 1.4rem; }
+  .nf-code { font-family: var(--font-heading); font-weight: 800; font-size: 3.4rem; line-height: 1; color: var(--saffron); letter-spacing: 2px; margin: 0; }
+  .nf-title { font-family: var(--font-heading); font-size: 1.15rem; font-weight: 700; color: var(--primary-maroon); margin: .6rem 0 .5rem; }
+  .nf-msg { font-size: .9rem; color: var(--muted-brown); line-height: 1.55; margin: 0 0 1.6rem; }
+  .nf-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+    padding: .7rem 1.6rem; border: none; border-radius: 999px; text-decoration: none;
+    background: linear-gradient(135deg, var(--primary-maroon), var(--primary-maroon-dark));
+    color: #fff; font-weight: 700; font-size: .9rem;
+    box-shadow: 0 8px 22px rgba(107,31,42,.28); transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .nf-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(107,31,42,.34); }
+  .nf-foot { margin-top: 1.6rem; font-size: .72rem; color: var(--muted-brown); }
+  @media (max-width: 380px) {
+    .nf-card { padding: 2rem 1.4rem 1.6rem; }
+    .nf-code { font-size: 2.8rem; }
+  }
+</style>
+</head>
+<body>
+  <div class="nf-card">
+    <span class="nf-corner tl"></span><span class="nf-corner tr"></span>
+    <span class="nf-corner bl"></span><span class="nf-corner br"></span>
+    <img class="nf-emblem" src="assets/icon.png" alt="" onerror="this.style.display='none'">
+    <div class="nf-temple">Shri Vihat Meldi Mata Mandir</div>
+    <p class="nf-code">404</p>
+    <h1 class="nf-title">Page Not Found</h1>
+    <p class="nf-msg">The page you're looking for doesn't exist, may have moved, or the link may be broken. Let's get you back on track.</p>
+    <a class="nf-btn" href="/">🏠 Return to Home</a>
+    <div class="nf-foot">Shri Vihat Meldi Mata Mandir &middot; Sanand, Gujarat</div>
+  </div>
+</body>
+</html>

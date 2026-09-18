@@ -165,16 +165,22 @@ app.use('/api', require('./routes/derived'));   // /calendar /dashboard /activit
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));
 
-/* ---- static front-end (moved into public/ in Phase 2) ---- */
+/* ---- static front-end (moved into public/ in Phase 2) ----
+   express.static serves every real file under public/ (including "/" ->
+   index.html, its default `index` option) plus the explicit named pages
+   below. Anything else is a broken/unknown link — it falls through to
+   notFound (middleware/error.js), which renders public/404.html instead of
+   silently handing back the SPA shell (the old app.get('*', ...) catch-all
+   here used to do exactly that, so a typo'd or stale link never looked
+   broken — it just loaded the whole app at the wrong URL). The SPA itself
+   has no server- or client-side path routing beyond these named pages
+   (switchPage() never touches the URL — BACKEND_PLAN.md / CLAUDE.md), so
+   this is the complete, real set of front-end routes. */
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 if (fs.existsSync(PUBLIC_DIR)) {
   app.use(express.static(PUBLIC_DIR));
   app.get(['/login', '/login.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'login.html')));
   app.get(['/yagna', '/yagna.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'yagna.html')));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-  });
 } else {
   console.warn('⚠ public/ not found — front-end not served. Run: git mv index.html css js assets public/');
 }
