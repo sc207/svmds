@@ -26,6 +26,9 @@ async function getSettings() {
   let templeIdentity = {};
   try { templeIdentity = JSON.parse(map.temple_identity || '{}'); } catch (_) {}
 
+  let yagnaRegistration = { enabled: false, opensAt: null, closesAt: null };
+  try { yagnaRegistration = Object.assign(yagnaRegistration, JSON.parse(map.yagna_registration || '{}')); } catch (_) {}
+
   // working_date/working_time are only trusted when an admin has explicitly
   // pinned them (working_date_pinned = '1'); otherwise always the real
   // current IST date/time. Without this flag a value only ever present
@@ -41,6 +44,7 @@ async function getSettings() {
     workingDatePinned: pinned,
     defaultLanguage: map.default_language || DEFAULTS.default_language,
     templeIdentity,
+    yagnaRegistration,
   };
 }
 
@@ -75,4 +79,33 @@ async function setDefaultLanguage(lang) {
   return getSettings();
 }
 
-module.exports = { getSettings, setSetting, setWorkingDate, clearWorkingDate, setTempleIdentity, setDefaultLanguage };
+async function setYagnaRegistration(obj) {
+  const next = {
+    enabled: !!(obj && obj.enabled),
+    opensAt: (obj && obj.opensAt) || null,
+    closesAt: (obj && obj.closesAt) || null,
+  };
+  await setSetting('yagna_registration', JSON.stringify(next));
+  return getSettings();
+}
+
+/** { enabled, open, opensAt, closesAt } — `open` is enabled AND (no window
+    set, or the real current IST time falls inside [opensAt, closesAt]).
+    Public GET /api/public/yagna/status reads this directly. */
+async function yagnaRegistrationStatus() {
+  const { yagnaRegistration } = await getSettings();
+  const { enabled, opensAt, closesAt } = yagnaRegistration;
+  let open = !!enabled;
+  if (open) {
+    const now = istNow();
+    const nowStamp = now.date + 'T' + now.time;
+    if (opensAt && nowStamp < opensAt) open = false;
+    if (closesAt && nowStamp > closesAt) open = false;
+  }
+  return { enabled: !!enabled, open, opensAt, closesAt };
+}
+
+module.exports = {
+  getSettings, setSetting, setWorkingDate, clearWorkingDate, setTempleIdentity, setDefaultLanguage,
+  setYagnaRegistration, yagnaRegistrationStatus,
+};

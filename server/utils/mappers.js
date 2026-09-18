@@ -649,6 +649,28 @@ function mapDhajaPooja(row) {
   };
 }
 
+function mapYagnaSignup(row) {
+  if (!row) return null;
+  return {
+    id: row.code || row.id,
+    uuid: row.id,
+    code: row.code || '',
+    firstName: row.first_name || '',
+    lastName: row.last_name || '',
+    samajName: row.samaj_name || '',
+    city: row.city || '',
+    state: row.state || '',
+    mobile: row.mobile || '',
+    expectedContribution: Number(row.expected_contribution || 0),
+    status: row.status || 'submitted',
+    category: row.category || null,
+    assignedPoojaId: row.assigned_pooja_code || row.assigned_pooja_id || null,
+    notes: row.notes || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || null,
+  };
+}
+
 function mapSession(row, currentJti) {
   if (!row) return null;
   return {
@@ -691,4 +713,5 @@ module.exports = {
   mapEventType, mapEvent, mapVisit, mapExpense, mapInventory,
   mapAnnualEvent,
   mapDhajaCampaign, mapDhajaPooja,
+  mapYagnaSignup,
 };

@@ -39,6 +39,11 @@
      lose: dhajaIsAdmin() (dhaja.js) treats a pooja-coordinator scope (real
      login or "view as" preview) the same as admin, so a coordinator gets
      full manage access (create campaigns, sponsor), same as any other pooja.
+       - yagna-signups  the public Maha Yagna sevarthi registration register
+                     (MAHA_YAGNA_PLAN.md) — temple-wide PII submitted by
+                     anonymous members of the public; no coordinator role
+                     fits (unlike Dhaja, there's no per-person ownership to
+                     scope it by).
      Adding a new nav page? Decide its role visibility here deliberately —
      don't just leave it out and have it land here "by accident" again. */
   var ROLE_META = {

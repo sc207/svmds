@@ -136,6 +136,7 @@ const { attachScope } = require('./middleware/authz');
 
 app.use('/api/auth', require('./routes/auth'));                 // public
 app.use('/api/public', require('./routes/publicSignups'));      // public (no session)
+app.use('/api/public', require('./routes/publicYagna'));        // public (no session)
 
 app.use('/api', authRequired);                                  // everything below needs a session
 app.use('/api', attachScope);
@@ -152,6 +153,7 @@ app.use('/api/poojas', require('./routes/poojas'));
 app.use('/api/sevarthis', require('./routes/sevarthis'));
 app.use('/api/annual-events', require('./routes/annualEvents'));
 app.use('/api/dhaja', require('./routes/dhaja'));
+app.use('/api/yagna-signups', require('./routes/yagnaSignups'));
 app.use('/api/committees', require('./routes/committees'));
 app.use('/api/teams', require('./routes/teams'));
 app.use('/api/events', require('./routes/events'));
@@ -168,6 +170,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 if (fs.existsSync(PUBLIC_DIR)) {
   app.use(express.static(PUBLIC_DIR));
   app.get(['/login', '/login.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'login.html')));
+  app.get(['/yagna', '/yagna.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'yagna.html')));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));

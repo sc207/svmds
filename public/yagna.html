@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Maha Yagna Sevarthi Registration — Shri Vihat Meldi Mata Mandir</title>
+<link rel="icon" type="image/png" href="assets/icon.png">
+
+<!-- Splash loader — identical to index.html's, so this public page opens
+     with the same mandir loader as the main app. -->
+<style id="loaderStyle">
+  html.is-loading, body.is-loading { overflow: hidden; }
+  #appLoader {
+    position: fixed; inset: 0; z-index: 99999;
+    display: grid; place-items: center;
+    background:
+      radial-gradient(circle at 50% 30%, rgba(232,197,120,0.35), transparent 60%),
+      radial-gradient(circle at 50% 38%, #FFFDF7 0%, #F4E8CF 62%, #EAD8B4 100%);
+    transition: opacity .5s ease, visibility .5s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  #appLoader.ldr-done { opacity: 0; visibility: hidden; pointer-events: none; }
+  .ldr-inner { display: flex; flex-direction: column; align-items: center; gap: 1.05rem; padding: 1.75rem; text-align: center; max-width: 90vw; }
+  .ldr-mandala { width: min(58vw, 224px); aspect-ratio: 1 / 1; position: relative; }
+  .ldr-mandala svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .ldr-ring-o { animation: ldrSpin 16s linear infinite; }
+  .ldr-ring-m { animation: ldrSpin 11s linear infinite reverse; }
+  .ldr-core   { animation: ldrPulse 2.6s ease-in-out infinite; }
+  .ldr-ring-o, .ldr-ring-m, .ldr-core { transform-box: fill-box; transform-origin: center; }
+  .ldr-glow   { animation: ldrGlow 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes ldrSpin { to { transform: rotate(360deg); } }
+  @keyframes ldrPulse { 0%,100% { transform: scale(0.955); } 50% { transform: scale(1.05); } }
+  @keyframes ldrGlow { 0%,100% { opacity: .45; transform: scale(0.9); } 50% { opacity: .8; transform: scale(1.08); } }
+  .ldr-title {
+    font-family: 'Cinzel', 'Noto Serif Gujarati', Georgia, serif;
+    font-weight: 700; color: #6B1F2A; letter-spacing: .5px; line-height: 1.25;
+    font-size: clamp(1.05rem, 4.6vw, 1.55rem);
+  }
+  .ldr-sub {
+    font-family: 'Noto Serif Gujarati', Georgia, serif; color: #C96A20; font-weight: 600;
+    font-size: clamp(.85rem, 3.7vw, 1.08rem);
+  }
+  .ldr-track {
+    width: min(78vw, 300px); height: 6px; border-radius: 999px; margin-top: .2rem;
+    background: rgba(107,31,42,.14); overflow: hidden;
+  }
+  .ldr-bar {
+    width: 8%; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, #6B1F2A, #C96A20 55%, #E6C978);
+    box-shadow: 0 0 12px rgba(201,106,32,.55);
+    transition: width .25s ease;
+  }
+  .ldr-hint {
+    font-size: .72rem; letter-spacing: 1.5px; text-transform: uppercase; color: #9c8050;
+    min-height: 1em;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ldr-ring-o, .ldr-ring-m, .ldr-core, .ldr-glow { animation: none; }
+    #appLoader { transition: none; }
+  }
+</style>
+
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  html { height: 100%; }
+  body {
+    margin: 0; min-height: 100%; box-sizing: border-box;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(201,162,74,.22), transparent 46%),
+      radial-gradient(circle at 84% 88%, rgba(201,106,32,.16), transparent 46%),
+      linear-gradient(160deg, #FBF6EC, #EFE3CF);
+    font-family: var(--font-body);
+    color: var(--dark-brown);
+  }
+  .yc-wrap { max-width: 640px; margin: 0 auto; padding: 1.75rem 1.1rem 3rem; }
+  .yc-header { text-align: center; margin-bottom: 1.5rem; }
+  .yc-emblem { width: 62px; height: 62px; border-radius: 50%; object-fit: cover; border: 2px solid var(--antique-gold); margin-bottom: .6rem; box-shadow: var(--shadow-sm); }
+  .yc-header h1 { font-family: var(--font-heading); font-size: 1.35rem; color: var(--primary-maroon); margin: 0 0 .15rem; letter-spacing: .3px; }
+  .yc-header p { margin: 0; color: var(--muted-brown); font-size: .85rem; }
+  .yc-ribbon { font-family: 'Cinzel', serif; font-size: .7rem; letter-spacing: 2px; text-transform: uppercase; color: var(--saffron); margin-top: .5rem; }
+
+  .yc-panel {
+    background: var(--ivory-card); border: 1px solid var(--warm-border);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
+    padding: 1.5rem 1.4rem; margin-bottom: 1.1rem;
+  }
+  .yc-panel h2 { font-family: var(--font-heading); font-size: 1.05rem; color: var(--primary-maroon); margin: 0 0 .3rem; }
+  .yc-panel .yc-sub { color: var(--muted-brown); font-size: .82rem; margin: 0 0 1rem; }
+
+  .yc-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem 1rem; }
+  .yc-form-grid .yc-full { grid-column: 1 / -1; }
+  @media (max-width: 460px) { .yc-form-grid { grid-template-columns: 1fr; } }
+  .yc-field label { display: block; font-size: .78rem; font-weight: 600; color: var(--dark-brown); margin-bottom: .3rem; }
+  .yc-field input, .yc-field select {
+    width: 100%; padding: .6rem .7rem; border: 1px solid var(--warm-border); border-radius: var(--radius-sm);
+    font-size: .92rem; font-family: inherit; background: #fff; color: var(--dark-brown); box-sizing: border-box;
+  }
+  .yc-field input:focus, .yc-field select:focus { outline: 2px solid var(--antique-gold); outline-offset: 1px; }
+  .yc-hint { font-size: .72rem; color: var(--muted-brown); margin-top: .25rem; }
+
+  .yc-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+    width: 100%; margin-top: 1.1rem; padding: .75rem 1rem; border: none; border-radius: 999px;
+    background: linear-gradient(135deg, var(--primary-maroon), var(--primary-maroon-dark));
+    color: #fff; font-weight: 700; font-size: .95rem; cursor: pointer;
+    box-shadow: 0 8px 22px rgba(107,31,42,.28); transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .yc-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(107,31,42,.34); }
+  .yc-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+  .yc-btn-outline { background: transparent; color: var(--primary-maroon); border: 1.5px solid var(--primary-maroon); box-shadow: none; }
+
+  .yc-msg { border-radius: var(--radius-sm); padding: .7rem .9rem; font-size: .85rem; margin-top: 1rem; display: none; }
+  .yc-msg.err { display: block; background: var(--danger-bg); color: var(--danger); border: 1px solid #E6C3BF; }
+  .yc-msg.ok  { display: block; background: var(--success-bg); color: var(--success); border: 1px solid #BFD9C4; }
+
+  .yc-link-row { text-align: center; font-size: .85rem; color: var(--muted-brown); margin-top: .3rem; }
+  .yc-link-row a { color: var(--saffron); font-weight: 600; text-decoration: none; }
+  .yc-link-row a:hover { text-decoration: underline; }
+
+  /* ---- Token card — certificate-grade, gold L-corners, Cinzel ribbon ---- */
+  .yc-card {
+    position: relative; background: #fffdf8; border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg); overflow: hidden; padding: 1.9rem 1.6rem 1.6rem;
+  }
+  .yc-corner { position: absolute; width: 34px; height: 34px; pointer-events: none;
+    background: linear-gradient(var(--antique-gold), var(--antique-gold)) left top/100% 2.5px no-repeat,
+                linear-gradient(var(--antique-gold), var(--antique-gold)) left top/2.5px 100% no-repeat; }
+  .yc-corner.tl { top: 10px; left: 10px; }
+  .yc-corner.tr { top: 10px; right: 10px; transform: scaleX(-1); }
+  .yc-corner.bl { bottom: 10px; left: 10px; transform: scaleY(-1); }
+  .yc-corner.br { bottom: 10px; right: 10px; transform: scale(-1); }
+  .yc-card-hero { position: absolute; right: -18px; bottom: -16px; width: 40%; opacity: .07; pointer-events: none; }
+  .yc-card-head { text-align: center; border-bottom: 1.5px solid var(--primary-maroon); padding-bottom: .8rem; position: relative; }
+  .yc-card-emblem { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 2px solid var(--antique-gold); }
+  .yc-card-temple { font-family: var(--font-heading); font-weight: 800; font-size: .95rem; color: var(--primary-maroon); margin-top: .35rem; }
+  .yc-card-loc { font-size: .62rem; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted-brown); margin-top: .1rem; }
+  .yc-card-ribbon { text-align: center; font-family: 'Cinzel', serif; letter-spacing: 2px; text-transform: uppercase; font-size: .78rem; color: var(--primary-maroon); margin: .9rem 0 .1rem; font-weight: 700; }
+  .yc-card-token { text-align: center; font-family: var(--font-heading); font-size: 1.9rem; font-weight: 800; color: var(--saffron); letter-spacing: 1.5px; margin: .3rem 0 1rem; }
+  .yc-card-token span { display: block; font-family: var(--font-body); font-weight: 600; font-size: .62rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted-brown); margin-bottom: .15rem; }
+  .yc-kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem 1rem; margin-top: .4rem; }
+  .yc-kv-grid .yc-full { grid-column: 1 / -1; }
+  .yc-kv { font-size: .82rem; }
+  .yc-kv b { display: block; font-size: .62rem; letter-spacing: .8px; text-transform: uppercase; color: var(--muted-brown); margin-bottom: .1rem; font-weight: 700; }
+  .yc-kv span { color: var(--dark-brown); font-weight: 600; }
+  .yc-card-foot { margin-top: 1.1rem; border-top: 1px solid var(--warm-border); padding-top: .8rem; display: flex; align-items: center; gap: .8rem; justify-content: space-between; }
+  .yc-qr { width: 44px; height: 44px; flex-shrink: 0; color: var(--primary-maroon); }
+  .yc-qr svg { width: 100%; height: 100%; }
+  .yc-card-note { font-size: .68rem; color: var(--muted-brown); line-height: 1.5; }
+
+  .yc-token-actions { display: flex; gap: .6rem; margin-top: 1.1rem; flex-wrap: wrap; }
+  .yc-token-actions .yc-btn { margin-top: 0; flex: 1; min-width: 150px; }
+
+  .yc-footer { text-align: center; font-size: .74rem; color: var(--muted-brown); margin-top: 1.5rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body class="is-loading">
+
+<div id="appLoader" role="status" aria-live="polite" aria-label="Loading Shri Vihat Meldi Mata Mandir">
+  <div class="ldr-inner">
+    <div class="ldr-mandala" aria-hidden="true">
+      <svg viewBox="0 0 200 200">
+        <defs>
+          <radialGradient id="ldrGlowGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#F0C86A" stop-opacity="0.75"/>
+            <stop offset="70%" stop-color="#F0C86A" stop-opacity="0"/>
+          </radialGradient>
+          <path id="ldrPetal" d="M100 40 C118 60 118 86 100 104 C82 86 82 60 100 40 Z"/>
+          <path id="ldrLeaf"  d="M100 66 C110 78 110 92 100 102 C90 92 90 78 100 66 Z"/>
+        </defs>
+        <circle class="ldr-glow" cx="100" cy="100" r="96" fill="url(#ldrGlowGrad)"/>
+        <g class="ldr-ring-o" fill="rgba(201,162,74,0.08)" stroke="#C9A24A" stroke-width="1.1">
+          <circle cx="100" cy="100" r="90" fill="none"/>
+          <circle cx="100" cy="100" r="82" fill="none" stroke-dasharray="2 6"/>
+          <use href="#ldrPetal" transform="rotate(0 100 100)"/>
+          <use href="#ldrPetal" transform="rotate(45 100 100)"/>
+          <use href="#ldrPetal" transform="rotate(90 100 100)"/>
+          <use href="#ldrPetal" transform="rotate(135 100 100)"/>
+          <use href="#ldrPetal" transform="rotate(180 100 100)"/>
+          <use href="#ldrPetal" transform="rotate(225 100 100)"/>
+          <use href="#ldrPetal" transform="rotate(270 100 100)"/>
+          <use href="#ldrPetal" transform="rotate(315 100 100)"/>
+        </g>
+        <g class="ldr-ring-m" fill="rgba(201,106,32,0.10)" stroke="#C96A20" stroke-width="1.1">
+          <circle cx="100" cy="100" r="62" fill="none"/>
+          <use href="#ldrLeaf" transform="rotate(22.5 100 100)"/>
+          <use href="#ldrLeaf" transform="rotate(67.5 100 100)"/>
+          <use href="#ldrLeaf" transform="rotate(112.5 100 100)"/>
+          <use href="#ldrLeaf" transform="rotate(157.5 100 100)"/>
+          <use href="#ldrLeaf" transform="rotate(202.5 100 100)"/>
+          <use href="#ldrLeaf" transform="rotate(247.5 100 100)"/>
+          <use href="#ldrLeaf" transform="rotate(292.5 100 100)"/>
+          <use href="#ldrLeaf" transform="rotate(337.5 100 100)"/>
+        </g>
+        <g class="ldr-core" fill="none" stroke="#6B1F2A" stroke-width="1.6">
+          <circle cx="100" cy="100" r="38"/>
+          <rect x="76" y="76" width="48" height="48" transform="rotate(45 100 100)"/>
+          <rect x="76" y="76" width="48" height="48"/>
+          <circle cx="100" cy="100" r="19" fill="#C9A24A" stroke="none"/>
+          <text x="100" y="110" text-anchor="middle" stroke="none" fill="#6B1F2A"
+                font-family="'Noto Serif Gujarati', Georgia, serif" font-size="24" font-weight="700">ૐ</text>
+        </g>
+      </svg>
+    </div>
+    <div class="ldr-title">શ્રી વિહત મેલડી માતા મંદિર</div>
+    <div class="ldr-sub">જય શ્રી વિહત મેલડી માતાજી 🙏</div>
+    <div class="ldr-track"><div class="ldr-bar" id="ldrBar"></div></div>
+    <div class="ldr-hint" id="ldrHint">Preparing the mandir</div>
+  </div>
+</div>
+
+<div class="yc-wrap">
+  <div class="yc-header">
+    <img class="yc-emblem" src="assets/icon.png" alt="" onerror="this.style.display='none'">
+    <h1>Shri Vihat Meldi Mata Mandir</h1>
+    <p>Sanand, Gujarat</p>
+    <div class="yc-ribbon">॥ Maha Yagna Sevarthi Registration ॥</div>
+  </div>
+
+  <main id="ycMain">
+
+    <!-- Registration form -->
+    <section id="ycRegister" class="yc-panel" hidden>
+      <h2>🔥 Become a Yagna Sevarthi</h2>
+      <p class="yc-sub">Register your interest in sponsoring a seva at the upcoming Maha Yagna. You'll receive a token — keep it safe, you'll need it to check your registration later.</p>
+      <form id="ycForm" onsubmit="return ycSubmit(event)">
+        <div class="yc-form-grid">
+          <div class="yc-field"><label for="ycFirst">First name *</label><input id="ycFirst" required maxlength="60"></div>
+          <div class="yc-field"><label for="ycLast">Last name</label><input id="ycLast" maxlength="60"></div>
+          <div class="yc-field yc-full"><label for="ycSamaj">Samaj name *</label>
+            <input id="ycSamaj" required maxlength="80" placeholder="e.g. Rabari Samaj">
+          </div>
+          <div class="yc-field"><label for="ycCity">City</label><input id="ycCity" maxlength="60"></div>
+          <div class="yc-field"><label for="ycState">State</label><input id="ycState" maxlength="60" value="Gujarat"></div>
+          <div class="yc-field"><label for="ycMobile">Mobile number *</label><input id="ycMobile" inputmode="numeric" maxlength="10" required placeholder="10-digit mobile"></div>
+          <div class="yc-field"><label for="ycAmount">Expected Yagna contribution (₹) *</label><input id="ycAmount" type="number" min="0" step="1" required></div>
+        </div>
+        <button type="submit" class="yc-btn" id="ycSubmitBtn">Submit Registration</button>
+        <div class="yc-msg" id="ycFormMsg"></div>
+      </form>
+    </section>
+
+    <!-- Registration closed / not open -->
+    <section id="ycClosed" class="yc-panel" hidden>
+      <h2>🙏 Registration is not open right now</h2>
+      <p class="yc-sub" id="ycClosedMsg">Please check back later.</p>
+    </section>
+
+    <div class="yc-link-row" id="ycLookupPrompt" hidden>Already registered? <a href="#lookup">Check your token</a></div>
+
+    <!-- Token lookup -->
+    <section id="ycLookup" class="yc-panel" hidden>
+      <h2>🔎 Check your registration</h2>
+      <p class="yc-sub">Enter your token and the mobile number you registered with.</p>
+      <form id="ycLookupForm" onsubmit="return ycVerify(event)">
+        <div class="yc-form-grid">
+          <div class="yc-field"><label for="ycLkToken">Token</label><input id="ycLkToken" required placeholder="MYS-00001" style="text-transform:uppercase"></div>
+          <div class="yc-field"><label for="ycLkMobile">Mobile number</label><input id="ycLkMobile" inputmode="numeric" maxlength="10" required placeholder="10-digit mobile"></div>
+        </div>
+        <button type="submit" class="yc-btn" id="ycLkBtn">Check</button>
+        <div class="yc-msg" id="ycLkMsg"></div>
+      </form>
+      <div class="yc-link-row"><a href="#">← Back to registration</a></div>
+    </section>
+
+    <!-- Token result -->
+    <section id="ycTokenView" hidden>
+      <div class="yc-card" id="ycTokenCard"></div>
+      <div class="yc-token-actions">
+        <button type="button" class="yc-btn" onclick="ycDownloadPdf()">⬇ Download PDF</button>
+        <button type="button" class="yc-btn yc-btn-outline" onclick="ycReset()">Back</button>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="yc-footer">માતાજીની કૃપા, ભક્તોની શ્રદ્ધા &nbsp;·&nbsp; ખમ્મા માડી 🙏<br>Shri Vihat Meldi Mata Mandir, Sanand, Gujarat</div>
+</div>
+
+<!-- PDF engine (ensurePdfLibs/html2canvas-pro/pdfMake) + assetURL — self-contained,
+     safe to load standalone (see MAHA_YAGNA_PLAN.md). -->
+<script src="js/export.js"></script>
+
+<script>
+/* ---- splash loader boot — identical mechanism to index.html ---- */
+(function () {
+  var loader = document.getElementById('appLoader');
+  if (!loader) return;
+  var bar = document.getElementById('ldrBar');
+  var hint = document.getElementById('ldrHint');
+  var pct = 8, target = 12, done = false, hi = 0;
+  var t0 = Date.now();
+  var MIN_SHOW = 1200;   // floor so a fast load still shows the mandir, never a flash
+  var hints = ['Preparing the mandir', 'Lighting the diyas', 'Almost ready'];
+  function paint() { if (bar) bar.style.width = pct.toFixed(1) + '%'; }
+  function tick() {
+    if (done) return;
+    pct += (target - pct) * 0.14;
+    if (target < 90) target += 0.4;
+    paint();
+    requestAnimationFrame(tick);
+  }
+  window.__boot = function (t, m) {
+    target = Math.max(target, Math.min(t, 100));
+    if (m && hint) hint.textContent = m;
+  };
+  var rot = setInterval(function () {
+    if (done || !hint) return;
+    hi = (hi + 1) % hints.length;
+    hint.textContent = hints[hi];
+  }, 1200);
+  window.addEventListener('load', finish);
+  var guard = setTimeout(finish, 6000);   // never trap the user
+  function finish() {
+    if (done) return;
+    done = true;
+    clearInterval(rot); clearTimeout(guard);
+    target = 100; pct = 100; paint();
+    if (hint) hint.textContent = hints[2];
+    setTimeout(close, Math.max(0, MIN_SHOW - (Date.now() - t0)));
+  }
+  function close() {
+    loader.classList.add('ldr-done');
+    setTimeout(function () {
+      document.documentElement.classList.remove('is-loading');
+      document.body.classList.remove('is-loading');
+      if (loader.parentNode) loader.parentNode.removeChild(loader);
+    }, 550);
+  }
+  document.documentElement.classList.add('is-loading');
+  requestAnimationFrame(tick);
+})();
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function money(n) { return '₹' + (Number(n) || 0).toLocaleString('en-IN'); }
+  function show(id) { var el = document.getElementById(id); if (el) el.hidden = false; }
+  function hide(id) { var el = document.getElementById(id); if (el) el.hidden = true; }
+  function msg(id, kind, text) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'yc-msg ' + kind;
+    el.textContent = text;
+    el.style.display = 'block';
+  }
+
+  async function api(method, path, body) {
+    var res = await fetch('/api/public' + path, {
+      method: method,
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) { var err = new Error((data && data.error) || ('HTTP ' + res.status)); err.status = res.status; throw err; }
+    return data;
+  }
+
+  /* deterministic pseudo-QR block — visual only, matches the app's existing
+     badge design language (management-ui.js qrCells()), not a real scanner code */
+  function qrCells(seed) {
+    var h = 0;
+    for (var i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) & 0xffffffff;
+    function rnd(n) { h = (h * 1103515245 + 12345) & 0x7fffffff; return h % n; }
+    var out = '';
+    for (var y = 0; y < 21; y++) {
+      for (var x = 0; x < 21; x++) {
+        var finder = (y < 7 && x < 7) || (y < 7 && x > 13) || (y > 13 && x < 7);
+        var on = finder ? true : rnd(100) > 52;
+        if (on) out += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="currentColor"/>';
+      }
+    }
+    return out;
+  }
+
+  function tokenCardHtml(x) {
+    var name = (x.firstName + ' ' + (x.lastName || '')).trim();
+    return '' +
+      '<span class="yc-corner tl"></span><span class="yc-corner tr"></span><span class="yc-corner bl"></span><span class="yc-corner br"></span>' +
+      '<img class="yc-card-hero" src="assets/temple.png" alt="" crossorigin="anonymous" onerror="this.style.display=\'none\'">' +
+      '<div class="yc-card-head">' +
+        '<img class="yc-card-emblem" src="assets/icon.png" alt="" crossorigin="anonymous" onerror="this.style.display=\'none\'">' +
+        '<div class="yc-card-temple">Shri Vihat Meldi Mata Mandir</div>' +
+        '<div class="yc-card-loc">Sanand, Gujarat</div>' +
+      '</div>' +
+      '<div class="yc-card-ribbon">Maha Yagna Sevarthi — Registration Token</div>' +
+      '<div class="yc-card-token"><span>Your token</span>' + esc(x.code) + '</div>' +
+      '<div class="yc-kv-grid">' +
+        '<div class="yc-kv yc-full"><b>Sevarthi name</b><span>' + esc(name || '—') + '</span></div>' +
+        '<div class="yc-kv"><b>Samaj</b><span>' + esc(x.samajName || '—') + '</span></div>' +
+        '<div class="yc-kv"><b>Status</b><span>' + esc((x.status || 'submitted').replace(/^./, function (c) { return c.toUpperCase(); })) + '</span></div>' +
+        '<div class="yc-kv"><b>City</b><span>' + esc(x.city || '—') + '</span></div>' +
+        '<div class="yc-kv"><b>State</b><span>' + esc(x.state || '—') + '</span></div>' +
+        '<div class="yc-kv"><b>Mobile</b><span>' + esc(x.mobile || '—') + '</span></div>' +
+        '<div class="yc-kv"><b>Expected contribution</b><span>' + esc(money(x.expectedContribution)) + '</span></div>' +
+      '</div>' +
+      '<div class="yc-card-foot">' +
+        '<div class="yc-qr"><svg viewBox="0 0 21 21" aria-hidden="true">' + qrCells(x.code) + '</svg></div>' +
+        '<div class="yc-card-note">Keep this token safe — you\'ll need it (with your mobile number) to check your registration and, once the Maha Yagna schedule is finalised, your pooja assignment. Present this token if asked by temple staff.</div>' +
+      '</div>';
+  }
+
+  var _lastSignup = null;
+
+  function renderToken(x, autoDownload) {
+    _lastSignup = x;
+    document.getElementById('ycTokenCard').innerHTML = tokenCardHtml(x);
+    hide('ycRegister'); hide('ycClosed'); hide('ycLookup'); hide('ycLookupPrompt');
+    show('ycTokenView');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (autoDownload) setTimeout(function () { ycDownloadPdf(); }, 400);
+  }
+
+  window.ycReset = function () {
+    hide('ycTokenView');
+    ycBoot();
+  };
+
+  window.ycDownloadPdf = async function () {
+    if (!_lastSignup || typeof window.ensurePdfLibs !== 'function') return;
+    var card = document.getElementById('ycTokenCard');
+    try {
+      var libs = await window.ensurePdfLibs();
+      var canvas = await libs.html2canvas(card, { scale: 2.5, backgroundColor: '#fffdf8', useCORS: true, logging: false, imageTimeout: 5000 });
+      var img = canvas.toDataURL('image/jpeg', 0.94);
+      var M = 24;
+      var pageWpt = 595.28 - 2 * M;
+      var w = pageWpt, h = w * canvas.height / canvas.width;
+      libs.pdfMake.createPdf({
+        pageSize: 'A4', pageOrientation: 'portrait', pageMargins: [M, M, M, M],
+        content: [{ image: img, width: w, height: h, alignment: 'center' }],
+      }).download('maha-yagna-token-' + _lastSignup.code + '.pdf');
+    } catch (e) { /* PDF engine failed to load — the on-screen card still shows every detail */ }
+  };
+
+  window.ycSubmit = function (ev) {
+    ev.preventDefault();
+    var btn = document.getElementById('ycSubmitBtn');
+    var mobile = document.getElementById('ycMobile').value.trim();
+    if (!/^[0-9]{10}$/.test(mobile)) { msg('ycFormMsg', 'err', 'Mobile number must be exactly 10 digits.'); return false; }
+    var body = {
+      firstName: document.getElementById('ycFirst').value.trim(),
+      lastName: document.getElementById('ycLast').value.trim(),
+      samajName: document.getElementById('ycSamaj').value.trim(),
+      city: document.getElementById('ycCity').value.trim(),
+      state: document.getElementById('ycState').value.trim(),
+      mobile: mobile,
+      expectedContribution: document.getElementById('ycAmount').value,
+    };
+    btn.disabled = true;
+    api('POST', '/yagna/submit', body).then(function (x) {
+      renderToken(x, true);
+    }).catch(function (err) {
+      msg('ycFormMsg', 'err', err.message || 'Something went wrong. Please try again.');
+    }).finally(function () { btn.disabled = false; });
+    return false;
+  };
+
+  window.ycVerify = function (ev) {
+    ev.preventDefault();
+    var btn = document.getElementById('ycLkBtn');
+    var code = document.getElementById('ycLkToken').value.trim().toUpperCase();
+    var mobile = document.getElementById('ycLkMobile').value.trim();
+    btn.disabled = true;
+    api('POST', '/yagna/verify', { code: code, mobile: mobile }).then(function (x) {
+      renderToken(x, false);
+    }).catch(function (err) {
+      msg('ycLkMsg', 'err', err.status === 404 ? 'No registration found for that token and mobile number.' : (err.message || 'Something went wrong.'));
+    }).finally(function () { btn.disabled = false; });
+    return false;
+  };
+
+  async function ycBoot() {
+    hide('ycTokenView'); hide('ycClosed'); hide('ycRegister');
+    if (location.hash === '#lookup') {
+      hide('ycLookupPrompt'); show('ycLookup');
+      return;
+    }
+    hide('ycLookup');
+    try {
+      var status = await api('GET', '/yagna/status');
+      if (status.open) {
+        show('ycRegister'); show('ycLookupPrompt');
+      } else {
+        var m = 'Registration will open soon. Please check back later.';
+        if (status.enabled && status.opensAt) m = 'Registration opens ' + status.opensAt.replace('T', ' ') + '.';
+        else if (status.enabled && status.closesAt) m = 'Registration has closed.';
+        document.getElementById('ycClosedMsg').textContent = m;
+        show('ycClosed'); show('ycLookupPrompt');
+      }
+    } catch (e) {
+      document.getElementById('ycClosedMsg').textContent = 'Could not reach the server. Please reload and try again.';
+      show('ycClosed');
+    }
+  }
+
+  window.addEventListener('hashchange', ycBoot);
+  ycBoot();
+})();
+</script>
+
+</body>
+</html>

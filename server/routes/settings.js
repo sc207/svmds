@@ -3,7 +3,7 @@
    writes are admin tier. (BACKEND_PLAN.md §10.3) */
 const express = require('express');
 const { requireRole } = require('../middleware/authz');
-const { getSettings, setWorkingDate, clearWorkingDate, setTempleIdentity, setDefaultLanguage } = require('../services/settingsStore');
+const { getSettings, setWorkingDate, clearWorkingDate, setTempleIdentity, setDefaultLanguage, setYagnaRegistration } = require('../services/settingsStore');
 const { logAudit } = require('../services/audit');
 
 const router = express.Router();
@@ -54,6 +54,18 @@ router.put('/language', adminTier, async (req, res, next) => {
     const out = await setDefaultLanguage(lang);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Settings',
       action: 'UPDATE', entityType: 'default_language', details: { lang } });
+    res.json(out);
+  } catch (e) { next(e); }
+});
+
+/* PUT /yagna-registration  { enabled, opensAt:'YYYY-MM-DDTHH:MM'|null, closesAt|null }
+   Controls the public Maha Yagna sevarthi registration page (public/yagna.html) —
+   MAHA_YAGNA_PLAN.md. */
+router.put('/yagna-registration', adminTier, async (req, res, next) => {
+  try {
+    const out = await setYagnaRegistration(req.body || {});
+    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Settings',
+      action: 'UPDATE', entityType: 'yagna_registration', details: req.body || {} });
     res.json(out);
   } catch (e) { next(e); }
 });

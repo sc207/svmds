@@ -33,6 +33,8 @@
 
       nav_dhaja:'🚩 Dhaja Pooja', cal_dhaja:'🚩 Dhaja', rep_dhaja:'Dhaja Pooja',
       dhaja_title:'Dhaja Pooja', dhaja_subtitle:"Sevarthis sponsor a dhaja — each sponsorship gets an 80G receipt",
+
+      nav_yagna_signups:'🔥 Maha Yagna Signups',
       dhaja_sponsor_btn:'Sponsor a Dhaja', dhaja_register:'Sponsorship register',
       dhaja_campaigns:'Campaigns', dhaja_campaigns_meta:'February + special days',
       dhaja_sponsored:'Sponsored', dhaja_sponsored_meta:'Dhaja poojas booked',
@@ -248,6 +250,8 @@
       annc_today:'आज', annc_tomorrow:'कल', annc_in_days:'{n} दिन में',
       annc_view:'विवरण देखें', annc_continue:'डैशबोर्ड पर जाएँ',
 
+      nav_yagna_signups:'🔥 महा यज्ञ पंजीकरण',
+
       nav_dhaja:'🚩 ध्वजा पूजा', cal_dhaja:'🚩 ध्वजा', rep_dhaja:'ध्वजा पूजा',
       dhaja_title:'ध्वजा पूजा', dhaja_subtitle:'सेवार्थी ध्वजा पूजा प्रायोजित करते हैं — हर प्रायोजन पर 80G रसीद',
       dhaja_sponsor_btn:'ध्वजा प्रायोजित करें', dhaja_register:'प्रायोजन रजिस्टर',
@@ -462,6 +466,8 @@
       annc_kicker:'આજના મંદિર સમાચાર', annc_update:'સૂચના', annc_updates:'સૂચનાઓ',
       annc_today:'આજે', annc_tomorrow:'આવતીકાલે', annc_in_days:'{n} દિવસમાં',
       annc_view:'વિગતો જુઓ', annc_continue:'ડેશબોર્ડ પર જાઓ',
+
+      nav_yagna_signups:'🔥 મહા યજ્ઞ નોંધણી',
 
       nav_dhaja:'🚩 ધજા પૂજા', cal_dhaja:'🚩 ધજા', rep_dhaja:'ધજા પૂજા',
       dhaja_title:'ધજા પૂજા', dhaja_subtitle:'સેવાર્થી ધજા પૂજાનું પ્રાયોજન કરે છે — દરેક પ્રાયોજન પર 80G રસીદ',

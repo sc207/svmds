@@ -49,6 +49,7 @@
         window.setLanguage(s.defaultLanguage, { announce: false });
       }
     } catch (e) {}
+    if (typeof YAGNA !== 'undefined' && s.yagnaRegistration) YAGNA.settings = s.yagnaRegistration;
     log('settings applied (clock ' + (overridden ? 'kept local override' : s.workingDate) + ')');
   }
 
@@ -418,6 +419,16 @@
     log('dhaja: ' + DHAJA.sponsorships.length + ' (' + DHAJA.campaigns.length + ' campaigns)');
   }
 
+  /* ---- Maha Yagna Sevarthi signups (admin-only register) ---- */
+  async function hydrateYagnaSignups() {
+    if (typeof YAGNA === 'undefined') return;
+    var rows = await window.API.get('/yagna-signups');
+    if (!Array.isArray(rows)) return;
+    swap(YAGNA.list, rows);   // already the mapped DTO shape the store expects
+    if (typeof renderYagnaSignups === 'function') renderYagnaSignups();
+    log('yagna-signups: ' + YAGNA.list.length);
+  }
+
   /* ---- Accounts (people.js's shared ACCOUNTS registry) ----
      Nothing ever hydrated this before: ACCOUNTS was seeded once with a
      single demo "Administrator" entry (people.js) and never touched again,
@@ -467,10 +478,11 @@
     committees: hydrateCommittees, teams: hydrateTeams,
     poojas: hydratePoojas, events: hydrateEvents, visits: hydrateVisits,
     donations: hydrateDonations, dhaja: hydrateDhaja, accounts: hydrateAccounts,
+    yagna: hydrateYagnaSignups,
   };
   // the full boot load runs `core` (devotees + inventory + expenses); a scoped
   // refresh runs only `devotees`.
-  var ALL = ['core', 'committees', 'teams', 'poojas', 'events', 'visits', 'donations', 'dhaja', 'accounts'];
+  var ALL = ['core', 'committees', 'teams', 'poojas', 'events', 'visits', 'donations', 'dhaja', 'accounts', 'yagna'];
 
   // run(undefined)        → full boot load (every module + settings)
   // run('dhaja') / run(['poojas','donations']) → just those modules (+ core, so
