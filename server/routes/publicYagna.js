@@ -19,6 +19,14 @@ const router = express.Router();
 
 const submitLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 8, message: { error: 'Too many submissions, try again later' } });
 const verifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many attempts, try again later' } });
+// Wrong-guess lockout: counts only FAILED verify attempts (skipSuccessfulRequests —
+// a correct token+mobile never counts against this), keyed by IP ("this device").
+// 3 wrong guesses locks further attempts out for an hour — closes the token+mobile
+// brute-force window much tighter than the general request-flood limiter above.
+const verifyLockout = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 3, skipSuccessfulRequests: true,
+  message: { error: 'Too many incorrect attempts. Please try again after an hour.' },
+});
 
 const YAGNA_SELECT = `SELECT y.* FROM yagna_sevarthi_signups y WHERE y.is_deleted = 0`;
 
@@ -84,8 +92,9 @@ router.post('/yagna/submit', submitLimiter, async (req, res, next) => {
 });
 
 /* POST /yagna/verify { code, mobile } — BOTH required (prevents enumerating
-   other people's details via a guessable sequential token alone). */
-router.post('/yagna/verify', verifyLimiter, async (req, res, next) => {
+   other people's details via a guessable sequential token alone), and a
+   device gets locked out for an hour after 3 wrong guesses (verifyLockout). */
+router.post('/yagna/verify', verifyLimiter, verifyLockout, async (req, res, next) => {
   try {
     const b = req.body || {};
     const code = String(b.code || '').trim().toUpperCase();

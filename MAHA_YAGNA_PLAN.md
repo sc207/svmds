@@ -45,7 +45,16 @@ purpose, per explicit user instruction.
 **both** the token code AND the 10-digit mobile number — a bare sequential
 token would let anyone enumerate other people's name/city/contribution by
 guessing `MYS-00001`, `MYS-00002`, etc. Two-factor lookup closes that without
-adding any new dependency (no OTP/CAPTCHA needed for this phase).
+adding any new dependency (no OTP/CAPTCHA needed for this phase). On top of
+that, `/yagna/verify` locks a device (IP) out for **1 hour after 3 wrong
+attempts** — `express-rate-limit`'s `skipSuccessfulRequests: true` so a
+correct check never counts against the limit, only failed ones do; once
+locked out, even a subsequently-correct token+mobile stays blocked until
+the hour passes (real lockout semantics, not "3 wrong then let the next
+correct one through"). This is `verifyLockout` in
+`server/routes/publicYagna.js`, separate from and stacked with the looser
+general request-flood limiter (`verifyLimiter`, 20/15min) already on that
+route.
 
 **Samaj field decision (user-confirmed correction):** the committee field is
 **free-text "Samaj name," not a dropdown, and not an FK to the `committees`
