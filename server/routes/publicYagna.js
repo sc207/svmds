@@ -59,28 +59,51 @@ router.post('/yagna/submit', submitLimiter, async (req, res, next) => {
     const contribution = Number(b.expectedContribution);
     if (!(contribution >= 0)) return res.status(400).json({ error: 'Expected contribution must be a number' });
 
-    // double-submit guard: an existing non-deleted row for the same mobile in
-    // the last 24h just returns its token instead of creating a duplicate.
-    const existing = await queryOne(
+    // Duplicate guard: same first name + last name + mobile (case/whitespace-
+    // insensitive) already registered → return THAT registration instead of
+    // creating a new one. Not time-limited (a Yagna registration is a one-time
+    // thing, not a "did they double-click" check) and enforced for real at the
+    // DB layer too (ux_yagna_signups_identity, migration 017), so two
+    // concurrent identical submits can never both succeed.
+    const dupe = () => queryOne(
       `SELECT id FROM yagna_sevarthi_signups
-        WHERE mobile = ? AND is_deleted = 0 AND created_at >= datetime('now', '-1 day')
-        ORDER BY created_at DESC LIMIT 1`, [mobile]);
+        WHERE is_deleted = 0 AND mobile = ?
+          AND lower(trim(first_name)) = lower(trim(?)) AND lower(trim(last_name)) = lower(trim(?))
+        ORDER BY created_at DESC LIMIT 1`, [mobile, firstName, lastName]);
+
+    const existing = await dupe();
     if (existing) {
       const row = await signupById(existing.id);
-      return res.status(200).json({ ...mapYagnaSignup(row), _deduped: true });
+      return res.status(200).json({
+        ...mapYagnaSignup(row), _duplicate: true,
+        message: 'You have already registered with this name and mobile number.',
+      });
     }
 
     const id = crypto.randomUUID();
     const code = await nextCode('yagna_sevarthi');
-    await run(
-      `INSERT INTO yagna_sevarthi_signups
-         (id, code, first_name, last_name, samaj_name, city, state, mobile,
-          expected_contribution, submitted_ip)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, code, firstName, lastName, samajName,
-       String(b.city || '').trim(), String(b.state || 'Gujarat').trim(), mobile, contribution,
-       String(req.ip || '').slice(0, 64)]
-    );
+    try {
+      await run(
+        `INSERT INTO yagna_sevarthi_signups
+           (id, code, first_name, last_name, samaj_name, city, state, mobile,
+            expected_contribution, submitted_ip)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, code, firstName, lastName, samajName,
+         String(b.city || '').trim(), String(b.state || 'Gujarat').trim(), mobile, contribution,
+         String(req.ip || '').slice(0, 64)]
+      );
+    } catch (e) {
+      // lost a race against ux_yagna_signups_identity — reselect + return
+      const again = await dupe();
+      if (again) {
+        const row = await signupById(again.id);
+        return res.status(200).json({
+          ...mapYagnaSignup(row), _duplicate: true,
+          message: 'You have already registered with this name and mobile number.',
+        });
+      }
+      throw e;
+    }
     await logAudit({
       userEmail: 'public', module: 'Maha Yagna Sevarthi',
       action: 'CREATE', entityType: 'yagna_signup', entityId: code,

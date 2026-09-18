@@ -265,6 +265,7 @@
 
     <!-- Token result -->
     <section id="ycTokenView" hidden>
+      <div class="yc-msg ok" id="ycDupeNotice" style="display:none"></div>
       <div class="yc-card" id="ycTokenCard"></div>
       <div class="yc-token-actions">
         <button type="button" class="yc-btn" onclick="ycDownloadPdf()">⬇ Download PDF</button>
@@ -412,11 +413,20 @@
 
   function renderToken(x, autoDownload) {
     _lastSignup = x;
+    var notice = document.getElementById('ycDupeNotice');
+    if (x._duplicate) {
+      notice.textContent = x.message || 'You have already registered with this name and mobile number. Here is your existing token.';
+      notice.style.display = 'block';
+    } else {
+      notice.style.display = 'none';
+    }
     document.getElementById('ycTokenCard').innerHTML = tokenCardHtml(x);
     hide('ycRegister'); hide('ycClosed'); hide('ycLookup'); hide('ycLookupPrompt');
     show('ycTokenView');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (autoDownload) setTimeout(function () { ycDownloadPdf(); }, 400);
+    // Don't nag a repeat submitter with another automatic download — they
+    // already have this PDF; the Download button is right there if they need it again.
+    if (autoDownload && !x._duplicate) setTimeout(function () { ycDownloadPdf(); }, 400);
   }
 
   window.ycReset = function () {

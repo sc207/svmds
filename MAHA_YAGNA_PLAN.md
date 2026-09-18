@@ -66,6 +66,25 @@ manually. **Nothing is auto-created or auto-matched against `committees` in
 Phase 1.** The admin register shows a "Samaj names as submitted" breakdown
 (grouped, counted, unnormalised) specifically to support this cleanup step.
 
+**Duplicate-identity decision (user-confirmed, migration 017):** a
+registration is a duplicate when **first name + last name + mobile number**
+all match an existing live row (case/whitespace-insensitive) — not mobile
+alone (a shared household phone can register more than one real sevarthi),
+and not time-limited (a Yagna registration is a one-time thing, not a
+"did they double-click" check). Enforced at the DB layer
+(`ux_yagna_signups_identity`, a partial `UNIQUE` index on
+`lower(trim(first_name)), lower(trim(last_name)), mobile` where
+`is_deleted = 0`), not just an app-level pre-check, so two concurrent
+identical submits can never both create a row — `POST /yagna/submit`
+pre-checks (fast path), inserts, and on a `UNIQUE` violation re-selects and
+returns the row that won the race, exactly the
+"pre-check → INSERT → catch → re-select" pattern `FEATURE_INTEGRATION.md`
+already uses everywhere else (e.g. `routes/devotees.js`). The response
+carries `_duplicate: true` + a `message`; `yagna.html` shows an explicit
+"you have already registered" banner above the token card instead of
+silently treating it like a fresh submission, and skips the automatic PDF
+download (they already have it — the Download button is still right there).
+
 ## Architecture — reusing existing patterns, not forking them
 
 - **Public unauthenticated route precedent**: `server/routes/publicSignups.js`
@@ -149,11 +168,13 @@ happens anywhere in this phase.
   auth guard):
   - `GET /yagna/status` → `{ enabled, open, opensAt, closesAt }`.
   - `POST /yagna/submit` — rate-limited, validates (`samajName` required,
-    free text), 400/404s if not open,
-    double-submit guard by mobile, returns the full mapped row so the client
-    renders the token card without a second round trip.
-  - `POST /yagna/verify` — body `{code, mobile}`, both required, more
-    tightly rate-limited than submit, 404 on any mismatch (never reveals
+    free text), 400/404s if not open, duplicate guard by first+last name+
+    mobile (DB-enforced, see the Duplicate-identity decision above), returns
+    the full mapped row so the client renders the token card without a
+    second round trip.
+  - `POST /yagna/verify` — body `{code, mobile}`, both required, rate-limited
+    against request volume AND locked out for an hour after 3 wrong attempts
+    (see the Security decision above), 404 on any mismatch (never reveals
     which field was wrong).
 - **`server/routes/yagnaSignups.js`** (admin, `requireRole('superadmin','admin')`):
   `GET /`, `GET/PUT /settings`, `PATCH /:id`, `DELETE /:id`. Every write →
