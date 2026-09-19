@@ -172,13 +172,20 @@
   var titleEl = document.getElementById('ldrTitle');
   var pct = 8, target = 12, done = false, hi = 0, ni = 0;
   var t0 = Date.now();
-  var MIN_SHOW = 1500;   // floor so a cached / fast load still shows the mandir, never a flash
   var hints = ['Preparing the mandir', 'Lighting the diyas', 'Gathering the seva records', 'Almost ready'];
   // Devotional invocations, cycled one at a time in the title spot while the
-  // mandir loads — a separate, faster rotation from the hint line above, so
-  // it isn't tied to the same 1.5s cadence.
+  // mandir loads. The real page can finish loading (often ~2s) well before a
+  // human has read all 5 — so closing waits on BOTH the real `load` event AND
+  // this cycle completing naturally (see cycleDone/pageDone below); it never
+  // force-jumps mid-cycle to the last name, and the loader stays up long
+  // enough for every name to actually be read.
   var names = ['શ્રી વિહત માતાય નમઃ', 'શ્રી મેલડી માતાય નમઃ', 'જય શ્રી ગોગા મહારાજ',
     'પરમ પૂજ્ય ભગવાન શ્રી કરમશી બાપાને સાદર નમન', 'પરમ પૂજ્ય ભુવાજી શ્રી સુરેશ બાપાને કોટિ કોટિ નમન'];
+  var NAME_HOLD = 700;    // ms each name is shown
+  // floor so the loader always stays up for the full name cycle plus a short
+  // hold on the last name, even when the real page loads in ~2s or less.
+  var MIN_SHOW = names.length * NAME_HOLD + 400;
+  var pageDone = false, cycleDone = false;
   function paint() { if (bar) bar.style.width = pct.toFixed(1) + '%'; }
   function tick() {
     if (done) return;
@@ -198,19 +205,31 @@
   }, 1500);
   var nameRot = setInterval(function () {
     if (done || !titleEl) return;
-    ni = (ni + 1) % names.length;
+    ni++;
+    if (ni >= names.length) {
+      ni = names.length - 1;
+      titleEl.textContent = names[ni];
+      clearInterval(nameRot);
+      cycleDone = true;
+      maybeFinish();
+      return;
+    }
     titleEl.textContent = names[ni];
-  }, 500);
+  }, NAME_HOLD);
   document.addEventListener('DOMContentLoaded', function () { window.__boot(84, hints[2]); });
-  window.addEventListener('load', finish);
-  var guard = setTimeout(finish, 8000);             // never trap the user
+  window.addEventListener('load', function () { pageDone = true; maybeFinish(); });
+  var guard = setTimeout(function () { pageDone = true; cycleDone = true; maybeFinish(); },
+    names.length * NAME_HOLD + 4000);                // never trap the user
+  function maybeFinish() {
+    if (done || !pageDone || !cycleDone) return;
+    finish();
+  }
   function finish() {
     if (done) return;
     done = true;
     clearInterval(rot); clearInterval(nameRot); clearTimeout(guard);
     target = 100; pct = 100; paint();
     if (hint) hint.textContent = hints[3];
-    if (titleEl) titleEl.textContent = names[names.length - 1];
     // If the real load was slow this waits 0ms; if it was fast, hold to MIN_SHOW.
     setTimeout(close, Math.max(0, MIN_SHOW - (Date.now() - t0)));
   }

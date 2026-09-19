@@ -293,10 +293,14 @@
   var titleEl = document.getElementById('ldrTitle');
   var pct = 8, target = 12, done = false, hi = 0, ni = 0;
   var t0 = Date.now();
-  var MIN_SHOW = 1200;   // floor so a fast load still shows the mandir, never a flash
   var hints = ['Preparing the mandir', 'Lighting the diyas', 'Almost ready'];
+  // See index.html for why this waits on BOTH the real load event and the
+  // name cycle completing naturally, instead of force-jumping to the last name.
   var names = ['શ્રી વિહત માતાય નમઃ', 'શ્રી મેલડી માતાય નમઃ', 'જય શ્રી ગોગા મહારાજ',
     'પરમ પૂજ્ય ભગવાન શ્રી કરમશી બાપાને સાદર નમન', 'પરમ પૂજ્ય ભુવાજી શ્રી સુરેશ બાપાને કોટિ કોટિ નમન'];
+  var NAME_HOLD = 700;    // ms each name is shown
+  var MIN_SHOW = names.length * NAME_HOLD + 400;
+  var pageDone = false, cycleDone = false;
   function paint() { if (bar) bar.style.width = pct.toFixed(1) + '%'; }
   function tick() {
     if (done) return;
@@ -305,8 +309,9 @@
     paint();
     requestAnimationFrame(tick);
   }
-  window.__boot = function (t) {
+  window.__boot = function (t, m) {
     target = Math.max(target, Math.min(t, 100));
+    if (m && hint) hint.textContent = m;
   };
   var rot = setInterval(function () {
     if (done || !hint) return;
@@ -315,18 +320,30 @@
   }, 900);
   var nameRot = setInterval(function () {
     if (done || !titleEl) return;
-    ni = (ni + 1) % names.length;
+    ni++;
+    if (ni >= names.length) {
+      ni = names.length - 1;
+      titleEl.textContent = names[ni];
+      clearInterval(nameRot);
+      cycleDone = true;
+      maybeFinish();
+      return;
+    }
     titleEl.textContent = names[ni];
-  }, 500);
-  window.addEventListener('load', finish);
-  var guard = setTimeout(finish, 6000);   // never trap the user
+  }, NAME_HOLD);
+  window.addEventListener('load', function () { pageDone = true; maybeFinish(); });
+  var guard = setTimeout(function () { pageDone = true; cycleDone = true; maybeFinish(); },
+    names.length * NAME_HOLD + 3000);   // never trap the user
+  function maybeFinish() {
+    if (done || !pageDone || !cycleDone) return;
+    finish();
+  }
   function finish() {
     if (done) return;
     done = true;
     clearInterval(rot); clearInterval(nameRot); clearTimeout(guard);
     target = 100; pct = 100; paint();
     if (hint) hint.textContent = hints[hints.length - 1];
-    if (titleEl) titleEl.textContent = names[names.length - 1];
     setTimeout(close, Math.max(0, MIN_SHOW - (Date.now() - t0)));
   }
   function close() {
