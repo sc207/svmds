@@ -137,9 +137,9 @@
         </g>
       </svg>
     </div>
-    <div class="ldr-title">શ્રી વિહત મેલડી ધામ</div>
-    <div class="ldr-sub" id="ldrNames">શ્રી વિહત માતાય નમઃ</div>
-    <div class="ldr-sub ldr-blessing">જય શ્રી વિહત મેલડી ધામ 🙏</div>
+    <div class="ldr-title">જય શ્રી વિહત મેલડી ધામ</div>
+    <div class="ldr-sub ldr-blessing" id="ldrNames">શ્રી વિહત માતાય નમઃ</div>
+    
     <div class="ldr-track"><div class="ldr-bar" id="ldrBar"></div></div>
     <div class="ldr-hint" id="ldrHint">Preparing the mandir</div>
   </div>
@@ -184,8 +184,8 @@
   // force-jumps mid-cycle to the last name, and the loader stays up long
   // enough for every name to actually be read.
   var names = ['શ્રી વિહત માતાય નમઃ', 'શ્રી મેલડી માતાય નમઃ', 'જય શ્રી ગોગા મહારાજ',
-    'પરમ પૂજ્ય ભગવાન શ્રી કરમશી બાપાને સાદર નમન', 'પરમ પૂજ્ય ભુવાજી શ્રી સુરેશ બાપાને કોટિ કોટિ નમન'];
-  var NAME_HOLD = 700;    // ms each name is shown
+    'ભગવાન શ્રી કરમશી બાપાને નમન', 'ભુવાજી શ્રી સુરેશ બાપાને નમન'];
+  var NAME_HOLD = 800;    // ms each name is shown
   // floor so the loader always stays up for the full name cycle plus a short
   // hold on the last name, even when the real page loads in ~2s or less.
   var MIN_SHOW = names.length * NAME_HOLD + 400;

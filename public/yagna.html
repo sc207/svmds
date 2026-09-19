@@ -206,9 +206,8 @@
         </g>
       </svg>
     </div>
-    <div class="ldr-title">શ્રી વિહત મેલડી ધામ</div>
-    <div class="ldr-sub" id="ldrNames">શ્રી વિહત માતાય નમઃ</div>
-    <div class="ldr-sub ldr-blessing">જય શ્રી વિહત મેલડી ધામ 🙏</div>
+    <div class="ldr-title">જય શ્રી વિહત મેલડી ધામ</div>
+    <div class="ldr-sub ldr-blessing" id="ldrNames">શ્રી વિહત માતાય નમઃ</div>
     <div class="ldr-track"><div class="ldr-bar" id="ldrBar"></div></div>
     <div class="ldr-hint" id="ldrHint">Preparing the mandir</div>
   </div>
@@ -301,8 +300,8 @@
   // See index.html for why this waits on BOTH the real load event and the
   // name cycle completing naturally, instead of force-jumping to the last name.
   var names = ['શ્રી વિહત માતાય નમઃ', 'શ્રી મેલડી માતાય નમઃ', 'જય શ્રી ગોગા મહારાજ',
-    'પરમ પૂજ્ય ભગવાન શ્રી કરમશી બાપાને સાદર નમન', 'પરમ પૂજ્ય ભુવાજી શ્રી સુરેશ બાપાને કોટિ કોટિ નમન'];
-  var NAME_HOLD = 700;    // ms each name is shown
+    'ભગવાન શ્રી કરમશી બાપાને નમન', 'ભુવાજી શ્રી સુરેશ બાપાને નમન'];
+  var NAME_HOLD = 800;    // ms each name is shown
   var MIN_SHOW = names.length * NAME_HOLD + 400;
   var pageDone = false, cycleDone = false;
   function paint() { if (bar) bar.style.width = pct.toFixed(1) + '%'; }
