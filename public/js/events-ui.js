@@ -313,7 +313,7 @@ function printEventNotice(id) {
     <img class="pj-invite-hero" src="${(typeof assetURL === 'function') ? assetURL('assets/temple.png') : 'assets/temple.png'}" alt="" onerror="this.style.display='none'">
     <div class="pj-invite-frame">
       <img class="pj-invite-emblem" src="${(typeof assetURL === 'function') ? assetURL('assets/icon.png') : 'assets/icon.png'}" alt="" onerror="this.style.display='none'">
-      <div class="pj-invite-temple">Shri Vihat Meldi Mata Mandir</div>
+      <div class="pj-invite-temple">Shri Vihat Meldi Dham</div>
       <div class="pj-invite-temple-sub">Sanand, Gujarat</div>
       <div class="pj-invite-invocation">${esc(window.t('ev_invite_line', 'You are cordially invited to'))}</div>
       <h1 class="pj-invite-headline">${esc(e.name)}</h1>
@@ -323,7 +323,7 @@ function printEventNotice(id) {
         ${days.map(d => `<div class="pj-invite-schedule-row"><strong>${(typeof fmtDateLong === 'function') ? fmtDateLong(d.date) : fmtDate(d.date)}</strong><span>${fmtTime(d.startTime)}–${fmtTime(d.endTime)}${e.venue ? ' · ' + esc(e.venue) : ''}</span></div>`).join('')}
       </div>
       <div class="pj-invite-blessing">${esc(window.t('banner_khamma', 'ખમ્મા માડી, ખમ્મા 🙏'))}</div>
-      <div class="pj-invite-foot">Jai Shri Vihat Meldi Mataji 🙏</div>
+      <div class="pj-invite-foot">Jai Shri Vihat Meldi Dham 🙏</div>
     </div>
   </div>`;
   if (typeof printInvitationHTML === 'function') printInvitationHTML(inner, e.name);

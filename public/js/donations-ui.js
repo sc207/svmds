@@ -279,7 +279,7 @@ function viewDonorProfile() {
    ------------------------------------------------------------ */
 function templeEmblemImg(cls) {
   const src = (typeof assetURL === 'function') ? assetURL('assets/icon.png') : 'assets/icon.png';
-  return `<img class="${cls}" src="${src}" alt="Shri Vihat Meldi Mata Mandir"
+  return `<img class="${cls}" src="${src}" alt="Shri Vihat Meldi Dham"
     onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:this.className+' don-emblem-fallback',textContent:'🛕'}))">`;
 }
 
@@ -294,7 +294,7 @@ function receiptMarkup(x) {
       <div class="don-doc-head">
         ${templeEmblemImg('don-doc-emblem')}
         <div>
-          <div class="don-doc-temple">Shri Vihat Meldi Mata Mandir</div>
+          <div class="don-doc-temple">Shri Vihat Meldi Dham</div>
           <div class="don-doc-temple-sub">Sanand, Gujarat &nbsp;·&nbsp; Public Charitable Trust</div>
         </div>
       </div>
@@ -342,7 +342,7 @@ function certificateMarkup(x) {
     <img class="don-cert-hero" src="${(typeof assetURL === 'function') ? assetURL('assets/temple.png') : 'assets/temple.png'}" alt="" aria-hidden="true" onerror="this.style.display='none'">
     <div class="don-cert-frame">
       ${templeEmblemImg('don-cert-emblem')}
-      <div class="don-cert-temple">Shri Vihat Meldi Mata Mandir</div>
+      <div class="don-cert-temple">Shri Vihat Meldi Dham</div>
       <div class="don-cert-temple-sub">Sanand, Gujarat</div>
 
       <div class="don-cert-ribbon">॥ ધન્યવાદ પ્રમાણપત્ર ॥</div>

@@ -1199,15 +1199,15 @@ async function downloadInvitationZIP(set, id) {
    Fixed phrases are translated per-card via INV_TXT / opts.lang. */
 const INV_TXT = {
   en: { invite:'You are cordially invited to', blessing:'Your presence will be our blessing.',
-        foot:'Jai Shri Vihat Meldi Mataji 🙏', ribbon:'~  Invitation  ~', programme:'Programme',
+        foot:'Jai Shri Vihat Meldi Dham 🙏', ribbon:'~  Invitation  ~', programme:'Programme',
         presence:'In the gracious presence of', sevaby:'Seva by the Sevarthi Parivar', invitee:'To',
         withfamily:'and family', ldate:'Date', ltime:'Time', lvenue:'Venue', tba:'To be announced', atmandir:'At the Mandir', session:'Session' },
   hi: { invite:'आप सादर आमंत्रित हैं', blessing:'आपकी उपस्थिति ही हमारा आशीर्वाद है।',
-        foot:'जय श्री विहत मेलडी माताजी 🙏', ribbon:'॥  आमंत्रण  ॥', programme:'कार्यक्रम',
+        foot:'जय श्री विहत मेलडी धाम 🙏', ribbon:'॥  आमंत्रण  ॥', programme:'कार्यक्रम',
         presence:'गरिमामयी उपस्थिति में', sevaby:'सेवार्थी परिवार द्वारा सेवा', invitee:'सेवा में',
         withfamily:'सपरिवार', ldate:'तिथि', ltime:'समय', lvenue:'स्थान', tba:'शीघ्र घोषित', atmandir:'मंदिर में', session:'सत्र' },
   gu: { invite:'આપ સૌને સાદર આમંત્રણ છે', blessing:'આપની ઉપસ્થિતિ એ જ અમારો આશીર્વાદ.',
-        foot:'જય શ્રી વિહત મેલડી માતાજી 🙏', ribbon:'॥  સાદર આમંત્રણ  ॥', programme:'કાર્યક્રમ',
+        foot:'જય શ્રી વિહત મેલડી ધામ 🙏', ribbon:'॥  સાદર આમંત્રણ  ॥', programme:'કાર્યક્રમ',
         presence:'મુખ્ય અતિથિ વિશેષ ઉપસ્થિતિમાં', sevaby:'સેવાર્થી પરિવાર દ્વારા સેવા', invitee:'પ્રતિ',
         withfamily:'સપરિવાર', ldate:'તારીખ', ltime:'સમય', lvenue:'સ્થળ', tba:'ટૂંક સમયમાં જાહેર', atmandir:'મંદિરે', session:'સત્ર' }
 };
@@ -1278,7 +1278,7 @@ function invitationMarkup(p, opts) {
     <div class="pj-invite-watermark">${inviteMandalaSVG()}</div>
     <div class="pj-invite-frame">
       ${inviteEmblemImg()}
-      <div class="pj-invite-temple">${esc(window.t('temple_name', 'Shri Vihat Meldi Mata Mandir'))}</div>
+      <div class="pj-invite-temple">${esc(window.t('temple_name', 'Shri Vihat Meldi Dham'))}</div>
       <div class="pj-invite-temple-sub">${esc(window.t('temple_loc', 'Sanand, Gujarat'))}</div>
       <div class="pj-invite-ribbon">${esc(ivt(L, 'ribbon'))}</div>
       <div class="pj-invite-invocation">${esc(opts.inviteLine || ivt(L, 'invite'))}</div>

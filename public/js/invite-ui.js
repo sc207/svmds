@@ -232,7 +232,7 @@ function combinedInvitationMarkup(poojas, opts) {
     <div class="pj-invite-watermark">${inviteMandalaSVG()}</div>
     <div class="pj-invite-frame">
       ${inviteEmblemImg()}
-      <div class="pj-invite-temple">${esc(window.t('temple_name', 'Shri Vihat Meldi Mata Mandir'))}</div>
+      <div class="pj-invite-temple">${esc(window.t('temple_name', 'Shri Vihat Meldi Dham'))}</div>
       <div class="pj-invite-temple-sub">${esc(window.t('temple_loc', 'Sanand, Gujarat'))}</div>
       <div class="pj-invite-ribbon">${esc(ivt(L, 'ribbon'))}</div>
       <div class="pj-invite-invocation">${esc(opts.inviteLine || ivt(L, 'invite'))}</div>

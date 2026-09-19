@@ -1,6 +1,6 @@
 /* ============================================================
    MANAGEMENT APP MODULE — Multi-Team Operational Platform
-   Shri Vihat Meldi Mata Mandir
+   Shri Vihat Meldi Dham
    ------------------------------------------------------------
    Architecture:
      Admin creates Management -> assigns Lead -> Lead manages

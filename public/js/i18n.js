@@ -1,6 +1,6 @@
 /* ============================================================
    TRILINGUAL LAYER — English / हिन्दी / ગુજરાતી
-   Shri Vihat Meldi Mata Mandir
+   Shri Vihat Meldi Dham
    ------------------------------------------------------------
    Loaded FIRST so t() / tData() are available everywhere.
    - Data ENTRY is always English (forms are not translated).
@@ -70,7 +70,7 @@
       dhaja_tithi_hint:'A date reference. “Start a campaign” pre-fills a new dhaja campaign for that day — it does not change the temple calendar.',
       dhaja_add_tile_hint:'February mahotsav, a special day, or any occasion', dhaja_camp_form_missing:'Reload the page and try again.',
 
-      temple_name:'Shri Vihat Meldi Mata Mandir',
+      temple_name:'Shri Vihat Meldi Dham',
       temple_loc:'Sanand, Gujarat',
       sub_tagline:'Sanand, Gujarat — Central Management Platform',
       sign_in:'🔐 Sign In', sign_out:'Sign Out', administrator:'Administrator',
@@ -121,8 +121,7 @@
       nav_admin:'🛡️ Accounts & Access',
 
       /* dashboard */
-      banner_invoke:'ૐ નમઃ શિવાય',
-      banner_headline:'જય શ્રી વિહત મેલડી માતાજી',
+      banner_headline:'જય શ્રી વિહત મેલડી ધામ',
       banner_tagline:'માતાજીની કૃપા, ભક્તોની શ્રદ્ધા',
       banner_khamma:'ખમ્મા માડી, ખમ્મા 🙏',
       welcome_back:'Welcome back',
@@ -289,7 +288,7 @@
       dhaja_tithi_hint:'केवल तारीख संदर्भ। “अभियान शुरू करें” उस दिन के लिए नया ध्वजा अभियान भर देता है — मंदिर कैलेंडर नहीं बदलता।',
       dhaja_add_tile_hint:'फरवरी महोत्सव, कोई विशेष दिन, या कोई भी अवसर', dhaja_camp_form_missing:'पेज रीलोड करके फिर से प्रयास करें।',
 
-      temple_name:'श्री विहत मेलडी माता मंदिर',
+      temple_name:'श्री विहत मेलडी धाम',
       temple_loc:'साणंद, गुजरात',
       sub_tagline:'साणंद, गुजरात — केंद्रीय प्रबंधन मंच',
       sign_in:'🔐 साइन इन करें', sign_out:'साइन आउट', administrator:'प्रशासक',
@@ -339,8 +338,7 @@
       nav_calendar:'🗓️ एकीकृत कैलेंडर', nav_reports:'📊 रिपोर्ट्स', nav_settings:'⚙️ सेटिंग्स',
       nav_admin:'🛡️ खाते एवं पहुँच',
 
-      banner_invoke:'ૐ નમઃ શિવાય',
-      banner_headline:'જય શ્રી વિહત મેલડી માતાજી',
+      banner_headline:'જય શ્રી વિહત મેલડી ધામ',
       banner_tagline:'માતાજીની કૃપા, ભક્તોની શ્રદ્ધા',
       banner_khamma:'ખમ્મા માડી, ખમ્મા 🙏',
       welcome_back:'वापसी पर स्वागत है',
@@ -506,7 +504,7 @@
       dhaja_tithi_hint:'ફક્ત તારીખ સંદર્ભ. “અભિયાન શરૂ કરો” તે દિવસ માટે નવું ધજા અભિયાન ભરી આપે છે — મંદિર કેલેન્ડર બદલાતું નથી.',
       dhaja_add_tile_hint:'ફેબ્રુઆરી મહોત્સવ, કોઈ વિશેષ દિવસ, અથવા કોઈ પણ પ્રસંગ', dhaja_camp_form_missing:'પેજ રીલોડ કરીને ફરી પ્રયાસ કરો.',
 
-      temple_name:'શ્રી વિહત મેલડી માતા મંદિર',
+      temple_name:'શ્રી વિહત મેલડી ધામ',
       temple_loc:'સાણંદ, ગુજરાત',
       sub_tagline:'સાણંદ, ગુજરાત — સેન્ટ્રલ મેનેજમેન્ટ પ્લેટફોર્મ',
       sign_in:'🔐 સાઇન ઇન કરો', sign_out:'સાઇન આઉટ', administrator:'એડમિનિસ્ટ્રેટર',
@@ -556,8 +554,7 @@
       nav_calendar:'🗓️ સંકલિત કેલેન્ડર', nav_reports:'📊 રિપોર્ટ્સ', nav_settings:'⚙️ સેટિંગ્સ',
       nav_admin:'🛡️ ખાતાં અને ઍક્સેસ',
 
-      banner_invoke:'ૐ નમઃ શિવાય',
-      banner_headline:'જય શ્રી વિહત મેલડી માતાજી',
+      banner_headline:'જય શ્રી વિહત મેલડી ધામ',
       banner_tagline:'માતાજીની કૃપા, ભક્તોની શ્રદ્ધા',
       banner_khamma:'ખમ્મા માડી, ખમ્મા 🙏',
       welcome_back:'પુનઃ સ્વાગત છે',

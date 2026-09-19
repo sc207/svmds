@@ -1,4 +1,4 @@
-/* SVMDS — Shri Vihat Meldi Mata Mandir — backend entry.
+/* SVMDS — Shri Vihat Meldi Dham — backend entry.
    Boot sequence: BACKEND_PLAN.md §1.2.  Phase 0: health + static + migrations.
    API routers are mounted in Phase 2+ where marked below. */
 const path = require('path');

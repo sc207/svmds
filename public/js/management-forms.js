@@ -252,7 +252,7 @@
             <path d="M50 20h5v10h-5zM50 50h30v30H50zM20 50h10v5h-10z" fill="#3B2418"/>
           </svg>
         </div>
-        <div style="font-size: 0.78rem; color: var(--gold-light); font-weight: 700;">ID: #TMB-9021 | Shri Vihat Meldi Mata Mandir</div>
+        <div style="font-size: 0.78rem; color: var(--gold-light); font-weight: 700;">ID: #TMB-9021 | Shri Vihat Meldi Dham</div>
       </div>
     </div>
   </div>

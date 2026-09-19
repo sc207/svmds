@@ -89,7 +89,7 @@
 
   function templeInfo() {
     var d = {
-      name: 'Shri Vihat Meldi Mata Mandir', loc: 'Sanand, Gujarat, India',
+      name: 'Shri Vihat Meldi Dham', loc: 'Sanand, Gujarat, India',
       founder: 'Bhagwan Bhuvaji Karamshi Bapa', head: 'Bhuvaji Suresh Bapa'
     };
     try {

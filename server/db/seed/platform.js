@@ -43,7 +43,7 @@ async function seedPlatform() {
   // default here — seeding one would freeze "today" on the deploy date.
   await ensureSetting('default_language', 'gu');
   await ensureSetting('temple_identity', JSON.stringify({
-    name: 'Shri Vihat Meldi Mata Mandir',
+    name: 'Shri Vihat Meldi Dham',
     loc: 'Sanand, Gujarat, India',
     founder: 'Bhagwan Bhuvaji Karamshi Bapa',
     head: 'Bhuvaji Suresh Bapa',

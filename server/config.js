@@ -8,7 +8,7 @@ const config = {
 
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
   adminEmail: (process.env.ADMIN_EMAIL || '').toLowerCase().trim(),
-  appName:   process.env.APP_NAME || 'Shri Vihat Meldi Mata Mandir',
+  appName:   process.env.APP_NAME || 'Shri Vihat Meldi Dham',
 
   // Google OAuth Web client id — used client-side by the GIS button and
   // server-side as the ID-token audience to verify. No client secret needed.

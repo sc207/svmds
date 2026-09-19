@@ -1,7 +1,7 @@
 /* ============================================================
    DONATIONS MODULE — cash & in-kind offerings, 80G receipts,
    Dhanyavaad certificates
-   Shri Vihat Meldi Mata Mandir
+   Shri Vihat Meldi Dham
    ------------------------------------------------------------
    A devotee / company / trust donates money OR an article
    (cow, gold paghadi, diamond jewellery, grain, construction

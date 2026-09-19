@@ -1373,7 +1373,7 @@ function badgeMarkup(m, x, isLead) {
       <div class="mg-badge-head">
         ${badgeEmblemImg()}
         <div class="mg-badge-htext">
-          <strong>${esc(window.t('temple_name', 'Shri Vihat Meldi Mata Mandir'))}</strong>
+          <strong>${esc(window.t('temple_name', 'Shri Vihat Meldi Dham'))}</strong>
           <span>${esc(window.t('temple_loc', 'Sanand, Gujarat'))}</span>
         </div>
       </div>
@@ -1887,11 +1887,11 @@ function renderPublicVolunteer(mgmtId) {
       <div class="pub-card">
         <div class="pub-head" style="--c:${m ? m.color : '#6B1F2A'}">
           <div class="pub-emblem">🪔</div>
-          <div class="pub-temple">Shri Vihat Meldi Mata Mandir</div>
+          <div class="pub-temple">Shri Vihat Meldi Dham</div>
           <div class="pub-temple-sub">Sanand, Gujarat</div>
         </div>
         ${inner}
-        <div class="pub-foot">Jai Shri Vihat Meldi Mataji 🙏 · Official public volunteering registration page</div>
+        <div class="pub-foot">Jai Shri Vihat Meldi Dham 🙏 · Official public volunteering registration page</div>
       </div>
     </div>`;
 

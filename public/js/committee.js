@@ -1,6 +1,6 @@
 /* ============================================================
    COMMITTEE / SAMAJ MODULE
-   Shri Vihat Meldi Mata Mandir — Temple Construction Governance
+   Shri Vihat Meldi Dham — Temple Construction Governance
    ------------------------------------------------------------
    Admin creates a Committee -> assigns a Leader -> Leader (and
    admin) manage members -> Leader calls Meetings -> attendance

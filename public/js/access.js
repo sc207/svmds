@@ -349,7 +349,7 @@ function renderSettings() {
       <h3 class="mg-pane-title">${window.t('set_identity', 'Temple Identity')}</h3>
       <form onsubmit="saveTempleSettings(event)">
         <div class="form-group"><label class="form-label">${window.t('set_name', 'Temple Name')}</label>
-          <input class="form-input" id="setTplName" value="${esc(cfg.name || 'Shri Vihat Meldi Mata Mandir')}"></div>
+          <input class="form-input" id="setTplName" value="${esc(cfg.name || 'Shri Vihat Meldi Dham')}"></div>
         <div class="form-group"><label class="form-label">${window.t('set_loc', 'Location')}</label>
           <input class="form-input" id="setTplLoc" value="${esc(cfg.loc || 'Sanand, Gujarat, India')}"></div>
 

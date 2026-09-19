@@ -1,6 +1,6 @@
 /* ============================================================
    POOJA APP MODULE — 36 Pooja Master Catalog + Pooja Events
-   Shri Vihat Meldi Mata Mandir
+   Shri Vihat Meldi Dham
    ------------------------------------------------------------
    Architecture (mirrors the Management module):
      Admin manages the Pooja Type catalog -> creates a Pooja
