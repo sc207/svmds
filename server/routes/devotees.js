@@ -51,6 +51,37 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* GET /directory  ?q=<search> — the SAME "everyone may search the whole
+   register" access as GET / above (writes still go through the full POST/
+   PATCH below), but a lean projection: id/code/name/mobile/city/state/
+   category only. category is included because pooja-ui.js's invitation
+   audience picker filters by it for a pooja_coordinator's own pooja; status/
+   notes/visit_count are admin-only detail (Devotees 360°) that nothing
+   outside that admin-only page currently reads — hydrate.js's hydrateDevotees()
+   uses this for every non-admin-tier session instead of the full list below,
+   so a scoped role's browser never downloads every devotee's free-text notes
+   just to populate the shared "pick a person" combobox. Declared before
+   GET /:id or the :id route would swallow this path. */
+router.get('/directory', async (req, res, next) => {
+  try {
+    const where = [];
+    const args = [];
+    if (req.query.q) {
+      where.push('(d.name LIKE ? OR d.mobile LIKE ? OR d.city LIKE ? OR d.code LIKE ?)');
+      const like = `%${req.query.q}%`;
+      args.push(like, like, like, like);
+    }
+    const sql = `SELECT id, code, name, mobile, city, state, category FROM devotees d
+      WHERE is_deleted = 0` + (where.length ? ' AND ' + where.join(' AND ') : '') + ' ORDER BY name LIMIT 2000';
+    const rows = await queryAll(sql, args);
+    res.json(rows.map(r => ({
+      id: r.code || String(r.id), rowId: r.id, code: r.code || '',
+      name: r.name, mobile: r.mobile || '', city: r.city || '',
+      state: r.state || 'Gujarat', category: r.category || 'normal',
+    })));
+  } catch (e) { next(e); }
+});
+
 async function findByIdOrCode(idOrCode) {
   const rows = await queryAll(
     LIST_SQL + ' AND (d.id = ? OR d.code = ?) LIMIT 1',

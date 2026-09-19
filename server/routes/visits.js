@@ -1,5 +1,8 @@
-/* Bappa / Bhuvaji padhramani register. Any session reads + writes; delete is
-   admin tier. Links to a devotee by mobile when one exists. */
+/* Bappa / Bhuvaji padhramani register — a scheduling/logistics workflow (no
+   owning-team field). Reads + writes: superadmin/admin/management_lead only
+   (matches ROLE_PAGES — an unscoped exception for management_lead, the same
+   bounded tradeoff accountant already has for donations/expenses/inventory);
+   delete: admin tier. Links to a devotee by mobile when one exists. */
 const express = require('express');
 const crypto = require('crypto');
 const { queryAll, queryOne, run } = require('../db/connection');
@@ -11,6 +14,7 @@ const { mapVisit } = require('../utils/mappers');
 
 const router = express.Router();
 const adminTier = requireRole('superadmin', 'admin');
+router.use(requireRole('superadmin', 'admin', 'management_lead'));
 const PURPOSE = ['home_inauguration', 'shop_opening', 'wedding_blessing', 'health_blessing', 'business_puja', 'festival_padhramani', 'other'];
 const STATUS = ['requested', 'scheduled', 'confirmed', 'completed', 'cancelled'];
 

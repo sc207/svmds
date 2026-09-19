@@ -55,10 +55,20 @@
 
   // just the people register — the one thing a scoped post-save refresh needs
   // so devCode() resolves any devotee the save created.
+  //
+  // An admin-tier session fetches the full record (status/notes/visit-count —
+  // the admin-only Devotees 360° page needs these); every other role fetches
+  // /devotees/directory, a lean id/name/mobile/city/state/category projection
+  // — enough for the shared "pick a person" combobox (devotee-picker.js) and
+  // the invitation audience-by-category filter, without downloading every
+  // devotee's admin-only detail to a scoped role's browser just to populate a
+  // search box. Both shapes land in the SAME state.devotees array; nothing
+  // outside the admin-only Devotees page reads the fields the lean shape omits.
   async function hydrateDevotees() {
     if (typeof state === 'undefined') return;
     try {
-      var devotees = await window.API.get('/devotees');
+      var isAdminTier = !!(window.API && typeof window.API.canOpen === 'function' && window.API.canOpen('admin'));
+      var devotees = await window.API.get(isAdminTier ? '/devotees' : '/devotees/directory');
       for (var k in DEV_BY_ROW) delete DEV_BY_ROW[k];
       devotees.forEach(function (d) {
         if (d.rowId != null) DEV_BY_ROW[d.rowId] = d.code || d.id;
@@ -70,7 +80,7 @@
                  category: d.category || 'normal', visits: d.visits || 0 };
       }));
       if (typeof renderDevotees === 'function') renderDevotees();
-      log('devotees: ' + state.devotees.length);
+      log('devotees: ' + state.devotees.length + (isAdminTier ? '' : ' (lean)'));
     } catch (e) { log('devotees failed: ' + e.message); }
   }
 

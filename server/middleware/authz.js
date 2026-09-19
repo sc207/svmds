@@ -10,14 +10,24 @@ const { queryAll, queryOne } = require('../db/connection');
 // scoped role's list here too (must stay a mirror of ROLE_META) — see the
 // matching comment in public/js/people.js for why each one is admin-only.
 // dhaja IS in pooja_coordinator's list — a dhaja is a type of pooja.
+//
+// inventory → accountant: a flat, temple-wide (unscoped) register with no
+// financial line items but no owning-team either — matches the ONE other
+// place this app already grants unscoped temple-wide visibility (accountant's
+// donations/expenses), not management_lead's always-per-team-scoped model.
+// visits → management_lead: a scheduling/logistics workflow (request →
+// scheduled → confirmed → completed) with the same shape as a Management
+// volunteering session, and — like inventory — has no owning-team field, so
+// this is an unscoped exception for management_lead (sees every visit, not
+// just "their" team's), the same bounded tradeoff accountant already has.
 const ROLE_PAGES = {
   superadmin:        ['*'],
   admin:             ['*'],
-  management_lead:   ['dashboard', 'management', 'calendar'],
+  management_lead:   ['dashboard', 'management', 'visits', 'calendar'],
   pooja_coordinator: ['dashboard', 'puja', 'dhaja', 'calendar'],
   committee_leader:  ['dashboard', 'committees', 'calendar'],
   event_incharge:    ['dashboard', 'events', 'calendar'],
-  accountant:        ['dashboard', 'donations', 'expenses', 'reports', 'calendar'],
+  accountant:        ['dashboard', 'donations', 'expenses', 'inventory', 'reports', 'calendar'],
 };
 
 // Only a superadmin may grant/revoke these, disable such an account, or impersonate.

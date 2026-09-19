@@ -1,4 +1,5 @@
-/* Temple expenses ledger. Any session reads + writes; delete is admin tier. */
+/* Temple expenses ledger. Financial records — reads + writes: superadmin/
+   admin/accountant only (matches ROLE_PAGES); delete: admin tier. */
 const express = require('express');
 const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole } = require('../middleware/authz');
@@ -8,6 +9,7 @@ const { mapExpense } = require('../utils/mappers');
 
 const router = express.Router();
 const adminTier = requireRole('superadmin', 'admin');
+router.use(requireRole('superadmin', 'admin', 'accountant'));
 const STATUS = ['Paid', 'Pending'];
 const byIdOrCode = v => queryOne('SELECT * FROM expenses WHERE (id = ? OR code = ?) AND is_deleted = 0', [parseInt(v, 10) || -1, v]);
 

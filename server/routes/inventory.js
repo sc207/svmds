@@ -1,4 +1,7 @@
-/* Temple inventory. Any session reads + writes; delete is admin tier.
+/* Temple inventory — a flat, unscoped stock register (no owning team, no
+   financial line items). Reads + writes: superadmin/admin/accountant only
+   (matches ROLE_PAGES — grouped with donations/expenses as the one other
+   unscoped-temple-wide role); delete: admin tier.
    `stock` / `min_stock` are free text (e.g. "40 kg"); status is set explicitly. */
 const express = require('express');
 const { queryAll, queryOne, run } = require('../db/connection');
@@ -9,6 +12,7 @@ const { mapInventory } = require('../utils/mappers');
 
 const router = express.Router();
 const adminTier = requireRole('superadmin', 'admin');
+router.use(requireRole('superadmin', 'admin', 'accountant'));
 const STATUS = ['In Stock', 'Low Stock', 'Out of Stock'];
 const byIdOrCode = v => queryOne('SELECT * FROM inventory WHERE (id = ? OR code = ?) AND is_deleted = 0', [parseInt(v, 10) || -1, v]);
 

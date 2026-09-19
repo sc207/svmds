@@ -1,7 +1,8 @@
 /* Donations — cash or in-kind, 80G receipt number allocated on create, optional
    appreciation certificate. This is the template module: CRUD + a catalog +
-   a numbering service + audit + mappers. Reads + writes: any session
-   (accountant included); soft delete: admin tier. (BACKEND_PLAN.md Phase 3) */
+   a numbering service + audit + mappers. Financial records — reads + writes:
+   superadmin/admin/accountant only (matches ROLE_PAGES); hard/soft delete:
+   admin tier, stricter than the owning role. (BACKEND_PLAN.md Phase 3) */
 const express = require('express');
 const crypto = require('crypto');
 const { queryAll, queryOne, run } = require('../db/connection');
@@ -13,6 +14,8 @@ const { mapDonation } = require('../utils/mappers');
 
 const router = express.Router();
 const adminTier = requireRole('superadmin', 'admin');
+const moduleTier = requireRole('superadmin', 'admin', 'accountant');
+router.use(moduleTier);
 
 const SELECT = `
   SELECT dn.*,

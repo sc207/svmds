@@ -45,15 +45,26 @@
                      fits (unlike Dhaja, there's no per-person ownership to
                      scope it by).
      Adding a new nav page? Decide its role visibility here deliberately —
-     don't just leave it out and have it land here "by accident" again. */
+     don't just leave it out and have it land here "by accident" again.
+       - inventory  a flat, temple-wide, unscoped stock register (no owning
+                     team, no financial line items) — given to accountant,
+                     matching the ONE other unscoped-temple-wide precedent
+                     this app already has (accountant's donations/expenses),
+                     not management_lead's always-per-team-scoped model.
+       - visits     Bappa/Bhuvaji padhramani scheduling — a request→scheduled→
+                     confirmed→completed workflow, same shape as a Management
+                     volunteering session. No owning-team field exists, so
+                     this is an unscoped exception for management_lead (sees
+                     every visit, not just "their" team's), the same bounded
+                     tradeoff accountant already has for donations/expenses. */
   var ROLE_META = {
     superadmin:        { icon: '🛡️', pages: ['*'] },
     admin:             { icon: '🛡️', pages: ['*'] },
-    management_lead:   { icon: '🗂️', pages: ['dashboard', 'management', 'calendar'] },
+    management_lead:   { icon: '🗂️', pages: ['dashboard', 'management', 'visits', 'calendar'] },
     pooja_coordinator: { icon: '🪔', pages: ['dashboard', 'puja', 'dhaja', 'calendar'] },
     committee_leader:  { icon: '🏛️', pages: ['dashboard', 'committees', 'calendar'] },
     event_incharge:    { icon: '📅', pages: ['dashboard', 'events', 'calendar'] },
-    accountant:        { icon: '💰', pages: ['dashboard', 'donations', 'expenses', 'reports', 'calendar'] }
+    accountant:        { icon: '💰', pages: ['dashboard', 'donations', 'expenses', 'inventory', 'reports', 'calendar'] }
   };
 
   /* Seeded from the people already referenced across the modules
