@@ -54,11 +54,11 @@
        - visits     admin-only (explicit decision, reversed from an earlier
                      attempt to give it to management_lead — see the matching
                      comment in server/middleware/authz.js). A visit's escort
-                     is now an individual Devotee picked from the central
-                     registry, not a Management team — that's a fact about
-                     one field, not a reason to hand Committee/Management
-                     broad Visits access. No role currently owns the actual
-                     padhramani-scheduling responsibility. */
+                     can be EITHER a Management team OR one-or-more individual
+                     Devotees picked from the central registry — that's a
+                     fact about one field, not a reason to hand Committee/
+                     Management broad Visits access. No role currently owns
+                     the actual padhramani-scheduling responsibility. */
   var ROLE_META = {
     superadmin:        { icon: '🛡️', pages: ['*'] },
     admin:             { icon: '🛡️', pages: ['*'] },

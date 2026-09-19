@@ -17,9 +17,9 @@ const { queryAll, queryOne } = require('../db/connection');
 // donations/expenses), not management_lead's always-per-team-scoped model.
 //
 // visits → admin-only (explicit decision, reversed from an earlier attempt
-// to give it to management_lead). The escort on a visit is now an individual
-// Devotee picked from the central registry, not a Management team — that
-// change is a data-model fact about ONE field, not a reason to hand
+// to give it to management_lead). The escort on a visit can be EITHER a
+// Management team OR one-or-more individual Devotees from the central
+// registry — that's a data-model fact about ONE field, not a reason to hand
 // Committee/Management broad Visits access. No role currently owns the
 // actual padhramani-scheduling responsibility; give it to a scoped role only
 // when that ownership is genuinely confirmed, not because of the escort field.
