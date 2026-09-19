@@ -91,6 +91,13 @@ function openYagnaReviewSheet(code) {
         </select>
       </div>
       <div class="form-group">
+        <label class="form-label" for="yagnaRevInterest">${window.t('yagna_interest', 'Interested In')}</label>
+        <select class="form-select" id="yagnaRevInterest">
+          ${YAGNA_INTEREST_TYPES.map(it =>
+            `<option value="${it}" ${(x.interestType || 'yagna') === it ? 'selected' : ''}>${yagnaInterestLabel(it)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
         <label class="form-label" for="yagnaRevNotes">${window.t('notes', 'Notes')}</label>
         <textarea class="form-input" id="yagnaRevNotes" rows="3" placeholder="${window.t('yagna_notes_ph', 'Internal notes — e.g. duplicate of DEV-1023, mobile confirmed by phone…')}">${yagnaEsc(x.notes || '')}</textarea>
       </div>
@@ -106,13 +113,14 @@ function saveYagnaReview(code) {
   const x = yagnaByCode(code);
   if (!x) return;
   const status = document.getElementById('yagnaRevStatus').value;
+  const interestType = document.getElementById('yagnaRevInterest').value;
   const notes = document.getElementById('yagnaRevNotes').value;
-  x.status = status; x.notes = notes;   // optimistic
+  x.status = status; x.interestType = interestType; x.notes = notes;   // optimistic
   if (typeof closeSheet === 'function') closeSheet();
   renderYagnaSignups();
 
   if (window.API && window.API.online) {
-    window.API.patch('/yagna-signups/' + code, { status, notes })
+    window.API.patch('/yagna-signups/' + code, { status, interestType, notes })
       .then(() => { if (window.__rehydrate) return window.__rehydrate('yagna'); })
       .then(() => yagnaToast(window.t('yagna_review_saved', 'Saved.')))
       .catch(err => yagnaToast((err && err.message) || 'Save failed'));

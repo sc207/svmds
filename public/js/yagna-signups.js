@@ -14,6 +14,7 @@ const YAGNA = {
   list: [],                                        // mapped rows from GET /yagna-signups
   settings: { enabled: false, opensAt: null, closesAt: null },
   filterStatus: 'all',
+  filterInterest: 'all',
   search: '',
 };
 
@@ -31,6 +32,20 @@ const YAGNA_STATUS_BADGE = {
   needs_follow_up: 'badge-cancelled', reviewed: 'badge-confirmed', converted: 'badge-maroon', rejected: 'badge-cancelled',
 };
 function yagnaStatusLabel(st) { return window.t('yagna_st_' + st, (st || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')); }
+
+/* What the registrant is interested in becoming a sevarthi FOR — an interest,
+   not a confirmed assignment (see server/routes/publicYagna.js). Every row
+   that predates this field is 'yagna' (the only thing the old Yagna-only
+   form could have collected). */
+const YAGNA_INTEREST_TYPES = ['yagna', 'pooja_seva', 'dhaja_pooja', 'unassigned'];
+const YAGNA_INTEREST_BADGE = {
+  yagna: 'badge-maroon', pooja_seva: 'badge-confirmed', dhaja_pooja: 'badge-pending', unassigned: 'badge-cancelled',
+};
+function yagnaInterestLabel(it) {
+  return window.t('yagna_interest_' + (it || 'yagna'), {
+    yagna: 'Maha Yagna', pooja_seva: 'Pooja & Seva', dhaja_pooja: 'Dhaja Pooja', unassigned: 'Not Sure / Assign Later',
+  }[it] || 'Maha Yagna');
+}
 
 function yagnaMoney(n) { return '₹' + (Number(n) || 0).toLocaleString('en-IN'); }
 function yagnaDate(iso) {

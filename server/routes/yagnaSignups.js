@@ -26,7 +26,7 @@ router.get('/', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/* PATCH /:id  { status?, notes?, category?, assignedPoojaId? } */
+/* PATCH /:id  { status?, notes?, category?, assignedPoojaId?, interestType? } */
 router.patch('/:id', adminTier, async (req, res, next) => {
   try {
     const row = await signupById(req.params.id);
@@ -39,6 +39,12 @@ router.patch('/:id', adminTier, async (req, res, next) => {
         return res.status(400).json({ error: 'bad status' });
       }
       sets.push('status = ?'); args.push(b.status);
+    }
+    if (b.interestType !== undefined) {
+      if (!['yagna', 'pooja_seva', 'dhaja_pooja', 'unassigned'].includes(b.interestType)) {
+        return res.status(400).json({ error: 'bad interestType' });
+      }
+      sets.push('interest_type = ?'); args.push(b.interestType);
     }
     if (typeof b.notes === 'string') { sets.push('notes = ?'); args.push(b.notes.trim()); }
     if (typeof b.category === 'string') { sets.push('category = ?'); args.push(b.category.trim() || null); }

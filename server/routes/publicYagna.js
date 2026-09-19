@@ -42,7 +42,17 @@ router.get('/yagna/status', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/* POST /yagna/submit { firstName, lastName?, samajName, city?, state?, mobile, expectedContribution? } */
+const YAGNA_INTEREST_TYPES = ['yagna', 'pooja_seva', 'dhaja_pooja', 'unassigned'];
+
+/* POST /yagna/submit { firstName, lastName?, samajName, city?, state?, mobile,
+   expectedContribution?, interestType? }
+   interestType: what the applicant is interested in becoming a sevarthi FOR
+   (Maha Yagna, Pooja & Seva, Dhaja Pooja, or 'unassigned' — "not sure, decide
+   later"). Defaults to 'yagna' when omitted, matching every row submitted
+   before this field existed and keeping this endpoint backward-compatible
+   with any cached copy of the public page that hasn't picked up the new
+   selector yet. This is the applicant's stated INTEREST, not a confirmed
+   assignment — no pooja/committee/devotee logic is touched here. */
 router.post('/yagna/submit', submitLimiter, async (req, res, next) => {
   try {
     const status = await yagnaRegistrationStatus();
@@ -53,6 +63,7 @@ router.post('/yagna/submit', submitLimiter, async (req, res, next) => {
     const lastName = String(b.lastName || '').trim();
     const samajName = String(b.samajName || '').trim();
     const mobile = String(b.mobile || '').trim();
+    const interestType = YAGNA_INTEREST_TYPES.includes(b.interestType) ? b.interestType : 'yagna';
     if (!firstName) return res.status(400).json({ error: 'First name is required' });
     if (!samajName) return res.status(400).json({ error: 'Samaj name is required' });
     if (!/^[0-9]{10}$/.test(mobile)) return res.status(400).json({ error: 'Mobile must be a 10-digit number' });
@@ -86,11 +97,11 @@ router.post('/yagna/submit', submitLimiter, async (req, res, next) => {
       await run(
         `INSERT INTO yagna_sevarthi_signups
            (id, code, first_name, last_name, samaj_name, city, state, mobile,
-            expected_contribution, submitted_ip)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            expected_contribution, submitted_ip, interest_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, code, firstName, lastName, samajName,
          String(b.city || '').trim(), String(b.state || 'Gujarat').trim(), mobile, contribution,
-         String(req.ip || '').slice(0, 64)]
+         String(req.ip || '').slice(0, 64), interestType]
       );
     } catch (e) {
       // lost a race against ux_yagna_signups_identity — reselect + return
@@ -107,7 +118,7 @@ router.post('/yagna/submit', submitLimiter, async (req, res, next) => {
     await logAudit({
       userEmail: 'public', module: 'Maha Yagna Sevarthi',
       action: 'CREATE', entityType: 'yagna_signup', entityId: code,
-      details: { firstName, lastName, samajName, city: b.city || '' },
+      details: { firstName, lastName, samajName, city: b.city || '', interestType },
     });
 
     res.status(201).json(mapYagnaSignup(await signupById(id)));

@@ -231,13 +231,21 @@
         <div class="yc-form-grid">
           <div class="yc-field"><label for="ycFirst">First name *</label><input id="ycFirst" required maxlength="60"></div>
           <div class="yc-field"><label for="ycLast">Last name</label><input id="ycLast" maxlength="60"></div>
+          <div class="yc-field yc-full"><label for="ycInterest">I'm interested in becoming a sevarthi for *</label>
+            <select id="ycInterest" required>
+              <option value="yagna">Maha Yagna / Jagna</option>
+              <option value="pooja_seva">Pooja &amp; Seva</option>
+              <option value="dhaja_pooja">Dhaja Pooja</option>
+              <option value="unassigned">Not Sure / Assign Later</option>
+            </select>
+          </div>
           <div class="yc-field yc-full"><label for="ycSamaj">Samaj name *</label>
             <input id="ycSamaj" required maxlength="80" placeholder="e.g. Rabari Samaj">
           </div>
           <div class="yc-field"><label for="ycCity">City</label><input id="ycCity" maxlength="60"></div>
           <div class="yc-field"><label for="ycState">State</label><input id="ycState" maxlength="60" value="Gujarat"></div>
           <div class="yc-field"><label for="ycMobile">Mobile number *</label><input id="ycMobile" inputmode="numeric" maxlength="10" required placeholder="10-digit mobile"></div>
-          <div class="yc-field"><label for="ycAmount">Expected Yagna contribution (₹) *</label><input id="ycAmount" type="number" min="0" step="1" required></div>
+          <div class="yc-field"><label for="ycAmount">Expected contribution (₹) *</label><input id="ycAmount" type="number" min="0" step="1" required></div>
         </div>
         <button type="submit" class="yc-btn" id="ycSubmitBtn">Submit Registration</button>
         <div class="yc-msg" id="ycFormMsg"></div>
@@ -411,8 +419,22 @@
     return out;
   }
 
+  var INTEREST_RIBBON = {
+    yagna: 'Maha Yagna Sevarthi — Registration Token',
+    pooja_seva: 'Pooja &amp; Seva Sevarthi — Registration Token',
+    dhaja_pooja: 'Dhaja Pooja Sevarthi — Registration Token',
+    unassigned: 'Sevarthi — Registration Token',
+  };
+  var INTEREST_LABEL = {
+    yagna: 'Maha Yagna / Jagna',
+    pooja_seva: 'Pooja & Seva',
+    dhaja_pooja: 'Dhaja Pooja',
+    unassigned: 'Not Sure / Assign Later',
+  };
+
   function tokenCardHtml(x) {
     var name = (x.firstName + ' ' + (x.lastName || '')).trim();
+    var ribbon = INTEREST_RIBBON[x.interestType] || INTEREST_RIBBON.yagna;
     return '' +
       '<span class="yc-corner tl"></span><span class="yc-corner tr"></span><span class="yc-corner bl"></span><span class="yc-corner br"></span>' +
       '<img class="yc-card-hero" src="assets/temple.png" alt="" crossorigin="anonymous" onerror="this.style.display=\'none\'">' +
@@ -421,10 +443,11 @@
         '<div class="yc-card-temple">Shri Vihat Meldi Dham</div>' +
         '<div class="yc-card-loc">Sanand, Gujarat</div>' +
       '</div>' +
-      '<div class="yc-card-ribbon">Maha Yagna Sevarthi — Registration Token</div>' +
+      '<div class="yc-card-ribbon">' + ribbon + '</div>' +
       '<div class="yc-card-token"><span>Your token</span>' + esc(x.code) + '</div>' +
       '<div class="yc-kv-grid">' +
         '<div class="yc-kv yc-full"><b>Sevarthi name</b><span>' + esc(name || '—') + '</span></div>' +
+        '<div class="yc-kv"><b>Interested in</b><span>' + esc(INTEREST_LABEL[x.interestType] || INTEREST_LABEL.yagna) + '</span></div>' +
         '<div class="yc-kv"><b>Samaj</b><span>' + esc(x.samajName || '—') + '</span></div>' +
         '<div class="yc-kv"><b>Status</b><span>' + esc((x.status || 'submitted').replace(/^./, function (c) { return c.toUpperCase(); })) + '</span></div>' +
         '<div class="yc-kv"><b>City</b><span>' + esc(x.city || '—') + '</span></div>' +
@@ -488,6 +511,7 @@
     var body = {
       firstName: document.getElementById('ycFirst').value.trim(),
       lastName: document.getElementById('ycLast').value.trim(),
+      interestType: document.getElementById('ycInterest').value,
       samajName: document.getElementById('ycSamaj').value.trim(),
       city: document.getElementById('ycCity').value.trim(),
       state: document.getElementById('ycState').value.trim(),

@@ -663,6 +663,7 @@ function mapYagnaSignup(row) {
     mobile: row.mobile || '',
     expectedContribution: Number(row.expected_contribution || 0),
     status: row.status || 'submitted',
+    interestType: row.interest_type || 'yagna',
     category: row.category || null,
     assignedPoojaId: row.assigned_pooja_code || row.assigned_pooja_id || null,
     notes: row.notes || '',

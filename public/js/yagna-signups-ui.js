@@ -13,6 +13,7 @@ function renderYagnaSignups() {
 }
 
 function setYagnaStatusFilter(v) { YAGNA.filterStatus = v; renderYagnaSignups(); }
+function setYagnaInterestFilter(v) { YAGNA.filterInterest = v; renderYagnaSignups(); }
 function yagnaSearch(v) { YAGNA.search = String(v || '').toLowerCase(); renderYagnaSignupsBody(); }
 
 function yagnaEsc(s) {
@@ -67,6 +68,11 @@ function viewYagnaSignups() {
           ${YAGNA_STATUSES.map(st =>
             `<option value="${st}" ${YAGNA.filterStatus === st ? 'selected' : ''}>${yagnaStatusLabel(st)}</option>`).join('')}
         </select>
+        <select class="form-select mg-inline-select" onchange="setYagnaInterestFilter(this.value)">
+          <option value="all" ${YAGNA.filterInterest === 'all' ? 'selected' : ''}>${window.t('yagna_all_interests', 'All interests')}</option>
+          ${YAGNA_INTEREST_TYPES.map(it =>
+            `<option value="${it}" ${YAGNA.filterInterest === it ? 'selected' : ''}>${yagnaInterestLabel(it)}</option>`).join('')}
+        </select>
         <input class="form-input mg-inline-select" style="max-width:260px" placeholder="${window.t('yagna_search', 'Search name / mobile / samaj / city / token…')}"
           value="${yagnaEsc(YAGNA.search)}" oninput="yagnaSearch(this.value)">
       </div>
@@ -75,6 +81,7 @@ function viewYagnaSignups() {
       <div class="mg-table-scroll"><table class="custom-table" style="min-width:900px">
         <thead><tr>
           <th>${window.t('yagna_token', 'Token')}</th><th>${window.t('name', 'Name')}</th>
+          <th>${window.t('yagna_interest', 'Interested In')}</th>
           <th>${window.t('yagna_samaj', 'Samaj (as entered)')}</th><th>${window.t('city', 'City')}</th>
           <th>${window.t('mobile', 'Mobile')}</th><th>${window.t('yagna_contribution', 'Contribution')}</th>
           <th>${window.t('status', 'Status')}</th><th>${window.t('yagna_submitted', 'Submitted')}</th><th></th>
@@ -108,17 +115,19 @@ function renderYagnaSignupsBody() {
 function yagnaRegisterRows() {
   let rows = YAGNA.list.slice();
   if (YAGNA.filterStatus !== 'all') rows = rows.filter(x => x.status === YAGNA.filterStatus);
+  if (YAGNA.filterInterest !== 'all') rows = rows.filter(x => (x.interestType || 'yagna') === YAGNA.filterInterest);
   if (YAGNA.search) {
     const q = YAGNA.search;
     rows = rows.filter(x => (x.firstName + ' ' + x.lastName + ' ' + x.mobile + ' ' + x.samajName + ' ' + x.city + ' ' + (x.code || '')).toLowerCase().indexOf(q) !== -1);
   }
   rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  if (!rows.length) return `<tr><td colspan="9" class="mg-pad-note">${window.t('yagna_none', 'No registrations yet.')}</td></tr>`;
+  if (!rows.length) return `<tr><td colspan="10" class="mg-pad-note">${window.t('yagna_none', 'No registrations yet.')}</td></tr>`;
   return rows.map(x => {
     const similar = yagnaSimilarTo(x);
     return `<tr>
     <td><strong>${yagnaEsc(x.code)}</strong>${similar.length ? `<div class="mg-muted-xs" style="color:var(--warning,#B06A12)" title="${window.t('yagna_similar_hint', 'Shares mobile, or name+city, with another registration — review before treating as a new person.')}">⚠ ${window.t('yagna_similar', 'Possible duplicate')} (${similar.length})</div>` : ''}</td>
     <td>${yagnaEsc((x.firstName + ' ' + x.lastName).trim())}</td>
+    <td><span class="badge ${YAGNA_INTEREST_BADGE[x.interestType] || 'badge-maroon'}">${yagnaEsc(yagnaInterestLabel(x.interestType))}</span></td>
     <td>${yagnaEsc(x.samajName || '—')}</td>
     <td>${yagnaEsc(x.city || '—')}</td>
     <td>${yagnaEsc(x.mobile)}</td>
@@ -138,9 +147,9 @@ function yagnaExport() {
   return {
     filename: 'maha-yagna-sevarthi-signups',
     title: window.t('yagna_title', 'Maha Yagna Sevarthi Signups'),
-    columns: ['Token', 'First Name', 'Last Name', 'Samaj (as entered)', 'City', 'State', 'Mobile', 'Contribution (INR)', 'Status', 'Submitted'],
+    columns: ['Token', 'First Name', 'Last Name', 'Interested In', 'Samaj (as entered)', 'City', 'State', 'Mobile', 'Contribution (INR)', 'Status', 'Submitted'],
     rows: YAGNA.list.map(x => [
-      x.code, x.firstName, x.lastName, x.samajName, x.city, x.state, x.mobile,
+      x.code, x.firstName, x.lastName, yagnaInterestLabel(x.interestType), x.samajName, x.city, x.state, x.mobile,
       Number(x.expectedContribution) || 0, x.status, x.createdAt || '',
     ]),
     meta: [window.t('yagna_kpi_total', 'Total Submissions') + ': ' + YAGNA.list.length],
