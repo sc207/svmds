@@ -51,16 +51,18 @@
                      matching the ONE other unscoped-temple-wide precedent
                      this app already has (accountant's donations/expenses),
                      not management_lead's always-per-team-scoped model.
-       - visits     Bappa/Bhuvaji padhramani scheduling — a request→scheduled→
-                     confirmed→completed workflow, same shape as a Management
-                     volunteering session. No owning-team field exists, so
-                     this is an unscoped exception for management_lead (sees
-                     every visit, not just "their" team's), the same bounded
-                     tradeoff accountant already has for donations/expenses. */
+       - visits     admin-only (explicit decision, reversed from an earlier
+                     attempt to give it to management_lead — see the matching
+                     comment in server/middleware/authz.js). A visit's escort
+                     is now an individual Devotee picked from the central
+                     registry, not a Management team — that's a fact about
+                     one field, not a reason to hand Committee/Management
+                     broad Visits access. No role currently owns the actual
+                     padhramani-scheduling responsibility. */
   var ROLE_META = {
     superadmin:        { icon: '🛡️', pages: ['*'] },
     admin:             { icon: '🛡️', pages: ['*'] },
-    management_lead:   { icon: '🗂️', pages: ['dashboard', 'management', 'visits', 'calendar'] },
+    management_lead:   { icon: '🗂️', pages: ['dashboard', 'management', 'calendar'] },
     pooja_coordinator: { icon: '🪔', pages: ['dashboard', 'puja', 'dhaja', 'calendar'] },
     committee_leader:  { icon: '🏛️', pages: ['dashboard', 'committees', 'calendar'] },
     event_incharge:    { icon: '📅', pages: ['dashboard', 'events', 'calendar'] },

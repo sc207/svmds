@@ -1,8 +1,12 @@
-/* Bappa / Bhuvaji padhramani register — a scheduling/logistics workflow (no
-   owning-team field). Reads + writes: superadmin/admin/management_lead only
-   (matches ROLE_PAGES — an unscoped exception for management_lead, the same
-   bounded tradeoff accountant already has for donations/expenses/inventory);
-   delete: admin tier. Links to a devotee by mobile when one exists. */
+/* Bappa / Bhuvaji padhramani register. Reads + writes: superadmin/admin only
+   (matches ROLE_PAGES) — explicit decision, reversed from an earlier attempt
+   to give it to management_lead. The escort on a visit is now an individual
+   Devotee picked from the central registry, not a Management team; that's a
+   fact about one field, not a reason to hand Committee/Management broad
+   Visits access. No scoped role currently owns the actual padhramani-
+   scheduling responsibility — revisit only if that ownership is genuinely
+   confirmed. Delete: admin tier (same as everything else here).
+   Links to a devotee by mobile when one exists. */
 const express = require('express');
 const crypto = require('crypto');
 const { queryAll, queryOne, run } = require('../db/connection');
@@ -14,7 +18,7 @@ const { mapVisit } = require('../utils/mappers');
 
 const router = express.Router();
 const adminTier = requireRole('superadmin', 'admin');
-router.use(requireRole('superadmin', 'admin', 'management_lead'));
+router.use(adminTier);
 const PURPOSE = ['home_inauguration', 'shop_opening', 'wedding_blessing', 'health_blessing', 'business_puja', 'festival_padhramani', 'other'];
 const STATUS = ['requested', 'scheduled', 'confirmed', 'completed', 'cancelled'];
 

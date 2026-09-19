@@ -15,15 +15,18 @@ const { queryAll, queryOne } = require('../db/connection');
 // financial line items but no owning-team either — matches the ONE other
 // place this app already grants unscoped temple-wide visibility (accountant's
 // donations/expenses), not management_lead's always-per-team-scoped model.
-// visits → management_lead: a scheduling/logistics workflow (request →
-// scheduled → confirmed → completed) with the same shape as a Management
-// volunteering session, and — like inventory — has no owning-team field, so
-// this is an unscoped exception for management_lead (sees every visit, not
-// just "their" team's), the same bounded tradeoff accountant already has.
+//
+// visits → admin-only (explicit decision, reversed from an earlier attempt
+// to give it to management_lead). The escort on a visit is now an individual
+// Devotee picked from the central registry, not a Management team — that
+// change is a data-model fact about ONE field, not a reason to hand
+// Committee/Management broad Visits access. No role currently owns the
+// actual padhramani-scheduling responsibility; give it to a scoped role only
+// when that ownership is genuinely confirmed, not because of the escort field.
 const ROLE_PAGES = {
   superadmin:        ['*'],
   admin:             ['*'],
-  management_lead:   ['dashboard', 'management', 'visits', 'calendar'],
+  management_lead:   ['dashboard', 'management', 'calendar'],
   pooja_coordinator: ['dashboard', 'puja', 'dhaja', 'calendar'],
   committee_leader:  ['dashboard', 'committees', 'calendar'],
   event_incharge:    ['dashboard', 'events', 'calendar'],
