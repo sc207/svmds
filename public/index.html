@@ -57,7 +57,8 @@
     .ldr-title {
       font-family: 'Cinzel', 'Noto Serif Gujarati', Georgia, serif;
       font-weight: 700; color: #6B1F2A; letter-spacing: .5px; line-height: 1.25;
-      font-size: clamp(1.05rem, 4.6vw, 1.55rem);
+      font-size: clamp(.92rem, 4vw, 1.32rem);
+      min-height: 2.5em; max-width: 84vw; display: flex; align-items: center; justify-content: center;
     }
     .ldr-sub {
       font-family: 'Noto Serif Gujarati', Georgia, serif; color: #C96A20; font-weight: 600;
@@ -74,9 +75,8 @@
       transition: width .25s ease;
     }
     .ldr-hint {
-      font-family: 'Noto Serif Gujarati', Georgia, serif;
-      font-size: clamp(.72rem, 3.2vw, .88rem); color: #9c8050;
-      min-height: 1.3em; max-width: 82vw; line-height: 1.35;
+      font-size: .72rem; letter-spacing: 1.5px; text-transform: uppercase; color: #9c8050;
+      min-height: 1em;
     }
     @media (prefers-reduced-motion: reduce) {
       .ldr-ring-o, .ldr-ring-m, .ldr-core, .ldr-glow { animation: none; }
@@ -134,10 +134,10 @@
         </g>
       </svg>
     </div>
-    <div class="ldr-title">શ્રી વિહત મેલડી ધામ</div>
+    <div class="ldr-title" id="ldrTitle">શ્રી વિહત માતાય નમઃ</div>
     <div class="ldr-sub">જય શ્રી વિહત મેલડી ધામ 🙏</div>
     <div class="ldr-track"><div class="ldr-bar" id="ldrBar"></div></div>
-    <div class="ldr-hint" id="ldrHint">શ્રી વિહત માતાય નમઃ</div>
+    <div class="ldr-hint" id="ldrHint">Preparing the mandir</div>
   </div>
 </div>
 
@@ -169,13 +169,15 @@
   if (!loader) return;
   var bar = document.getElementById('ldrBar');
   var hint = document.getElementById('ldrHint');
-  var pct = 8, target = 12, done = false, hi = 0;
+  var titleEl = document.getElementById('ldrTitle');
+  var pct = 8, target = 12, done = false, hi = 0, ni = 0;
   var t0 = Date.now();
   var MIN_SHOW = 1500;   // floor so a cached / fast load still shows the mandir, never a flash
-  // Devotional invocations, cycled one at a time while the mandir loads — kept
-  // separate from the progress bar (which still moves on real __boot(t) signals)
-  // so this rotation is never interrupted by a status message.
-  var hints = ['શ્રી વિહત માતાય નમઃ', 'શ્રી મેલડી માતાય નમઃ', 'જય શ્રી ગોગા મહારાજ',
+  var hints = ['Preparing the mandir', 'Lighting the diyas', 'Gathering the seva records', 'Almost ready'];
+  // Devotional invocations, cycled one at a time in the title spot while the
+  // mandir loads — a separate, faster rotation from the hint line above, so
+  // it isn't tied to the same 1.5s cadence.
+  var names = ['શ્રી વિહત માતાય નમઃ', 'શ્રી મેલડી માતાય નમઃ', 'જય શ્રી ગોગા મહારાજ',
     'પરમ પૂજ્ય ભગવાન શ્રી કરમશી બાપાને સાદર નમન', 'પરમ પૂજ્ય ભુવાજી શ્રી સુરેશ બાપાને કોટિ કોટિ નમન'];
   function paint() { if (bar) bar.style.width = pct.toFixed(1) + '%'; }
   function tick() {
@@ -185,23 +187,30 @@
     paint();
     requestAnimationFrame(tick);
   }
-  window.__boot = function (t) {
+  window.__boot = function (t, msg) {
     target = Math.max(target, Math.min(t, 100));
+    if (msg && hint) hint.textContent = msg;
   };
   var rot = setInterval(function () {
     if (done || !hint) return;
-    hi = (hi + 1) % hints.length;
+    hi = (hi + 1) % 3;
     hint.textContent = hints[hi];
-  }, 900);
-  document.addEventListener('DOMContentLoaded', function () { window.__boot(84); });
+  }, 1500);
+  var nameRot = setInterval(function () {
+    if (done || !titleEl) return;
+    ni = (ni + 1) % names.length;
+    titleEl.textContent = names[ni];
+  }, 500);
+  document.addEventListener('DOMContentLoaded', function () { window.__boot(84, hints[2]); });
   window.addEventListener('load', finish);
   var guard = setTimeout(finish, 8000);             // never trap the user
   function finish() {
     if (done) return;
     done = true;
-    clearInterval(rot); clearTimeout(guard);
+    clearInterval(rot); clearInterval(nameRot); clearTimeout(guard);
     target = 100; pct = 100; paint();
-    if (hint) hint.textContent = hints[hints.length - 1];
+    if (hint) hint.textContent = hints[3];
+    if (titleEl) titleEl.textContent = names[names.length - 1];
     // If the real load was slow this waits 0ms; if it was fast, hold to MIN_SHOW.
     setTimeout(close, Math.max(0, MIN_SHOW - (Date.now() - t0)));
   }
@@ -731,7 +740,7 @@
 <!-- JavaScript Logic Engine -->
 <script src="js/api.js"></script>
 <script src="js/i18n.js"></script>
-<script>window.__boot && window.__boot(34);</script>
+<script>window.__boot && window.__boot(34, 'Lighting the diyas');</script>
 <script src="js/people.js"></script>
 <script src="js/export.js"></script>
 <script src="js/app.js"></script>
@@ -773,7 +782,7 @@
 <script src="js/search.js"></script>
 <script src="js/hydrate.js"></script>
 <script src="js/announcements.js"></script>
-<script>window.__boot && window.__boot(92);</script>
+<script>window.__boot && window.__boot(92, 'Almost ready');</script>
 
 </body>
 </html>
