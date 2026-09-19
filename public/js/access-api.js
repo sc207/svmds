@@ -124,7 +124,7 @@
               '<div class="mg-muted-xs" style="margin-top:2px">' +
                 esc(shortUA(s.userAgent)) +
                 (s.ip ? ' · ' + esc(s.ip) : '') +
-                (s.lastSeen ? ' · ' + esc(String(s.lastSeen).replace('T', ' ').slice(0, 16)) : '') +
+                (s.lastSeen ? ' · ' + esc(window.fmtServerTimeIST ? window.fmtServerTimeIST(s.lastSeen) : s.lastSeen) : '') +
               '</div>' +
             '</td>' +
             '<td style="text-align:right;white-space:nowrap">' +
@@ -140,7 +140,7 @@
         '<div class="card-body" style="padding:0"><div class="mg-table-scroll"><table class="custom-table acc-table acc-table-sm">' +
         '<thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead><tbody>' +
         (AUDIT.length ? AUDIT.map(function (a) {
-          var when = a.createdAt ? String(a.createdAt).replace('T', ' ').slice(0, 16) : '—';
+          var when = a.createdAt ? (window.fmtServerTimeIST ? window.fmtServerTimeIST(a.createdAt) : a.createdAt) : '—';
           var ent = [a.entityType, a.entityId].filter(Boolean).join(' ');
           var extra = '';
           try { var d = a.details || {}; var keys = Object.keys(d); if (keys.length) extra = keys.map(function (k) { return k + ': ' + (typeof d[k] === 'object' ? JSON.stringify(d[k]) : d[k]); }).join(', '); } catch (e) {}

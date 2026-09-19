@@ -992,6 +992,28 @@
             window.t('cal_thu', 'Thu'), window.t('cal_fri', 'Fri'), window.t('cal_sat', 'Sat'),
             window.t('cal_sun', 'Sun')];
   };
+
+  /** A real backend timestamp (sessions.last_seen, audit_logs.created_at,
+      any *At/*_at column) — SQLite's datetime('now') stores these in UTC
+      with no offset marker — converted to the temple's own Asia/Kolkata
+      wall-clock time for display, mirroring server/services/settingsStore.js
+      istNow(). NOT the same job as locDate/locTime above: those pretty-print
+      a value that's already the correct civil date/time (a pooja session's
+      entered date, a "07:00" field); this one converts a real UTC instant.
+      "2026-09-19 12:38:00" -> "19 Sep 2026, 18:08". */
+  window.fmtServerTimeIST = function (raw) {
+    if (!raw) return '';
+    var iso = String(raw).trim().replace(' ', 'T');
+    if (!/[Zz]|[+-]\d\d:?\d\d$/.test(iso)) iso += 'Z';   // no offset marker -> assume UTC
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(raw);
+    try {
+      return d.toLocaleString(_bcp47(), {
+        timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+      });
+    } catch (e) { return String(raw); }
+  };
   /** Monday-first weekday index (0=Mon..6=Sun) of `todayIso` ('YYYY-MM-DD'),
       but ONLY when it falls inside the month being viewed (viewYear /
       0-indexed viewMonth) — otherwise -1, so a calendar showing some other

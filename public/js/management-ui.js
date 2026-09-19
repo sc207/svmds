@@ -872,7 +872,7 @@ function paneSessionAttendance(m) {
                 <td>${esc(x.mobile)}</td>
                 <td>${esc(x.role || 'Volunteer')}</td>
                 <td><span class="badge ${cls}">${label}</span></td>
-                <td class="mg-muted-xs">${a ? esc(a.markedAt.replace('T',' ').slice(0,16)) : '—'}</td>
+                <td class="mg-muted-xs">${a ? esc(window.fmtServerTimeIST ? window.fmtServerTimeIST(a.markedAt) : a.markedAt) : '—'}</td>
                 <td>
                   ${v.completed ? '<span class="mg-muted-xs">Locked</span>' : `
                   <div class="mg-att-toggle">
@@ -1186,7 +1186,7 @@ function panePublic(m) {
             <td>${esc(s.mobile)}</td>
             <td>${esc(s.city || '—')}</td>
             <td>${v ? `${esc(v.title)}<div class="mg-muted-xs">${fmtDate(v.date)} · ${fmtTime(v.startTime)}</div>` : '<span class="mg-muted-xs">Slot removed</span>'}</td>
-            <td class="mg-muted-xs">${esc(String(s.submittedAt).replace('T',' ').slice(0,16))}</td>
+            <td class="mg-muted-xs">${esc(window.fmtServerTimeIST ? window.fmtServerTimeIST(s.submittedAt) : s.submittedAt)}</td>
             <td><span class="badge ${cls}">${esc(s.status[0].toUpperCase() + s.status.slice(1))}</span></td>
             <td>
               ${s.status === 'pending' ? `<div class="flex gap-1">
