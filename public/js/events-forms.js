@@ -184,7 +184,7 @@ function handleSaveEvent(ev) {
           if (!inChargeDev && prevInCharge) return window.API.del('/events/' + code + '/incharge');
           return null;
         })
-        .then(function () { return window.__rehydrate && window.__rehydrate('events'); })
+        .then(function (inChargeResp) { if (typeof promptOrphanedRoleCleanup === 'function') promptOrphanedRoleCleanup(inChargeResp); return window.__rehydrate && window.__rehydrate('events'); })
         .catch(function (err) { evToast((err && err.message) || 'Saved locally — sync failed'); });
     }
   } else {

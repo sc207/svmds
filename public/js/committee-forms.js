@@ -263,7 +263,7 @@ function handleSaveCommittee(e) {
         if (!leaderId && prevLeader) return window.API.del('/committees/' + code + '/leader');
         return null;
       })
-      .then(function () { return cmtSyncRoster(code, CMT.editingCmtId, members, leaderId); })
+      .then(function (leaderResp) { if (typeof promptOrphanedRoleCleanup === 'function') promptOrphanedRoleCleanup(leaderResp); return cmtSyncRoster(code, CMT.editingCmtId, members, leaderId); })
       .then(function () { cmtToast(name + ' — ' + window.t('save') + ' ✓'); return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); })
       .then(done);
@@ -664,7 +664,7 @@ function saveCmtSettings(e, cid) {
         if (!c.leaderId && prevLeader) return window.API.del('/committees/' + code + '/leader');
         return null;
       })
-      .then(function () { return window.__rehydrate && window.__rehydrate('committees'); })
+      .then(function (leaderResp) { if (typeof promptOrphanedRoleCleanup === 'function') promptOrphanedRoleCleanup(leaderResp); return window.__rehydrate && window.__rehydrate('committees'); })
       .catch(function (err) { cmtToast((err && err.message) || 'Saved locally — sync failed'); });
   }
 }

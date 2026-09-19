@@ -481,7 +481,11 @@ function pjDiffLinks(code, prevCoord, nextCoord, prevSev, nextSev, localPooja) {
 
   let chain = Promise.resolve();
   addCoord.forEach(function (d) { chain = chain.then(function () { return window.API.post('/poojas/' + code + '/coordinators', { devoteeId: d }).catch(function(){}); }); });
-  delCoord.forEach(function (d) { chain = chain.then(function () { return window.API.del('/poojas/' + code + '/coordinators/' + d).catch(function(){}); }); });
+  delCoord.forEach(function (d) { chain = chain.then(function () {
+    return window.API.del('/poojas/' + code + '/coordinators/' + d)
+      .then(function (resp) { if (typeof promptOrphanedRoleCleanup === 'function') promptOrphanedRoleCleanup(resp); return resp; })
+      .catch(function(){});
+  }); });
   addSev.forEach(function (d) { chain = chain.then(function () { return window.API.post('/poojas/' + code + '/sevarthis', { devoteeId: d }).catch(function(e){ if (!(e && e.status === 409)) throw e; }); }); });
   delSev.forEach(function (d) {
     chain = chain.then(function () {

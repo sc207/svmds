@@ -260,16 +260,78 @@
     hint.innerHTML = '<span style="color:var(--success,#2E7D6B)">✓ the account links to this devotee record.</span>';
   };
 
+  /* ---------- role -> entity assignment ----------
+     Granting a scoped role only controls page access (server-side); it never
+     attaches the account to any Pooja/Committee/Management App/Event on its
+     own (see server/routes/poojas|committees|teams|events.js — the
+     coordinator/leader/lead/in-charge links are separate, dedicated
+     endpoints). Right after a NEW grant, walk the admin straight into
+     picking which entity(ies) — instead of leaving them to discover the
+     second screen on their own. Skippable; nothing is forced. */
+  var ROLE_ENTITY = {
+    pooja_coordinator: { hydrateKey: 'poojas', label: 'Pooja',
+      list: function () { return (typeof POOJA !== 'undefined' ? POOJA.poojas : []) || []; },
+      postPath: function (code) { return '/poojas/' + code + '/coordinators'; } },
+    committee_leader: { hydrateKey: 'committees', label: 'Committee',
+      list: function () { return (typeof CMT !== 'undefined' ? CMT.committees : []) || []; },
+      postPath: function (code) { return '/committees/' + code + '/leader'; } },
+    management_lead: { hydrateKey: 'teams', label: 'Management App',
+      list: function () { return (typeof MG !== 'undefined' ? MG.managements : []) || []; },
+      postPath: function (code) { return '/teams/' + code + '/lead'; } },
+    event_incharge: { hydrateKey: 'events', label: 'Event',
+      list: function () { return (typeof EV !== 'undefined' ? EV.events : []) || []; },
+      postPath: function (code) { return '/events/' + code + '/incharge'; } },
+  };
+  function promptEntityAssignment(role, userId, accountLabel) {
+    var cfg = ROLE_ENTITY[role];
+    if (!cfg || typeof openSheet !== 'function') return;
+    var list = cfg.list();
+    if (!list.length) {
+      toast('No ' + cfg.label + ' exists yet — create one, then come back to Roles to assign ' + accountLabel + '.');
+      return;
+    }
+    var rows = list.map(function (x) {
+      return '<label style="display:flex;gap:.5rem;align-items:center;margin:.35rem 0">' +
+        '<input type="checkbox" class="acc-assign-check" value="' + esc(x.code || x.id) + '"> ' + esc(x.name) + '</label>';
+    }).join('');
+    openSheet({
+      title: 'Assign ' + esc(accountLabel) + ' to a ' + cfg.label,
+      body: '<p class="mg-muted-xs">They now have the ' + esc(ROLE_LABEL[role] || role) +
+        ' role (page access). Pick which ' + cfg.label.toLowerCase() + '(s) they actually coordinate/lead — ' +
+        'you can change this anytime from the ' + cfg.label + '\'s own settings.</p>' +
+        '<div style="max-height:320px;overflow:auto">' + rows + '</div>',
+      footer: '<button class="btn btn-outline" onclick="closeSheet()">Skip for now</button>' +
+        '<button class="btn btn-primary" onclick="accSubmitEntityAssignment(\'' + role + '\',\'' + userId + '\')">Assign</button>',
+    });
+  }
+  window.accSubmitEntityAssignment = function (role, userId) {
+    var cfg = ROLE_ENTITY[role]; if (!cfg) return;
+    var codes = Array.prototype.slice.call(document.querySelectorAll('.acc-assign-check:checked')).map(function (c) { return c.value; });
+    if (!codes.length) { toast('Pick at least one, or Skip for now.'); return; }
+    var chain = Promise.resolve();
+    codes.forEach(function (code) {
+      chain = chain.then(function () { return window.API.post(cfg.postPath(code), { userId: userId }); });
+    });
+    chain.then(function () {
+      if (typeof closeSheet === 'function') closeSheet();
+      toast('Assigned.');
+      if (window.__rehydrate) window.__rehydrate([cfg.hydrateKey, 'accounts']);
+    }).catch(function (err) { toast((err && err.message) || 'Assignment failed'); });
+  };
+
   window.accSubmitAdd = async function () {
     var f = document.getElementById('accAddForm'); if (!f) return;
     var email = f.email.value.trim();
     if (!email) { toast('Google email is required'); return; }
     var devoteeId = (document.getElementById('accDevoteeSel') || {}).value || '';
     if (!devoteeId) { toast('Pick a devotee, or add a new one.'); return; }
+    var roles = pickedRoles(f);
     try {
-      await window.API.post('/users', { email: email, roles: pickedRoles(f), devoteeId: devoteeId });
+      var created = await window.API.post('/users', { email: email, roles: roles, devoteeId: devoteeId });
       if (typeof closeSheet === 'function') closeSheet();
       toast('Account created'); await refresh();
+      var assignable = roles.filter(function (r) { return ROLE_ENTITY[r]; })[0];
+      if (assignable && created && created.id != null) promptEntityAssignment(assignable, created.id, created.name || email);
     } catch (e) { toast(e.message); }
   };
 
@@ -327,11 +389,15 @@
     var u = USERS.filter(function (x) { return String(x.id) === String(id); })[0];
     var f = document.getElementById('accRolesForm'); if (!u || !f) return;
     var want = pickedRoles(f), have = u.roles || [];
+    var newlyGranted = want.filter(function (r) { return have.indexOf(r) === -1 && ROLE_ENTITY[r]; });
     try {
       for (var i = 0; i < want.length; i++) if (have.indexOf(want[i]) === -1) await window.API.post('/users/' + id + '/roles', { role: want[i] });
       for (var k = 0; k < have.length; k++) if (want.indexOf(have[k]) === -1) await window.API.del('/users/' + id + '/roles/' + have[k]);
       if (typeof closeSheet === 'function') closeSheet();
       toast('Roles updated'); await refresh();
+      // only one follow-up sheet can show at a time — prompt for the first
+      // newly-granted assignable role; re-open Roles to assign the rest.
+      if (newlyGranted[0]) promptEntityAssignment(newlyGranted[0], id, u.name || u.email);
     } catch (e) { toast(e.message); }
   };
 

@@ -178,16 +178,19 @@ router.post('/:id/lead', adminTier, async (req, res, next) => {
       if (!has) await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
                            (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [uid, 'management_lead', uid, 'management_lead']);
     }
+    // Displacing a previous lead never silently revokes THEIR role (see
+    // DELETE /:id/lead below for why) — just report whether this was their
+    // last team so the admin can be asked instead.
+    let orphanedRole = null;
     if (prev && prev !== uid) {
       const still = await queryOne('SELECT 1 AS x FROM teams WHERE lead_id = ? AND is_deleted = 0 LIMIT 1', [prev]);
-      if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'management_lead']);
-      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
+      if (!still) orphanedRole = { userId: prev, role: 'management_lead' };
     }
     if (devId) await addAsMember({ kind: 'team', entityId: row.id, devoteeId: devId, role: 'Lead' });
 
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
       action: 'GRANT', entityType: 'management_lead', entityId: String(uid || 'dev:' + devId), scopeId: row.code });
-    res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
+    res.json({ ...(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id]))), _orphanedRole: orphanedRole });
   } catch (e) { next(e); }
 });
 
@@ -195,7 +198,15 @@ router.post('/:id/lead', adminTier, async (req, res, next) => {
    actually required at the DB/POST-/ level, only a stale frontend check on
    the create/edit form enforced it; their own roster row from
    addAsMember() is left alone — removing them as lead doesn't remove them
-   as a member). */
+   as a member).
+
+   Deliberately does NOT auto-revoke the management_lead role or kill
+   sessions even when this was their last team — that's a bigger,
+   cross-cutting action than "unassign from one team" and must be a
+   confirmed, separate choice (DELETE /api/users/:id/roles/management_lead,
+   which is the one place role revocation — and its matching entity
+   cleanup — actually happens). Instead this reports `_orphanedRole` so the
+   frontend can ask. */
 router.delete('/:id/lead', adminTier, async (req, res, next) => {
   try {
     const row = await teamByIdOrCode(req.params.id);
@@ -204,14 +215,14 @@ router.delete('/:id/lead', adminTier, async (req, res, next) => {
 
     const prev = row.lead_id;
     await run(`UPDATE teams SET lead_id = NULL, lead_devotee_id = NULL, updated_at = datetime('now') WHERE id = ?`, [row.id]);
+    let orphanedRole = null;
     if (prev) {
       const still = await queryOne('SELECT 1 AS x FROM teams WHERE lead_id = ? AND is_deleted = 0 LIMIT 1', [prev]);
-      if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'management_lead']);
-      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
+      if (!still) orphanedRole = { userId: prev, role: 'management_lead' };
     }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Management',
       action: 'REVOKE', entityType: 'management_lead', entityId: String(prev || 'dev:' + row.lead_devotee_id), scopeId: row.code });
-    res.json(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id])));
+    res.json({ ...(await hydrate(await queryOne('SELECT * FROM teams WHERE id = ?', [row.id]))), _orphanedRole: orphanedRole });
   } catch (e) { next(e); }
 });
 

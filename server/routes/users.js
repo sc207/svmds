@@ -238,6 +238,27 @@ router.delete('/:id/roles/:role', adminTier, async (req, res, next) => {
     if (role === 'superadmin') assertRootOwnerSafe(u, 'revoke-superadmin');
 
     await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [u.id, role]);
+
+    // Revoking a scoped role is the one deliberate place that also detaches
+    // this account from every entity that role let them act on — otherwise a
+    // committee/team/event/pooja would keep pointing at someone who can no
+    // longer open the page at all (a stale, confusing attachment, not a
+    // privacy hole — page access is already gated on the role separately —
+    // but exactly the "stale assignment" data-hygiene gap this exists to close).
+    // The reverse direction (unassigning from one entity) never lands here
+    // automatically — see the entity DELETE /:id/leader|lead|incharge|coordinators
+    // routes, which only report the role is now unused and let the admin
+    // confirm before it's revoked from here.
+    if (role === 'pooja_coordinator') {
+      await run('DELETE FROM pooja_coordinator_links WHERE user_id = ?', [u.id]);
+    } else if (role === 'committee_leader') {
+      await run(`UPDATE committees SET leader_id = NULL, leader_devotee_id = NULL, updated_at = datetime('now') WHERE leader_id = ?`, [u.id]);
+    } else if (role === 'management_lead') {
+      await run(`UPDATE teams SET lead_id = NULL, lead_devotee_id = NULL, updated_at = datetime('now') WHERE lead_id = ?`, [u.id]);
+    } else if (role === 'event_incharge') {
+      await run(`UPDATE events SET in_charge_id = NULL, in_charge_devotee_id = NULL, updated_at = datetime('now') WHERE in_charge_id = ?`, [u.id]);
+    }
+
     // losing a scoped role can change what they may see — revoke live sessions so they re-auth
     await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [u.id]);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Access',

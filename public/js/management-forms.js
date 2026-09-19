@@ -309,6 +309,43 @@ function runConfirm() {
   if (typeof fn === 'function') fn();
 }
 
+/* ------------------------------------------------------------
+   ORPHANED-ROLE CLEANUP — shared by Pooja/Committee/Management/Events
+   ------------------------------------------------------------
+   Unassigning someone as the last coordinator/leader/lead/in-charge of an
+   entity never silently revokes their scoped role (server-side: the
+   DELETE .../leader|lead|incharge|coordinators/... routes only report it
+   via `_orphanedRole` on the response, they don't act on it). Call this
+   with whatever that unassign call resolved to — if it flags an orphaned
+   role, this asks before removing it. Never silent, per explicit design. */
+const ORPHANED_ROLE_COPY = {
+  pooja_coordinator: { label: 'Pooja Coordinator', noun: 'coordinates any Pooja' },
+  committee_leader: { label: 'Committee Leader', noun: 'leads any Committee' },
+  management_lead: { label: 'Management Lead', noun: 'leads any Management App' },
+  event_incharge: { label: 'Event In-charge', noun: 'is in-charge of any Event' },
+};
+function promptOrphanedRoleCleanup(resp) {
+  const o = resp && resp._orphanedRole;
+  if (!o || !o.userId || !o.role || typeof openConfirm !== 'function') return;
+  const copy = ORPHANED_ROLE_COPY[o.role] || { label: o.role, noun: 'has any remaining assignment' };
+  openConfirm({
+    title: 'Remove ' + copy.label + ' access?',
+    body: '<p>This person no longer ' + copy.noun + '. Remove their <strong>' + copy.label + '</strong> role too?</p>' +
+          '<p class="mg-muted-xs">They keep every other role they hold. This only takes effect for this one.</p>',
+    confirmLabel: 'Remove role',
+    danger: true,
+    onConfirm: function () {
+      window.API.del('/users/' + o.userId + '/roles/' + o.role)
+        .then(function () {
+          if (typeof showToast === 'function') showToast(copy.label + ' role removed.');
+          if (window.__rehydrate) window.__rehydrate('accounts');
+        })
+        .catch(function (err) { if (typeof showToast === 'function') showToast((err && err.message) || 'Failed to remove role'); });
+    },
+  });
+}
+window.promptOrphanedRoleCleanup = promptOrphanedRoleCleanup;
+
 /* ============================================================
    ADD / EDIT MANAGEMENT
    ============================================================ */
@@ -452,7 +489,7 @@ function handleSaveManagement(e) {
         if (!leadId && prevLead) return window.API.del('/teams/' + code + '/lead');
         return null;
       })
-      .then(function () { return mgSyncRoster(code, m.id, members, leadId); })
+      .then(function (leadResp) { if (typeof promptOrphanedRoleCleanup === 'function') promptOrphanedRoleCleanup(leadResp); return mgSyncRoster(code, m.id, members, leadId); })
       .then(function () { mgToast(`${name} updated.`); return window.__rehydrate && window.__rehydrate('teams'); })
       .catch(function (err) { mgToast((err && err.message) || 'Saved locally — sync failed'); })
       .then(finish);

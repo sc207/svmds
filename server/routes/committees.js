@@ -174,16 +174,19 @@ router.post('/:id/leader', adminTier, async (req, res, next) => {
       if (!has) await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
                            (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [uid, 'committee_leader', uid, 'committee_leader']);
     }
+    // Displacing a previous leader never silently revokes THEIR role (see
+    // DELETE /:id/leader below for why) — just report whether this was their
+    // last committee so the admin can be asked instead.
+    let orphanedRole = null;
     if (prevLeader && prevLeader !== uid) {
       const stillLeads = await queryOne('SELECT 1 AS x FROM committees WHERE leader_id = ? AND is_deleted = 0 LIMIT 1', [prevLeader]);
-      if (!stillLeads) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prevLeader, 'committee_leader']);
-      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prevLeader]);
+      if (!stillLeads) orphanedRole = { userId: prevLeader, role: 'committee_leader' };
     }
     if (devId) await addAsMember({ kind: 'committee', entityId: row.id, devoteeId: devId, role: 'Leader' });
 
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',
       action: 'GRANT', entityType: 'committee_leader', entityId: String(uid || 'dev:' + devId), scopeId: row.code });
-    res.json(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id])));
+    res.json({ ...(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id]))), _orphanedRole: orphanedRole });
   } catch (e) { next(e); }
 });
 
@@ -191,7 +194,15 @@ router.post('/:id/leader', adminTier, async (req, res, next) => {
    never actually required at the DB/POST-/ level, only a stale frontend
    check on the create/edit form enforced it; see the roster row this
    person likely still has via addAsMember(), which is intentionally left
-   alone — removing them as leader doesn't remove them as a member). */
+   alone — removing them as leader doesn't remove them as a member).
+
+   Deliberately does NOT auto-revoke the committee_leader role or kill
+   sessions even when this was their last committee — that's a bigger,
+   cross-cutting action than "unassign from one committee" and must be a
+   confirmed, separate choice (DELETE /api/users/:id/roles/committee_leader,
+   which is the one place role revocation — and its matching entity
+   cleanup — actually happens). Instead this reports `_orphanedRole` so the
+   frontend can ask. */
 router.delete('/:id/leader', adminTier, async (req, res, next) => {
   try {
     const row = await committeeByIdOrCode(req.params.id);
@@ -200,14 +211,14 @@ router.delete('/:id/leader', adminTier, async (req, res, next) => {
 
     const prevLeader = row.leader_id;
     await run(`UPDATE committees SET leader_id = NULL, leader_devotee_id = NULL, updated_at = datetime('now') WHERE id = ?`, [row.id]);
+    let orphanedRole = null;
     if (prevLeader) {
       const stillLeads = await queryOne('SELECT 1 AS x FROM committees WHERE leader_id = ? AND is_deleted = 0 LIMIT 1', [prevLeader]);
-      if (!stillLeads) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prevLeader, 'committee_leader']);
-      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prevLeader]);
+      if (!stillLeads) orphanedRole = { userId: prevLeader, role: 'committee_leader' };
     }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Committee',
       action: 'REVOKE', entityType: 'committee_leader', entityId: String(prevLeader || 'dev:' + row.leader_devotee_id), scopeId: row.code });
-    res.json(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id])));
+    res.json({ ...(await hydrate(await queryOne('SELECT * FROM committees WHERE id = ?', [row.id]))), _orphanedRole: orphanedRole });
   } catch (e) { next(e); }
 });
 

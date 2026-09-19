@@ -401,6 +401,15 @@ router.post('/:id/coordinators', adminTier, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* Unassign one coordinator from this pooja.
+
+   Deliberately does NOT auto-revoke the pooja_coordinator role or kill
+   sessions even when this was their last pooja — that's a bigger,
+   cross-cutting action than "unassign from one pooja" and must be a
+   confirmed, separate choice (DELETE /api/users/:id/roles/pooja_coordinator,
+   which is the one place role revocation — and its matching link cleanup —
+   actually happens). Instead this reports `_orphanedRole` so the frontend
+   can ask. */
 router.delete('/:id/coordinators/:ref', adminTier, async (req, res, next) => {
   try {
     const row = await poojaByIdOrCode(req.params.id);
@@ -414,16 +423,16 @@ router.delete('/:id/coordinators/:ref', adminTier, async (req, res, next) => {
       'SELECT rowid AS rid, user_id FROM pooja_coordinator_links WHERE pooja_id = ? AND (user_id = ? OR devotee_id = ?)',
       [row.id, uid, devId]);
     for (const l of links) await run('DELETE FROM pooja_coordinator_links WHERE rowid = ?', [l.rid]);
-    // drop the role for any freed account that now coordinates nothing
+    // report (never silently act on) whether this freed an account that now coordinates nothing
+    let orphanedRole = null;
     for (const l of links) {
       if (!l.user_id) continue;
       const still = await queryOne('SELECT 1 AS x FROM pooja_coordinator_links WHERE user_id = ? LIMIT 1', [l.user_id]);
-      if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [l.user_id, 'pooja_coordinator']);
-      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [l.user_id]);
+      if (!still) { orphanedRole = { userId: l.user_id, role: 'pooja_coordinator' }; break; }
     }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
       action: 'REVOKE', entityType: 'pooja_coordinator', entityId: String(ref), scopeId: row.code });
-    res.json(await hydrate(await poojaByIdOrCode(row.id)));
+    res.json({ ...(await hydrate(await poojaByIdOrCode(row.id))), _orphanedRole: orphanedRole });
   } catch (e) { next(e); }
 });
 

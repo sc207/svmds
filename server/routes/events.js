@@ -219,14 +219,17 @@ router.post('/:id/incharge', adminTier, async (req, res, next) => {
       if (!has) await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
                            (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [uid, 'event_incharge', uid, 'event_incharge']);
     }
+    // Displacing a previous in-charge never silently revokes THEIR role (see
+    // DELETE /:id/incharge below for why) — just report whether this was
+    // their last event so the admin can be asked instead.
+    let orphanedRole = null;
     if (prev && prev !== uid) {
       const still = await queryOne('SELECT 1 AS x FROM events WHERE in_charge_id = ? AND is_deleted = 0 LIMIT 1', [prev]);
-      if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'event_incharge']);
-      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
+      if (!still) orphanedRole = { userId: prev, role: 'event_incharge' };
     }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Events',
       action: 'GRANT', entityType: 'event_incharge', entityId: String(uid || 'dev:' + devId), scopeId: row.code });
-    res.json(await withDays(await eventByIdOrCode(row.id)));
+    res.json({ ...(await withDays(await eventByIdOrCode(row.id))), _orphanedRole: orphanedRole });
   } catch (e) { next(e); }
 });
 
@@ -234,7 +237,15 @@ router.post('/:id/incharge', adminTier, async (req, res, next) => {
    at the DB/POST-/ level; there just wasn't any way to go back to that
    state once someone was assigned). Their own roster row from
    addAsMember(), if any, is left alone — removing them as in-charge
-   doesn't remove them as a guest/roster entry elsewhere. */
+   doesn't remove them as a guest/roster entry elsewhere.
+
+   Deliberately does NOT auto-revoke the event_incharge role or kill
+   sessions even when this was their last event — that's a bigger,
+   cross-cutting action than "unassign from one event" and must be a
+   confirmed, separate choice (DELETE /api/users/:id/roles/event_incharge,
+   which is the one place role revocation — and its matching entity
+   cleanup — actually happens). Instead this reports `_orphanedRole` so the
+   frontend can ask. */
 router.delete('/:id/incharge', adminTier, async (req, res, next) => {
   try {
     const row = await eventByIdOrCode(req.params.id);
@@ -243,14 +254,14 @@ router.delete('/:id/incharge', adminTier, async (req, res, next) => {
 
     const prev = row.in_charge_id;
     await run(`UPDATE events SET in_charge_id = NULL, in_charge_devotee_id = NULL, updated_at = datetime('now') WHERE id = ?`, [row.id]);
+    let orphanedRole = null;
     if (prev) {
       const still = await queryOne('SELECT 1 AS x FROM events WHERE in_charge_id = ? AND is_deleted = 0 LIMIT 1', [prev]);
-      if (!still) await run('DELETE FROM user_roles WHERE user_id = ? AND role = ?', [prev, 'event_incharge']);
-      await run('UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0', [prev]);
+      if (!still) orphanedRole = { userId: prev, role: 'event_incharge' };
     }
     await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Events',
       action: 'REVOKE', entityType: 'event_incharge', entityId: String(prev || 'dev:' + row.in_charge_devotee_id), scopeId: row.code });
-    res.json(await withDays(await eventByIdOrCode(row.id)));
+    res.json({ ...(await withDays(await eventByIdOrCode(row.id))), _orphanedRole: orphanedRole });
   } catch (e) { next(e); }
 });
 
