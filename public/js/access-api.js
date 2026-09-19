@@ -444,7 +444,13 @@
   window.renderAccess = function () {
     if (!window.API || !window.API.online) { if (typeof seedRender === 'function') return seedRender(); return; }
     var root = document.getElementById('accessRoot');
-    if (root && !USERS.length) root.innerHTML = '<div class="mg-muted-xs" style="padding:1rem">Loading accounts…</div>';
+    if (!root) return;
+    // Same guard the seed renderer applies (access.js accGuard): don't even
+    // attempt the admin-only /users fetch for a persona that can't open this
+    // page — GET /users is admin-tier now, so a scoped role would otherwise
+    // hit a guaranteed 403 on every app boot for a page it can never see.
+    if (typeof canOpenPage === 'function' && !canOpenPage('admin')) { root.innerHTML = ''; return; }
+    if (!USERS.length) root.innerHTML = '<div class="mg-muted-xs" style="padding:1rem">Loading accounts…</div>';
     refresh();
   };
 })();

@@ -23,16 +23,36 @@ function dto(row) {
   return u;
 }
 
-/* GET /  — everyone signed in may read the roster (matches the client). */
-router.get('/', async (req, res, next) => {
+/* GET /  — the full administrable account roster (email, mobile, city, roles,
+   active, rootOwner, …). Admin-tier only — this is PII, not a name lookup. */
+router.get('/', adminTier, async (req, res, next) => {
   try {
     const rows = await listUsers();
     res.json(rows.map(dto));
   } catch (e) { next(e); }
 });
 
-/* GET /:id */
-router.get('/:id', async (req, res, next) => {
+/* GET /directory  — everyone signed in may resolve WHO an id/role belongs to
+   (dashboards, activity feeds, "assigned to" dropdowns — people.js ACCOUNTS
+   is hydrated from this). Deliberately minimal: no email/mobile/city/rootOwner —
+   those only ever render inside the admin-only Accounts & Access page, which
+   reads GET / above instead. Must be declared before GET /:id or the :id
+   route would swallow this path. */
+router.get('/directory', async (req, res, next) => {
+  try {
+    const rows = await listUsers();
+    res.json(rows.filter(u => u.active).map(u => ({
+      id: u.id,
+      devoteeId: u.devotee_id || null,
+      devoteeCode: u.devotee_code || null,
+      name: u.name || '',
+      roles: Array.isArray(u.roles) ? u.roles : [],
+    })));
+  } catch (e) { next(e); }
+});
+
+/* GET /:id  — full account record by id. Admin-tier only, same reasoning as GET /. */
+router.get('/:id', adminTier, async (req, res, next) => {
   try {
     const u = await getUser(parseInt(req.params.id, 10));
     if (!u) return res.status(404).json({ error: 'User not found' });

@@ -441,14 +441,18 @@
      accounts. */
   async function hydrateAccounts() {
     if (typeof window.ACCOUNTS === 'undefined' || !Array.isArray(window.ACCOUNTS)) return;
-    var rows = await window.API.get('/users');
+    // /users/directory — a name-resolution-only projection every signed-in
+    // role may read (no email/mobile/city/rootOwner: those are PII that only
+    // the admin-only Accounts & Access page needs, and it fetches the full
+    // roster itself via access-api.js's own GET /users call).
+    var rows = await window.API.get('/users/directory');
     if (!Array.isArray(rows)) return;
-    swap(window.ACCOUNTS, rows.filter(function (u) { return u.active; }).map(function (u) {
+    swap(window.ACCOUNTS, rows.map(function (u) {
       return {
         id: u.devoteeCode || (u.devoteeId != null ? String(u.devoteeId) : String(u.id)),
-        name: u.name || u.email || '',
-        mobile: u.mobile || '',
-        city: u.city || '',
+        name: u.name || '',
+        mobile: '',
+        city: '',
         roles: u.roles || []
       };
     }));
