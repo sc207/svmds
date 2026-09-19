@@ -102,7 +102,13 @@ function setPoojaSession(role, coordId, announce) {
     POOJA.session = { role:'admin', userId:'DEV-001', userName:'Administrator' };
     if (speak) pjToast('Context switched to: Super Admin (Full Platform)');
   } else {
-    const c = coordinatorById(coordId) || coordinatorPool()[0] || { id: coordId || '', name: 'Pooja Coordinator' };
+    // coordId always comes from a real, already-assigned coordinatorIds entry
+    // (populateCoordRoleOptions()/changeRoleScope('coord:<id>') — never empty
+    // here) — never fall back to "any known person" if the direct lookup
+    // fails (e.g. their devotee record was later deleted/merged); that would
+    // silently preview as a completely different, unrelated person instead
+    // of just showing a plain id with no friendly name.
+    const c = coordinatorById(coordId) || { id: coordId || '', name: 'Pooja Coordinator' };
     POOJA.session = { role:'coordinator', userId:c.id, userName:c.name };
     if (speak) pjToast(`Context switched to: ${c.name} (Pooja Coordinator)`);
   }

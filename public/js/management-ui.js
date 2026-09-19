@@ -100,7 +100,12 @@ function setMgSession(role, leadId, announce) {
     MG.session = { role:'admin', userId:'DEV-001', userName:'Administrator' };
     if (speak) mgToast('Context switched to: Super Admin (Full Platform)');
   } else {
-    const l = leadById(leadId) || MG.leads[0] || { id: leadId || '', name: 'Management Lead' };
+    // leadId always comes from a real, already-assigned team.leadId
+    // (populateLeadRoleOptions()/changeRoleScope('lead:<id>') — never empty
+    // here) — never fall back to "any known lead" if the direct lookup
+    // fails; that would silently preview as a completely different,
+    // unrelated person instead of just showing a plain id with no name.
+    const l = leadById(leadId) || { id: leadId || '', name: 'Management Lead' };
     MG.session = { role:'lead', userId:l.id, userName:l.name };
     if (speak) mgToast(`Context switched to: ${l.name} (Management Lead)`);
   }

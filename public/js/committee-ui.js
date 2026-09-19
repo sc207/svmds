@@ -65,7 +65,12 @@ function setCmtSession(role, leaderId, announce) {
   if (role === 'admin') {
     CMT.session = { role:'admin', userId:'DEV-001', userName:'Administrator' };
   } else {
-    const l = cmtLeadById(leaderId) || CMT.leaders[0] || { id: leaderId || '', name: 'Committee Leader' };
+    // leaderId always comes from a real, already-assigned committee.leaderId
+    // (populateCmtRoleOptions()/changeRoleScope('cmt:<id>') — never empty
+    // here) — never fall back to "any known leader" if the direct lookup
+    // fails; that would silently preview as a completely different,
+    // unrelated person instead of just showing a plain id with no name.
+    const l = cmtLeadById(leaderId) || { id: leaderId || '', name: 'Committee Leader' };
     CMT.session = { role:'leader', userId:l.id, userName:l.name };
     if (speak) cmtToast('Context: ' + l.name + ' (Committee Leader)');
   }
