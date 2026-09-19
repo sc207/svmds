@@ -517,8 +517,11 @@ function mapVisit(row) {
     state: linked && row.dev_state != null ? row.dev_state : (row.state || 'Gujarat'),
     date: row.date,
     time: row.time || '',
+    // escortMode / escortDevotees (plural — a visit can have more than one
+    // individual escort) are attached by server/routes/visits.js withEscort(),
+    // not here — a roster can't come back as columns on a single visits row.
     escortTeam: row.escort_team || '',
-    escortTeamId: row.escort_team_id || null,
+    escortTeamId: row.escort_team_code || row.escort_team_id || null,
     escortTeamName: row.escort_team_name || row.escort_team || '',
     status: row.status || 'requested',
     notes: row.notes || '',

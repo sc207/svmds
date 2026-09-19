@@ -98,6 +98,10 @@ async function deleteDraft(draftIdOrCode) {
 const ROSTER = {
   meeting: { table: 'meeting_members', ctx: 'meeting_id', mem: 'committee_member_id', memTable: 'committee_members' },
   session: { table: 'session_members', ctx: 'session_id', mem: 'team_member_id', memTable: 'team_members' },
+  /* Bappa/Bhuvaji Visits' "individual escort(s)" — one or more Devotees
+     directly (no intermediate role record, unlike meeting/session above),
+     so mem/memTable point straight at devotees. See server/routes/visits.js. */
+  'visit-escort': { table: 'visit_escort_devotees', ctx: 'visit_id', mem: 'devotee_id', memTable: 'devotees' },
 };
 async function getRoster(kind, contextId) {
   const r = ROSTER[kind]; if (!r) return [];

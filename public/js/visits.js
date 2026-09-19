@@ -4,9 +4,12 @@
    A "padhramani" — the deity's murti (or the Bhuvaji, the
    temple's oracle/medium who channels Maa) visits a devotee's
    new home, shop or a family function to bless it. Each visit
-   needs a date/time, the full address, and an ESCORT TEAM —
-   the temple volunteers who carry the palki / murti, manage
-   the aarti thali, crowd and the return journey safely.
+   needs a date/time, the full address, and an ESCORT — either
+   a Management TEAM (the volunteers who carry the palki/murti,
+   manage the aarti thali, crowd and the return journey safely)
+   OR one-or-more individual Devotees picked from the central
+   registry, never both (escortMode 'team' | 'individual'; see
+   server/routes/visits.js for the visit_escort_devotees roster).
    Single-file module, renders into #visitsRoot, uses the
    generic openSheet() for its add/edit form.
    ============================================================ */
@@ -87,7 +90,7 @@ function renderVisits() {
           <thead><tr>
             <th>${window.t('vis_devotee', 'Devotee')}</th><th>${window.t('vis_purpose', 'Purpose')}</th>
             <th>${window.t('vis_address', 'Address')}</th><th>${window.t('vis_datetime', 'Date & Time')}</th>
-            <th>${window.t('vis_escort', 'Escort Team')}</th><th>${window.t('status')}</th><th>${window.t('actions')}</th>
+            <th>${window.t('vis_escort', 'Escort')}</th><th>${window.t('status')}</th><th>${window.t('actions')}</th>
           </tr></thead>
           <tbody>${list.length ? list.map(v => `
             <tr>
@@ -95,7 +98,7 @@ function renderVisits() {
               <td><span class="badge badge-maroon">${esc(visitPurposeLabel(v.purpose))}</span></td>
               <td>${esc(v.address || '')}${v.city ? `<div class="mg-muted-xs">${esc(v.city)}${v.state ? ', ' + esc(v.state) : ''}</div>` : ''}</td>
               <td>${(typeof fmtDate === 'function') ? fmtDate(v.date) : v.date}${v.time ? `<div class="mg-muted-xs">${(typeof fmtTime === 'function') ? fmtTime(v.time) : v.time}</div>` : ''}</td>
-              <td>${esc(v.escortTeam || '—')}</td>
+              <td>${visitEscortCell(v)}</td>
               <td><span class="badge ${VIS_STATUS_BADGE[v.status] || 'badge-pending'}">${esc(visitStatusLabel(v.status))}</span></td>
               <td><div class="flex gap-1">
                 ${v.mobile ? `<a class="btn btn-outline mg-btn-xs" href="tel:${esc(v.mobile)}">📞</a>` : ''}
@@ -128,6 +131,17 @@ function visEscortOptions(v) {
   return opts;
 }
 
+/* Table-cell display for whichever escort mode a visit is in — individual
+   mode can have more than one escort (visit_escort_devotees roster). */
+function visitEscortCell(v) {
+  if (v.escortMode === 'individual') {
+    const devs = v.escortDevotees || [];
+    if (!devs.length) return '—';
+    return devs.map(d => `<span class="badge badge-confirmed">${esc(d.name)}</span>`).join(' ');
+  }
+  return v.escortTeam ? esc(v.escortTeam) : '—';
+}
+
 function visitFormBody(v) {
   v = v || {};
   const pOpts = VISITS.purposes.map(p => `<option value="${p}" ${v.purpose === p ? 'selected' : ''}>${esc(visitPurposeLabel(p))}</option>`).join('');
@@ -152,11 +166,56 @@ function visitFormBody(v) {
       <div class="form-group"><label class="form-label" for="visDate">${window.t('date')} *</label><input type="date" class="form-input" id="visDate" value="${esc(v.date || visToday())}" required></div>
       <div class="form-group"><label class="form-label" for="visTime">${window.t('time')}</label><input type="time" class="form-input" id="visTime" value="${esc(v.time || '11:00')}"></div>
     </div>
-    <div class="form-group"><label class="form-label" for="visEscortSel">${window.t('vis_escort', 'Escort Team')}</label>
-      <select class="form-select" id="visEscortSel">${visEscortOptions(v)}</select>
+    <div class="form-group">
+      <label class="form-label">${window.t('vis_escort', 'Escort')}</label>
+      <div class="flex gap-2" style="margin-bottom:.5rem">
+        <label class="flex items-center gap-1" style="font-weight:normal">
+          <input type="radio" name="visEscortMode" value="team" ${(v.escortMode || 'team') === 'team' ? 'checked' : ''} onchange="visSetEscortMode('team')">
+          ${window.t('vis_escort_team', 'Escort Team')}
+        </label>
+        <label class="flex items-center gap-1" style="font-weight:normal">
+          <input type="radio" name="visEscortMode" value="individual" ${v.escortMode === 'individual' ? 'checked' : ''} onchange="visSetEscortMode('individual')">
+          ${window.t('vis_escort_individual', 'Individual Devotee')}
+        </label>
+      </div>
+      <div id="visEscortTeamWrap" ${v.escortMode === 'individual' ? 'hidden' : ''}>
+        <select class="form-select" id="visEscortSel">${visEscortOptions(v)}</select>
+      </div>
+      <div id="visEscortDevWrap" ${v.escortMode === 'individual' ? '' : 'hidden'}>
+        <div class="mg-muted-xs" style="margin-bottom:.4rem">${window.t('vis_escort_dev_hint', 'Pick one or more people leading/escorting this visit — not the sevarthi being visited.')}</div>
+        <button type="button" class="btn-add-devotee" onclick="visAddEscortPerson()">+ ${window.t('vis_escort_add_person', 'Add new devotee')}</button>
+        <div id="visEscortDevPicker" class="mg-mt-sm">${
+          (typeof personCheckList === 'function' && typeof allPeople === 'function')
+            ? personCheckList(allPeople(), (v.escortDevotees || []).map(d => d.id), 'vis-esc-check')
+            : ''
+        }</div>
+      </div>
     </div>
     <div class="form-group"><label class="form-label" for="visNotes">${window.t('notes')}</label><textarea class="form-input mg-textarea" id="visNotes" rows="2">${esc(v.notes || '')}</textarea></div>
   </form>`;
+}
+
+function visSetEscortMode(mode) {
+  const teamWrap = document.getElementById('visEscortTeamWrap');
+  const devWrap = document.getElementById('visEscortDevWrap');
+  if (teamWrap) teamWrap.hidden = mode === 'individual';
+  if (devWrap) devWrap.hidden = mode !== 'individual';
+}
+/* "+ Add new devotee" from inside the escort picker — keeps whatever's
+   already ticked, then re-renders the checklist with the new person added
+   and pre-ticked (same pattern as mgAddMemberPerson in management-forms.js). */
+function visAddEscortPerson() {
+  const keep = (typeof checkedIds === 'function') ? checkedIds('visEscortDevPicker', 'vis-esc-check') : [];
+  if (typeof openDevoteeSheet !== 'function') return;
+  openDevoteeSheet({
+    title: window.t('vis_escort_add_title', 'Add a new devotee'),
+    onSaved: function (dev) {
+      const box = document.getElementById('visEscortDevPicker');
+      if (box && typeof personCheckList === 'function' && typeof allPeople === 'function') {
+        box.innerHTML = personCheckList(allPeople(), keep.concat([dev.id]), 'vis-esc-check');
+      }
+    }
+  });
 }
 
 function openAddVisit() {
@@ -187,17 +246,28 @@ function handleSaveVisit(e) {
   const name = person.name;
   const date = g('visDate').value;
   if (!date) { visToast(window.t('vis_need_date', 'Date is required.')); return; }
+  const escortModeEl = document.querySelector('input[name="visEscortMode"]:checked');
+  const escortMode = escortModeEl ? escortModeEl.value : 'team';
   const escortTeamId = g('visEscortSel') ? g('visEscortSel').value : '';
   const escortName = escortTeamId && typeof MG !== 'undefined' && Array.isArray(MG.managements)
     ? ((MG.managements.find(t => String(t.code || t.id) === String(escortTeamId)) || {}).name || '')
     : '';
+  const escortDevIds = (escortMode === 'individual' && typeof checkedIds === 'function') ? checkedIds('visEscortDevPicker', 'vis-esc-check') : [];
+  const allP = (escortMode === 'individual' && typeof allPeople === 'function') ? allPeople() : [];
+  const escortDevs = escortDevIds.map(id => {
+    const p = allP.find(x => String(x.id) === String(id));
+    return { id: id, name: p ? p.name : id, mobile: p ? p.mobile || '' : '', city: p ? p.city || '' : '' };
+  });
   const fields = {
     devoteeId: devoteeId, devoteeName: name,
     mobile: person.mobile || '', city: person.city || '', state: person.state || 'Gujarat',
     purpose: g('visPurpose').value, status: g('visStatus').value,
     address: g('visAddress').value.trim(),
     date, time: g('visTime').value,
-    escortTeamId: escortTeamId || '', escortTeam: escortName,
+    escortMode: escortMode,
+    escortTeamId: escortMode === 'team' ? (escortTeamId || '') : '',
+    escortTeam: escortMode === 'team' ? escortName : '',
+    escortDevotees: escortMode === 'individual' ? escortDevs : [],
     notes: g('visNotes').value.trim()
   };
   const online = !!(window.API && window.API.online);
@@ -205,7 +275,11 @@ function handleSaveVisit(e) {
     devoteeId: /^DEV-/i.test(devoteeId) ? devoteeId : undefined,
     devoteeName: name, address: fields.address, purpose: fields.purpose, status: fields.status,
     date: fields.date, time: fields.time,
-    escortTeamId: escortTeamId || undefined, notes: fields.notes
+    escortMode: escortMode,
+    escortTeamId: escortMode === 'team' ? (escortTeamId || undefined) : undefined,
+    escortTeam: escortMode === 'team' ? escortName : undefined,
+    escortDevoteeIds: escortMode === 'individual' ? escortDevIds : undefined,
+    notes: fields.notes
   };
   if (VISITS.editingId) {
     const v = visitById(VISITS.editingId);
@@ -254,10 +328,12 @@ function visitsExport() {
     filename: 'bhuvaji-visits',
     title: window.t('vis_title', 'Bappa / Bhuvaji Visits'),
     subtitle: window.t('vis_sub', 'Padhramani register with escort teams'),
-    columns: ['Devotee', 'Mobile', 'Purpose', 'Address', 'City', 'State', 'Date', 'Time', 'Escort Team', 'Status'],
+    columns: ['Devotee', 'Mobile', 'Purpose', 'Address', 'City', 'State', 'Date', 'Time', 'Escort Type', 'Escort', 'Status'],
     rows: VISITS.list.map(v => [v.devoteeName || '', v.mobile || '', visitPurposeLabel(v.purpose),
       v.address || '', v.city || '', v.state || '', v.date || '', v.time || '',
-      v.escortTeam || '', visitStatusLabel(v.status)])
+      v.escortMode === 'individual' ? 'Individual' : 'Team',
+      v.escortMode === 'individual' ? (v.escortDevotees || []).map(d => d.name).join(', ') : (v.escortTeam || ''),
+      visitStatusLabel(v.status)])
   };
 }
 if (typeof registerExport === 'function') registerExport('mod-visits', visitsExport);

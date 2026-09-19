@@ -123,7 +123,8 @@ function devoteeProfile(devoteeId) {
         status: v.status,
         statusLabel: (typeof visitStatusLabel === 'function') ? visitStatusLabel(v.status) : (v.status || ''),
         badge: (typeof VIS_STATUS_BADGE !== 'undefined' && VIS_STATUS_BADGE[v.status]) || 'badge-pending',
-        address: v.address || '', city: v.city || '', escortTeam: v.escortTeam || ''
+        address: v.address || '', city: v.city || '',
+        escortTeam: v.escortMode === 'individual' ? (v.escortDevotees || []).map(d => d.name).join(', ') : (v.escortTeam || '')
       };
     });
   const visits = splitByDate(visRows,

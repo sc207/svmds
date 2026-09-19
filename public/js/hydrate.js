@@ -354,7 +354,11 @@
                devoteeId: v.devoteeCode || devCode(v.devoteeId),
                mobile: v.mobile || '', purpose: v.purpose || 'other', address: v.address || '',
                city: v.city || '', state: v.state || 'Gujarat', date: v.date, time: v.time || '',
+               escortMode: v.escortMode || 'team',
                escortTeamId: v.escortTeamId || '', escortTeam: v.escortTeamName || v.escortTeam || '',
+               escortDevotees: (Array.isArray(v.escortDevotees) ? v.escortDevotees : []).map(function (d) {
+                 return { id: d.code || devCode(d.id), name: d.name || '', mobile: d.mobile || '', city: d.city || '' };
+               }),
                status: v.status || 'requested', notes: v.notes || '' };
     }));
     if (typeof renderVisits === 'function') renderVisits();
