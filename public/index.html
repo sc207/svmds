@@ -57,12 +57,15 @@
     .ldr-title {
       font-family: 'Cinzel', 'Noto Serif Gujarati', Georgia, serif;
       font-weight: 700; color: #6B1F2A; letter-spacing: .5px; line-height: 1.25;
-      font-size: clamp(.92rem, 4vw, 1.32rem);
-      min-height: 2.5em; max-width: 84vw; display: flex; align-items: center; justify-content: center;
+      font-size: clamp(1.05rem, 4.6vw, 1.55rem);
     }
     .ldr-sub {
       font-family: 'Noto Serif Gujarati', Georgia, serif; color: #C96A20; font-weight: 600;
       font-size: clamp(.85rem, 3.7vw, 1.08rem);
+      min-height: 2.4em; max-width: 84vw; display: flex; align-items: center; justify-content: center;
+    }
+    .ldr-blessing {
+      min-height: 0; max-width: none; display: block;
     }
     .ldr-track {
       width: min(78vw, 300px); height: 6px; border-radius: 999px; margin-top: .2rem;
@@ -134,8 +137,9 @@
         </g>
       </svg>
     </div>
-    <div class="ldr-title" id="ldrTitle">શ્રી વિહત માતાય નમઃ</div>
-    <div class="ldr-sub">જય શ્રી વિહત મેલડી ધામ 🙏</div>
+    <div class="ldr-title">શ્રી વિહત મેલડી ધામ</div>
+    <div class="ldr-sub" id="ldrNames">શ્રી વિહત માતાય નમઃ</div>
+    <div class="ldr-sub ldr-blessing">જય શ્રી વિહત મેલડી ધામ 🙏</div>
     <div class="ldr-track"><div class="ldr-bar" id="ldrBar"></div></div>
     <div class="ldr-hint" id="ldrHint">Preparing the mandir</div>
   </div>
@@ -169,7 +173,7 @@
   if (!loader) return;
   var bar = document.getElementById('ldrBar');
   var hint = document.getElementById('ldrHint');
-  var titleEl = document.getElementById('ldrTitle');
+  var namesEl = document.getElementById('ldrNames');
   var pct = 8, target = 12, done = false, hi = 0, ni = 0;
   var t0 = Date.now();
   var hints = ['Preparing the mandir', 'Lighting the diyas', 'Gathering the seva records', 'Almost ready'];
@@ -204,17 +208,17 @@
     hint.textContent = hints[hi];
   }, 1500);
   var nameRot = setInterval(function () {
-    if (done || !titleEl) return;
+    if (done || !namesEl) return;
     ni++;
     if (ni >= names.length) {
       ni = names.length - 1;
-      titleEl.textContent = names[ni];
+      namesEl.textContent = names[ni];
       clearInterval(nameRot);
       cycleDone = true;
       maybeFinish();
       return;
     }
-    titleEl.textContent = names[ni];
+    namesEl.textContent = names[ni];
   }, NAME_HOLD);
   document.addEventListener('DOMContentLoaded', function () { window.__boot(84, hints[2]); });
   window.addEventListener('load', function () { pageDone = true; maybeFinish(); });
