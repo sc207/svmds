@@ -20,25 +20,57 @@ const YAGNA = {
 function yagnaByCode(code) { return YAGNA.list.find(x => x.id === code || x.code === code); }
 function yagnaToast(m) { if (typeof showToast === 'function') showToast(m); }
 
-const YAGNA_STATUS_BADGE = { submitted: 'badge-pending', reviewed: 'badge-confirmed', converted: 'badge-maroon', rejected: 'badge-cancelled' };
-function yagnaStatusLabel(st) { return window.t('yagna_st_' + st, (st || '').charAt(0).toUpperCase() + (st || '').slice(1)); }
+/* submitted -> {under_review, contacted, needs_follow_up} -> reviewed is the
+   Phase-1 review workflow (MAHA_YAGNA_PLAN.md). 'converted' stays a valid
+   status (DB CHECK, migration 018) for forward-compatibility with the not-
+   yet-built Phase 2 approval step, but nothing in this UI sets it — see
+   openYagnaReviewSheet, whose dropdown deliberately excludes it. */
+const YAGNA_STATUSES = ['submitted', 'under_review', 'contacted', 'needs_follow_up', 'reviewed', 'converted', 'rejected'];
+const YAGNA_STATUS_BADGE = {
+  submitted: 'badge-pending', under_review: 'badge-pending', contacted: 'badge-confirmed',
+  needs_follow_up: 'badge-cancelled', reviewed: 'badge-confirmed', converted: 'badge-maroon', rejected: 'badge-cancelled',
+};
+function yagnaStatusLabel(st) { return window.t('yagna_st_' + st, (st || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')); }
 
 function yagnaMoney(n) { return '₹' + (Number(n) || 0).toLocaleString('en-IN'); }
 function yagnaDate(iso) {
   if (!iso) return '—';
+  if (typeof window.fmtServerTimeIST === 'function') return window.fmtServerTimeIST(iso);
   try { return new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
   catch (e) { return iso; }
 }
 
-/** { total, byStatus:{submitted,reviewed,converted,rejected}, totalContribution } */
+/** { total, byStatus:{...every YAGNA_STATUSES key}, totalContribution } */
 function yagnaSummary() {
-  const byStatus = { submitted: 0, reviewed: 0, converted: 0, rejected: 0 };
+  const byStatus = {}; YAGNA_STATUSES.forEach(st => { byStatus[st] = 0; });
   let totalContribution = 0;
   YAGNA.list.forEach(x => {
     if (byStatus[x.status] != null) byStatus[x.status]++;
     totalContribution += Number(x.expectedContribution) || 0;
   });
   return { total: YAGNA.list.length, byStatus, totalContribution };
+}
+
+/** digits-only mobile, for exact comparison regardless of formatting. */
+function yagnaDigits(v) { return String(v || '').replace(/\D/g, ''); }
+/** lowercased+trimmed, for case/whitespace-insensitive comparison. */
+function yagnaNorm(v) { return String(v || '').trim().toLowerCase(); }
+
+/** Review-only aid: which OTHER live registrations share this row's exact
+ * mobile, or its normalised first+last name and city. Deliberately simple
+ * and deterministic (no fuzzy/phonetic matching) — flags possible repeats
+ * for a human to look at, never auto-merges or deletes anything.
+ * Returns [] when nothing else matches. */
+function yagnaSimilarTo(row) {
+  if (!row) return [];
+  const mob = yagnaDigits(row.mobile);
+  const nameKey = yagnaNorm(row.firstName) + '|' + yagnaNorm(row.lastName) + '|' + yagnaNorm(row.city);
+  return YAGNA.list.filter(other => {
+    if (other.code === row.code) return false;
+    if (mob && yagnaDigits(other.mobile) === mob) return true;
+    const otherKey = yagnaNorm(other.firstName) + '|' + yagnaNorm(other.lastName) + '|' + yagnaNorm(other.city);
+    return nameKey === otherKey && yagnaNorm(row.firstName);
+  });
 }
 
 /** Raw samaj names as submitted, grouped verbatim (case-sensitive, untrimmed

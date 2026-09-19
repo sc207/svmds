@@ -59,9 +59,16 @@ function saveYagnaSettings() {
   }
 }
 
+/* Statuses selectable in Phase 1 review — 'converted' is deliberately left
+   out here (it stays valid in the DB/CHECK for the not-yet-built Phase 2
+   approval step, migration 018) so staff can never mark something
+   "converted" when no conversion logic exists behind it yet. */
+const YAGNA_REVIEW_STATUSES = ['submitted', 'under_review', 'contacted', 'needs_follow_up', 'reviewed', 'rejected'];
+
 function openYagnaReviewSheet(code) {
   const x = yagnaByCode(code);
   if (!x || typeof openSheet !== 'function') return;
+  const similar = (typeof yagnaSimilarTo === 'function') ? yagnaSimilarTo(x) : [];
   openSheet({
     title: window.t('yagna_review_title', 'Review') + ' — ' + x.code,
     body: `
@@ -70,10 +77,16 @@ function openYagnaReviewSheet(code) {
         ${yagnaEsc(x.samajName || '—')} &middot; ${yagnaEsc(x.city || '—')}${x.state ? ', ' + yagnaEsc(x.state) : ''}<br>
         ${window.t('mobile', 'Mobile')}: ${yagnaEsc(x.mobile)} &middot; ${window.t('yagna_contribution', 'Contribution')}: ${yagnaMoney(x.expectedContribution)}
       </div>
+      ${similar.length ? `
+      <div class="mg-note-box" style="margin-bottom:1rem;border-color:var(--warning,#B06A12)">
+        <strong style="color:var(--warning,#B06A12)">⚠ ${window.t('yagna_similar_title', 'Possible duplicate registrations')}</strong>
+        <div class="mg-muted-xs" style="margin:.3rem 0">${window.t('yagna_similar_body_hint', 'Same mobile, or same name + city, as another live registration. Review only — nothing is merged automatically.')}</div>
+        ${similar.map(s => `<div class="mg-muted-xs">${yagnaEsc(s.code)} — ${yagnaEsc((s.firstName + ' ' + s.lastName).trim())} · ${yagnaEsc(s.mobile)} · ${yagnaEsc(s.city || '—')}</div>`).join('')}
+      </div>` : ''}
       <div class="form-group">
         <label class="form-label" for="yagnaRevStatus">${window.t('status', 'Status')}</label>
         <select class="form-select" id="yagnaRevStatus">
-          ${['submitted', 'reviewed', 'converted', 'rejected'].map(st =>
+          ${YAGNA_REVIEW_STATUSES.concat(x.status === 'converted' ? ['converted'] : []).map(st =>
             `<option value="${st}" ${x.status === st ? 'selected' : ''}>${yagnaStatusLabel(st)}</option>`).join('')}
         </select>
       </div>

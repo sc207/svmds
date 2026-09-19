@@ -2,7 +2,7 @@
    the public form, no coordinator role fits — see MAHA_YAGNA_PLAN.md). The
    enable/window toggle lives in routes/settings.js (PUT /yagna-registration);
    this router is just the submissions register: list, review status/notes,
-   soft-delete. Reads: any session. Writes: admin tier. */
+   soft-delete. Reads and writes: admin tier only. */
 const express = require('express');
 const { queryAll, run } = require('../db/connection');
 const { requireRole } = require('../middleware/authz');
@@ -35,7 +35,7 @@ router.patch('/:id', adminTier, async (req, res, next) => {
     const sets = [], args = [];
 
     if (b.status !== undefined) {
-      if (!['submitted', 'reviewed', 'converted', 'rejected'].includes(b.status)) {
+      if (!['submitted', 'under_review', 'contacted', 'needs_follow_up', 'reviewed', 'converted', 'rejected'].includes(b.status)) {
         return res.status(400).json({ error: 'bad status' });
       }
       sets.push('status = ?'); args.push(b.status);

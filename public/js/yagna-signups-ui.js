@@ -64,10 +64,10 @@ function viewYagnaSignups() {
       <div class="flex gap-2 items-center" style="flex-wrap:wrap">
         <select class="form-select mg-inline-select" onchange="setYagnaStatusFilter(this.value)">
           <option value="all" ${YAGNA.filterStatus === 'all' ? 'selected' : ''}>${window.t('yagna_all', 'All statuses')}</option>
-          ${['submitted', 'reviewed', 'converted', 'rejected'].map(st =>
+          ${YAGNA_STATUSES.map(st =>
             `<option value="${st}" ${YAGNA.filterStatus === st ? 'selected' : ''}>${yagnaStatusLabel(st)}</option>`).join('')}
         </select>
-        <input class="form-input mg-inline-select" style="max-width:240px" placeholder="${window.t('yagna_search', 'Search name / mobile / samaj / token…')}"
+        <input class="form-input mg-inline-select" style="max-width:260px" placeholder="${window.t('yagna_search', 'Search name / mobile / samaj / city / token…')}"
           value="${yagnaEsc(YAGNA.search)}" oninput="yagnaSearch(this.value)">
       </div>
     </div>
@@ -110,12 +110,14 @@ function yagnaRegisterRows() {
   if (YAGNA.filterStatus !== 'all') rows = rows.filter(x => x.status === YAGNA.filterStatus);
   if (YAGNA.search) {
     const q = YAGNA.search;
-    rows = rows.filter(x => (x.firstName + ' ' + x.lastName + ' ' + x.mobile + ' ' + x.samajName + ' ' + (x.code || '')).toLowerCase().indexOf(q) !== -1);
+    rows = rows.filter(x => (x.firstName + ' ' + x.lastName + ' ' + x.mobile + ' ' + x.samajName + ' ' + x.city + ' ' + (x.code || '')).toLowerCase().indexOf(q) !== -1);
   }
   rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   if (!rows.length) return `<tr><td colspan="9" class="mg-pad-note">${window.t('yagna_none', 'No registrations yet.')}</td></tr>`;
-  return rows.map(x => `<tr>
-    <td><strong>${yagnaEsc(x.code)}</strong></td>
+  return rows.map(x => {
+    const similar = yagnaSimilarTo(x);
+    return `<tr>
+    <td><strong>${yagnaEsc(x.code)}</strong>${similar.length ? `<div class="mg-muted-xs" style="color:var(--warning,#B06A12)" title="${window.t('yagna_similar_hint', 'Shares mobile, or name+city, with another registration — review before treating as a new person.')}">⚠ ${window.t('yagna_similar', 'Possible duplicate')} (${similar.length})</div>` : ''}</td>
     <td>${yagnaEsc((x.firstName + ' ' + x.lastName).trim())}</td>
     <td>${yagnaEsc(x.samajName || '—')}</td>
     <td>${yagnaEsc(x.city || '—')}</td>
@@ -127,7 +129,8 @@ function yagnaRegisterRows() {
       <button class="btn btn-outline mg-btn-xs" onclick="openYagnaReviewSheet('${yagnaEsc(x.code)}')">${window.t('review', 'Review')}</button>
       <button class="btn btn-outline mg-btn-xs mg-btn-danger" onclick="yagnaDeleteConfirm('${yagnaEsc(x.code)}')">${window.t('delete', 'Delete')}</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 /* ---------- export builder ---------- */
