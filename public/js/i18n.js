@@ -1000,7 +1000,7 @@
       istNow(). NOT the same job as locDate/locTime above: those pretty-print
       a value that's already the correct civil date/time (a pooja session's
       entered date, a "07:00" field); this one converts a real UTC instant.
-      "2026-09-19 12:38:00" -> "19 Sep 2026, 18:08". */
+      "2026-09-19 12:38:00" -> "19 Sep 2026, 6:08 PM". */
   window.fmtServerTimeIST = function (raw) {
     if (!raw) return '';
     var iso = String(raw).trim().replace(' ', 'T');
@@ -1010,7 +1010,7 @@
     try {
       return d.toLocaleString(_bcp47(), {
         timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric',
-        hour: 'numeric', minute: '2-digit',
+        hour: 'numeric', minute: '2-digit', hour12: true,
       });
     } catch (e) { return String(raw); }
   };
