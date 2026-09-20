@@ -90,6 +90,17 @@ a { text-decoration: none; color: inherit; }
 button { font-family: inherit; border: none; outline: none; cursor: pointer; }
 input, select, textarea { font-family: inherit; outline: none; }
 
+/* The resets above strip outline from every interactive element; without
+   this, keyboard users get no focus indicator at all on anything that
+   doesn't have its own :focus-visible rule. Components with a nicer
+   dedicated focus treatment (.btn, .nav-item, .form-input, …) already win
+   on specificity, so this is purely a safety net for everything else
+   (icon-only buttons, raw <select>, <a> nav elements, etc.). */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--antique-gold);
+  outline-offset: 2px;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--warm-ivory); }
@@ -268,6 +279,11 @@ input, select, textarea { font-family: inherit; outline: none; }
   background: rgba(255, 255, 255, 0.1);
   color: #FFFFFF;
   transform: translateX(3px);
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: -2px;
 }
 
 .nav-item.active {
@@ -762,6 +778,7 @@ input, select, textarea { font-family: inherit; outline: none; }
   letter-spacing: 0.5px;
   line-height: 1.15;
   word-break: break-word;
+  text-wrap: balance;
 }
 .banner-title span { color: var(--primary-maroon); }
 
@@ -915,6 +932,7 @@ input, select, textarea { font-family: inherit; outline: none; }
   line-height: 1.2;
   margin-bottom: 0.4rem;
   font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-card-badge {
@@ -1180,6 +1198,7 @@ input, select, textarea { font-family: inherit; outline: none; }
   color: var(--dark-brown);
   white-space: nowrap;
   vertical-align: middle;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Row separators sit on the <tr>, not each <td>, so the line is one
@@ -1280,6 +1299,15 @@ input, select, textarea { font-family: inherit; outline: none; }
   font-weight: 700;
   transition: all var(--transition-fast);
   cursor: pointer;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--antique-gold);
+  outline-offset: 2px;
 }
 
 .btn-primary {
@@ -1555,7 +1583,7 @@ input, select, textarea { font-family: inherit; outline: none; }
 
 /* Page header */
 .mg-page-head { margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap; }
-.mg-page-title { font-size: 1.7rem; margin: 0; }
+.mg-page-title { font-size: 1.7rem; margin: 0; text-wrap: balance; }
 .mg-pane-title {
   font-family: var(--font-heading);
   font-size: 1.35rem;
@@ -2067,9 +2095,13 @@ body.public-mode .mobile-bottom-nav { display: none !important; }
 .pub-slot-body { display: flex; flex-direction: column; gap: 0.15rem; }
 .pub-slot-body strong { font-size: 0.88rem; color: var(--dark-brown); }
 .pub-slot-meta { font-size: 0.76rem; color: var(--muted-brown); }
+.pub-error { font-size: 0.8rem; color: var(--danger); background: var(--danger-bg); border: 1px solid #E6C3BF;
+  border-radius: 8px; padding: 0.55rem 0.8rem; margin-top: 0.6rem; }
 .pub-submit { width: 100%; margin-top: 0.4rem; padding: 0.8rem 1rem; border: 0; border-radius: 10px; cursor: pointer;
   background: linear-gradient(160deg, var(--saffron), var(--primary-maroon)); color: #fff; font-size: 0.92rem; font-weight: 700; }
 .pub-submit:hover { filter: brightness(1.05); }
+.pub-submit:active { transform: scale(0.98); }
+.pub-submit:focus-visible { outline: 2px solid var(--antique-gold); outline-offset: 2px; }
 .pub-help { font-size: 0.76rem; color: var(--muted-brown); text-align: center; margin-top: 0.6rem; }
 .pub-foot { padding: 1rem 1.5rem; border-top: 1px solid var(--warm-border); font-size: 0.72rem;
   color: var(--muted-brown); text-align: center; }

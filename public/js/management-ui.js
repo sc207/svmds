@@ -1950,6 +1950,7 @@ function renderPublicVolunteer(mgmtId) {
             <textarea id="pubNote" class="pub-input" rows="2" placeholder="Optional"></textarea>
           </div>
 
+          <p class="pub-error" id="pubFormError" hidden></p>
           <button class="pub-submit" type="submit">Submit Volunteering Details</button>
           <p class="pub-help">The team lead will confirm your slot on WhatsApp${cfg.contact ? ` — ${esc(cfg.contact)}` : ''}.</p>
         </form>` : `
@@ -1959,6 +1960,15 @@ function renderPublicVolunteer(mgmtId) {
         </div>`}
       </div>
     </div>`);
+}
+
+function pubFormError(msg) {
+  const el = document.getElementById('pubFormError');
+  if (!el) return;
+  if (!msg) { el.hidden = true; el.textContent = ''; return; }
+  el.textContent = msg;
+  el.hidden = false;
+  el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function submitPublicSignup(e, mgmtId) {
@@ -1971,9 +1981,10 @@ function submitPublicSignup(e, mgmtId) {
   const city = document.getElementById('pubCity').value.trim();
   const note = document.getElementById('pubNote').value.trim();
 
-  if (!slot) { alert('Please select a volunteering slot.'); return; }
-  if (!name) { alert('Please enter your name.'); return; }
-  if (!/^[0-9]{10}$/.test(mobile)) { alert('Please enter a valid 10-digit mobile number.'); return; }
+  if (!slot) { pubFormError('Please select a volunteering slot.'); return; }
+  if (!name) { pubFormError('Please enter your name.'); return; }
+  if (!/^[0-9]{10}$/.test(mobile)) { pubFormError('Please enter a valid 10-digit mobile number.'); return; }
+  pubFormError(null);
 
   const id = nextId('PUB', MG.publicSignups, 3);
   MG.publicSignups.push({

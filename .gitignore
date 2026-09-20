@@ -14,3 +14,4 @@ node_modules/
 .env.local
 data/
 uploads/
+.playwright-cli/
