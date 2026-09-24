@@ -81,6 +81,16 @@ function parseCsv(text) {
 function readAnySheet(buf, filename) {
   const isZip = buf.length > 3 && buf[0] === 0x50 && buf[1] === 0x4b;
   if (isZip) return readXlsx(buf);
+  /* An Office container (D0 CF 11 E0): either a password-protected .xlsx —
+     which is what this app's own Excel export now is — or an old .xls.
+     Neither can be read without Excel, so say which and what to do. */
+  const isOle = buf.length > 8 && buf.slice(0, 8).toString('hex') === 'd0cf11e0a1b11ae1';
+  if (isOle && !/\.xls$/i.test(filename || '')) {
+    throw Object.assign(new Error(
+      'This Excel file is password-protected. Open it in Excel with its password, then File > Info > ' +
+      'Protect Workbook > Encrypt with Password, clear the password, save, and import that copy.'),
+      { status: 400 });
+  }
   if (/\.xls$/i.test(filename || '')) {
     throw Object.assign(new Error(
       'This is the older .xls format. Open it in Excel and use File > Save As > "Excel Workbook (.xlsx)", then import that.'),

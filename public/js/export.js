@@ -318,9 +318,9 @@
       <button type="button" class="btn btn-outline mg-btn-xs" data-export="pdf"
               title="Print / PDF" aria-label="Print / PDF">
         ${icon('print', 'ico-sm')}<span class="ex-label">Print / PDF</span></button>
-      <button type="button" class="btn btn-outline mg-btn-xs" data-export="csv"
-              title="Excel (CSV)" aria-label="Excel (CSV)">
-        ${icon('sheet', 'ico-sm')}<span class="ex-label">Excel (CSV)</span></button>
+      <button type="button" class="btn btn-outline mg-btn-xs" data-export="xlsx"
+              title="Excel — password protected" aria-label="Excel, password protected">
+        ${icon('sheet', 'ico-sm')}<span class="ex-label">Excel 🔒</span></button>
     </div>`;
   }
 
@@ -347,6 +347,81 @@
       footer: (spec.footer || 'Shri Vihat Meldi Dham — Sanand') + ' · ' + stamp };
   }
 
+  /* ---------- password-protected Excel ----------
+     The register as an encrypted .xlsx, built on the server
+     (routes/exports.js) with Excel's own "Encrypt with Password". The
+     password is typed here for this one file, sent once, and never
+     stored — so a copy forwarded on WhatsApp is useless without it. The
+     CSV download is gone from the toolbar for the same reason: an
+     unprotected copy would defeat the point. */
+  function askPassword(spec) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (!done) { done = true; resolve(v); } };
+      UI.openSheet({
+        title: 'Password for this Excel file',
+        body: `${UI.contextCard({ title: spec.title || 'Export', sub: `${num((spec.rows || []).length)} rows` })}
+          <form id="xpwForm" novalidate style="margin-top:.9rem" autocomplete="off">
+            <div class="form-group"><label class="form-label req" for="f_xpw">Password</label>
+              <input class="form-input" id="f_xpw" name="pw" type="password" autocomplete="new-password" minlength="6"></div>
+            <div class="form-group"><label class="form-label req" for="f_xpw2">Type it again</label>
+              <input class="form-input" id="f_xpw2" name="pw2" type="password" autocomplete="new-password"></div>
+            <label class="small" style="display:flex;gap:.45rem;align-items:center;font-weight:500">
+              <input type="checkbox" id="f_xpwShow" style="width:auto;min-height:0"> Show password</label>
+            <p class="form-hint" style="margin-top:.7rem">At least 6 characters. Excel asks for it before opening the file.
+              Share it separately from the file — a phone call, not the same WhatsApp message. It is not stored
+              anywhere: if it is forgotten, export the file again.</p>
+          </form>`,
+        footer: `<button class="btn btn-outline" data-sheet-close>Cancel</button>
+                 <button class="btn btn-primary" id="xpwGo">Download Excel</button>`,
+        onMount(sheet) {
+          sheet.addEventListener('close', () => finish(null), { once: true });
+          const f = document.getElementById('xpwForm');
+          document.getElementById('f_xpwShow').addEventListener('change', (e) => {
+            f.querySelectorAll('input[name^="pw"]').forEach((i) => { i.type = e.target.checked ? 'text' : 'password'; });
+          });
+          const go = () => {
+            UI.clearFieldErrors(f);
+            const pw = f.pw.value, pw2 = f.pw2.value;
+            if (pw.length < 6) return UI.showFieldError(f, 'pw', 'At least 6 characters');
+            if (pw !== pw2) return UI.showFieldError(f, 'pw2', 'The two passwords are not the same');
+            finish(pw);
+            UI.closeSheet();
+          };
+          sheet.querySelector('#xpwGo').addEventListener('click', go);
+          UI.bindEnterFlow(f, go);
+        },
+      });
+    });
+  }
+
+  async function xlsx(spec, password) {
+    const cols = spec.columns;
+    const body = {
+      list: spec.list, title: spec.title, filename: spec.filename, password,
+      meta: (spec.meta || []).filter(([k]) => k !== 'Taken'),
+      columns: cols.map((c) => ({ label: c.label, type: c.type || '' })),
+      rows: spec.rows.map((r) => cols.map((c) => { const v = c.value(r); return v === undefined ? null : v; })),
+    };
+    const res = await fetch('/api/exports/xlsx', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: '*/*' }, body: JSON.stringify(body),
+    });
+    if (res.status === 401) { location.replace('/login'); return; }
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const name = (/filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '') || [])[1] || 'export.xlsx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    UI.toast(`${num(spec.rows.length)} rows saved as a password-protected Excel file`, 'ok');
+  }
+
   function bindToolbar(root, build) {
     if (!root) return;
     root.querySelectorAll('[data-export]').forEach((b) =>
@@ -354,6 +429,16 @@
         const spec = build();
         if (!spec) return;
         if (!(spec.rows || []).length) { UI.toast('Nothing to export in this view.', 'err'); return; }
+        if (b.getAttribute('data-export') === 'xlsx') {
+          /* Recorded on the server in the same request that builds the file. */
+          const password = await askPassword(spec);
+          if (!password) return;
+          b.disabled = true;
+          try { await xlsx(spec, password); }
+          catch (err) { UI.toast('The Excel file was not made — ' + err.message, 'err'); }
+          finally { b.disabled = false; }
+          return;
+        }
         const format = b.getAttribute('data-export') === 'csv' ? 'csv' : 'pdf';
         /* Opened now, inside the tap, or Safari blocks it (see print.js). */
         const win = format === 'pdf' ? global.openPrintHolder() : null;
@@ -372,5 +457,5 @@
       }));
   }
 
-  global.Export = { csv, pdf, toolbar, bindToolbar, toCsv, download };
+  global.Export = { csv, pdf, xlsx, toolbar, bindToolbar, toCsv, download };
 })(window);
