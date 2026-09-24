@@ -2,24 +2,21 @@
   "name": "svmds",
   "version": "1.0.0",
   "private": true,
-  "description": "Shri Vihat Meldi Mata Mandir — temple management platform (SVMDS)",
+  "description": "Shri Vihat Meldi Dham, Sanand — Murti Pran Pratishtha Mahotsav sevarthi & contribution tracking",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node server/index.js",
+    "dev": "node --watch-path=./server --watch-path=./public server/index.js",
     "migrate": "node server/db/migrate.js",
-    "seed": "node server/db/migrate.js --seed",
-    "wipe": "node server/db/wipe.js",
-    "db:repair:dry": "node server/db/repair-cli.js --dry-run",
-    "db:repair": "node server/db/repair-cli.js",
-    "db:compact": "node server/db/compact.js"
+    "seed": "node server/db/seed/seed.js",
+    "seed:demo": "node server/db/seed/seed-demo.js",
+    "reset": "node server/db/reset.js"
   },
   "engines": {
     "node": "20.x"
   },
   "dependencies": {
     "@libsql/client": "^0.14.0",
-    "better-sqlite3": "^11.7.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

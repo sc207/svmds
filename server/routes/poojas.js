@@ -1,519 +1,542 @@
-/* Poojas — event + ordered pooja_sessions + sevarthi / coordinator / guest links.
-   Scope: admin tier sees all; a pooja_coordinator sees only poojas they're linked
-   to (req.scope.poojaIds). Catalog + coordinator assignment + pooja delete are
-   admin tier; a coordinator may edit their own pooja's sessions/sevarthis/guests.
-   (BACKEND_PLAN.md §3 Pooja module) */
+/* Murti Pran Pratishtha Mahotsav — the three pooja categories, the
+   poojas inside them, and the per-day seating (patla) slots. */
 const express = require('express');
-const crypto = require('crypto');
-const { queryAll, queryOne, run } = require('../db/connection');
-const { requireRole, isAdminTier } = require('../middleware/authz');
-const { nextCode } = require('../services/entityCode');
-const { logAudit } = require('../services/audit');
-const { ensureDevotee, digits } = require('../services/people');
-const { nextColorFor } = require('../services/palette');
-const { mapPooja, mapPoojaSession, mapSevarthi, mapGuest } = require('../utils/mappers');
+const db = require('../db');
+const roles = require('../middleware/roles');
+const { slotWhen } = require('../util/dates');
+const { log } = require('../middleware/audit');
 
 const router = express.Router();
-const adminTier = requireRole('superadmin', 'admin');
 
-/* ---------- hydration ---------- */
-async function hydrate(poojaRow) {
-  if (!poojaRow) return null;
-  const [sessRows, sevRows, coordRows, guestRows] = await Promise.all([
-    queryAll('SELECT * FROM pooja_sessions WHERE pooja_id = ? AND is_deleted = 0 ORDER BY date, start_time', [poojaRow.id]),
-    queryAll(`SELECT s.*, dv.code AS devotee_code, dv.name AS dev_name, dv.mobile AS dev_mobile,
-                dv.city AS dev_city, dv.state AS dev_state
-              FROM sevarthis s JOIN pooja_sevarthi_links l ON l.sevarthi_id = s.id
-              LEFT JOIN devotees dv ON dv.id = s.devotee_id
-              WHERE l.pooja_id = ? AND s.is_deleted = 0`, [poojaRow.id]),
-    queryAll(`SELECT l.user_id, l.devotee_id, d.code AS devotee_code
-              FROM pooja_coordinator_links l LEFT JOIN devotees d ON d.id = l.devotee_id
-              WHERE l.pooja_id = ?`, [poojaRow.id]),
-    queryAll(`SELECT g.*, l.role AS link_role, dv.code AS devotee_code, dv.name AS dev_name,
-                dv.mobile AS dev_mobile, dv.city AS dev_city, dv.state AS dev_state
-              FROM guests g JOIN pooja_guest_links l ON l.guest_id = g.id
-              LEFT JOIN devotees dv ON dv.id = g.devotee_id
-              WHERE l.pooja_id = ? AND g.is_deleted = 0`, [poojaRow.id]),
-  ]);
-  // coordinatorIds = the person identity (devotee code) so the client links the
-  // same way whether or not that person has a login account.
-  return mapPooja(poojaRow, {
-    sessions: sessRows.map(mapPoojaSession),
-    sevarthiIds: sevRows.map(r => r.code || String(r.id)),
-    coordinatorIds: coordRows.map(r => r.devotee_code || (r.devotee_id != null ? String(r.devotee_id) : null))
-      .filter(Boolean),
-    coordinatorUserIds: coordRows.map(r => r.user_id).filter(v => v != null),
-    guests: guestRows.map(mapGuest),
-  });
+/** A refusal thrown from inside db.tx() — rolls the transaction back and
+    reaches the client as { error } with this status (middleware/error.js). */
+const refuse = (status, message) => Object.assign(new Error(message), { status });
+
+/* `icon` is a sprite id — the frontend renders it as
+   <svg><use href="/assets/icons.svg#<icon>"></use></svg>. No emoji. */
+const CATEGORIES = {
+  maha_yagna:    { key: 'maha_yagna',    label: 'Maha Yagna',             icon: 'flame' },
+  mandir_pooja:  { key: 'mandir_pooja',  label: 'Mandir ni Pooja',        icon: 'diya' },
+  bhagvat_katha: { key: 'bhagvat_katha', label: 'Bhagvat Saptah — Katha', icon: 'book' },
+};
+
+/* Registration capacity. Only 'limited' puts a number on the slots and
+   so only 'limited' can ever block a registration — see 002_phase1.sql. */
+const CAPACITY_MODES = ['not_decided', 'limited', 'unlimited'];
+
+/** Read the capacity mode off a request, tolerating older payloads that
+    only knew the fixed_capacity boolean. */
+function readCapacityMode(b, fallback) {
+  const m = String(b.capacity_mode || '').trim();
+  if (CAPACITY_MODES.includes(m)) return m;
+  if (fallback) return fallback;
+  return (b.fixed_capacity === false || b.fixed_capacity === 0) ? 'not_decided' : 'limited';
 }
 
-const TYPE_JOIN = `
-  SELECT p.*, pt.code AS type_code
-  FROM poojas p
-  LEFT JOIN pooja_types pt ON pt.id = p.type_id
-  WHERE p.is_deleted = 0`;
+/** Live totals for one pooja: seats, bookings and money. */
+async function poojaStats(poojaId) {
+  const s = await db.get(`
+    SELECT IFNULL(SUM(capacity), 0)     AS total_seats,
+           IFNULL(SUM(booked_count), 0) AS booked_seats,
+           SUM(CASE WHEN capacity IS NULL THEN 1 ELSE 0 END) AS open_days,
+           COUNT(*) AS day_count
+      FROM pooja_slots WHERE pooja_id = ?
+  `, poojaId);
 
-async function poojaByIdOrCode(v) {
-  const rows = await queryAll(TYPE_JOIN + ' AND (p.id = ? OR p.code = ?) LIMIT 1', [v, v]);
-  return rows[0] || null;
+  /* Outstanding and excess are summed PER BOOKING, never netted across
+     the pooja: one sevarthi giving extra does not settle another's
+     shortfall, and a global subtraction would quietly hide both.
+     `received` stays every rupee actually taken in (cancelled bookings
+     included — that cash is in hand and its refund is settled by hand),
+     while `covered` counts only what sits against a live booking. */
+  const money = await db.get(`
+    SELECT IFNULL(SUM(b.amount_committed), 0)                        AS committed,
+           IFNULL(SUM(IFNULL(pd.paid, 0)), 0)                        AS covered,
+           IFNULL(SUM(IFNULL(pd.devotee, 0)), 0)                     AS devotee_paid,
+           IFNULL(SUM(IFNULL(pd.bappa, 0)), 0)                       AS bappa_paid,
+           IFNULL(SUM(CASE WHEN b.amount_committed > IFNULL(pd.paid, 0)
+                           THEN b.amount_committed - IFNULL(pd.paid, 0) ELSE 0 END), 0) AS outstanding,
+           IFNULL(SUM(CASE WHEN IFNULL(pd.paid, 0) > b.amount_committed
+                           THEN IFNULL(pd.paid, 0) - b.amount_committed ELSE 0 END), 0) AS excess,
+           IFNULL((SELECT SUM(p.amount) FROM payments p
+                     JOIN sevarthi_bookings b2 ON b2.id = p.booking_id
+                     JOIN pooja_slots ps2 ON ps2.id = b2.slot_id
+                    WHERE ps2.pooja_id = ?), 0) AS received
+      FROM sevarthi_bookings b
+      JOIN pooja_slots ps ON ps.id = b.slot_id
+      LEFT JOIN (SELECT booking_id,
+                        SUM(amount)                                                  AS paid,
+                        SUM(CASE WHEN payer_type = 'bhuvaji' THEN amount ELSE 0 END) AS bappa,
+                        SUM(CASE WHEN payer_type = 'bhuvaji' THEN 0 ELSE amount END) AS devotee
+                   FROM payments GROUP BY booking_id) pd ON pd.booking_id = b.id
+     WHERE ps.pooja_id = ? AND b.status <> 'cancelled'
+  `, poojaId, poojaId);
+
+  const unlimited = s.open_days > 0;
+  return {
+    total_seats: unlimited ? null : s.total_seats,
+    booked_seats: s.booked_seats,
+    seats_left: unlimited ? null : Math.max(0, s.total_seats - s.booked_seats),
+    day_count: s.day_count,
+    is_full: !unlimited && s.total_seats > 0 && s.booked_seats >= s.total_seats,
+    committed: money.committed,
+    received: money.received,
+    covered: money.covered,
+    devotee_paid: money.devotee_paid,
+    bappa_paid: money.bappa_paid,
+    outstanding: money.outstanding,
+    excess: money.excess,
+  };
 }
 
-async function canManage(req, poojaRow) {
-  if (isAdminTier(req.user)) return true;
-  if ((req.user.roles || []).includes('pooja_coordinator')) {
-    const me = await queryOne('SELECT devotee_id FROM users WHERE id = ?', [req.user.id]);
-    const devId = (me && me.devotee_id) || -1;
-    const link = await queryOne(
-      'SELECT 1 AS x FROM pooja_coordinator_links WHERE pooja_id = ? AND (user_id = ? OR devotee_id = ?)',
-      [poojaRow.id, req.user.id, devId]);
-    return !!link;
+async function withStats(row) {
+  const stats = await poojaStats(row.id);
+  /* A 'whole' pooja has one pooled slot, so the slot count is not the
+     number of days it runs — that comes from its own date range. */
+  if (row.seating_mode === 'whole' && row.start_date && row.end_date) {
+    stats.day_count = datesBetween(row.start_date, row.end_date).length;
   }
-  return false;
+  return { ...row, ...stats, category_label: (CATEGORIES[row.category] || {}).label };
 }
 
-/* ---------- list ---------- */
-router.get('/', async (req, res, next) => {
-  try {
-    const where = [];
-    const args = [];
-    if (!isAdminTier(req.user) && (req.user.roles || []).includes('pooja_coordinator')) {
-      const ids = req.scope.poojaIds || [];
-      if (!ids.length) return res.json([]);
-      where.push(`p.id IN (${ids.map(() => '?').join(',')})`);
-      args.push(...ids);
-    }
-    if (req.query.status) { where.push('p.status = ?'); args.push(req.query.status); }
-    if (req.query.typeId) { where.push('(pt.code = ? OR p.type_id = ?)'); args.push(req.query.typeId, parseInt(req.query.typeId, 10) || -1); }
-    const sql = TYPE_JOIN + (where.length ? ' AND ' + where.join(' AND ') : '') + ' ORDER BY p.created_at DESC';
-    const rows = await queryAll(sql, args);
-    const out = [];
-    for (const r of rows) out.push(await hydrate(r));
-    res.json(out);
-  } catch (e) { next(e); }
+/* Reads do not queue behind writes, so a list's stats run side by side
+   rather than one network round trip after another. */
+const allWithStats = (rows) => Promise.all(rows.map(withStats));
+
+/** Category-level progress bars for the Mahotsav landing screen. */
+router.get('/categories', async (req, res) => {
+  const out = await Promise.all(Object.values(CATEGORIES).map(async (c) => {
+    const poojas = await allWithStats(await db.all(`SELECT * FROM pooja_events WHERE category = ?`, c.key));
+    const agg = poojas.reduce((a, p) => ({
+      total_seats: p.total_seats === null ? a.total_seats : a.total_seats + p.total_seats,
+      booked_seats: a.booked_seats + p.booked_seats,
+      target: a.target + (p.target_amount || 0),
+      received: a.received + p.received,
+      committed: a.committed + p.committed,
+      covered: a.covered + p.covered,
+      devotee_paid: a.devotee_paid + p.devotee_paid,
+      bappa_paid: a.bappa_paid + p.bappa_paid,
+      outstanding: a.outstanding + p.outstanding,
+      excess: a.excess + p.excess,
+      unlimited: a.unlimited || p.total_seats === null,
+    }), {
+      total_seats: 0, booked_seats: 0, target: 0, received: 0, committed: 0,
+      covered: 0, devotee_paid: 0, bappa_paid: 0, outstanding: 0, excess: 0, unlimited: false,
+    });
+
+    return {
+      ...c,
+      pooja_count: poojas.length,
+      total_seats: agg.unlimited ? null : agg.total_seats,
+      booked_seats: agg.booked_seats,
+      seats_left: agg.unlimited ? null : Math.max(0, agg.total_seats - agg.booked_seats),
+      target_amount: agg.target,
+      committed: agg.committed,
+      received: agg.received,
+      covered: agg.covered,
+      devotee_paid: agg.devotee_paid,
+      bappa_paid: agg.bappa_paid,
+      outstanding: agg.outstanding,
+      excess: agg.excess,
+      /* How many poojas in this category are still waiting on a decision —
+         what lets the category card say "3 not decided" instead of
+         implying the whole category is deliberately uncapped. */
+      not_decided_count: poojas.filter((p) => p.capacity_mode === 'not_decided').length,
+    };
+  }));
+  res.json(out);
 });
 
-router.get('/:id', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!isAdminTier(req.user) && (req.user.roles || []).includes('pooja_coordinator')
-        && !(req.scope.poojaIds || []).includes(row.id)) {
-      return res.status(403).json({ error: 'Not your pooja' });
-    }
-    res.json(await hydrate(row));
-  } catch (e) { next(e); }
+router.get('/', async (req, res) => {
+  const { category } = req.query;
+  const rows = category
+    ? await db.all(`SELECT * FROM pooja_events WHERE category = ? ORDER BY start_date, name`, category)
+    : await db.all(`SELECT * FROM pooja_events ORDER BY category, start_date, name`);
+  res.json(await allWithStats(rows));
 });
 
-/* ---------- create (admin tier) ---------- */
-router.post('/', adminTier, async (req, res, next) => {
-  try {
-    const b = req.body || {};
-    const name = String(b.name || '').trim();
-    if (!name) return res.status(400).json({ error: 'name is required' });
-    const scheduleMode = b.scheduleMode === 'multi' ? 'multi' : 'single';
+router.get('/:id', async (req, res) => {
+  const row = await db.get(`SELECT * FROM pooja_events WHERE id = ?`, req.params.id);
+  if (!row) return res.status(404).json({ error: 'Pooja not found' });
 
-    let typeId = null;
-    if (b.typeId) {
-      const t = await queryOne('SELECT id FROM pooja_types WHERE (code = ? OR id = ?) AND is_deleted = 0',
-        [b.typeId, parseInt(b.typeId, 10) || -1]);
-      if (!t) return res.status(400).json({ error: 'Unknown typeId' });
-      typeId = t.id;
-    }
+  const slots = (await db.all(`
+    SELECT * FROM pooja_slots WHERE pooja_id = ? ORDER BY slot_date
+  `, row.id)).map((s) => ({
+    ...s,
+    seats_left: s.capacity === null ? null : Math.max(0, s.capacity - s.booked_count),
+    is_full: s.capacity !== null && s.booked_count >= s.capacity,
+  }));
 
-    const sessions = Array.isArray(b.sessions) ? b.sessions : [];
-    if (!sessions.length) return res.status(400).json({ error: 'at least one session is required' });
-    for (const s of sessions) {
-      if (!s.date || !/^\d{4}-\d{2}-\d{2}$/.test(s.date)) return res.status(400).json({ error: 'each session needs a date (YYYY-MM-DD)' });
-    }
-    if (scheduleMode === 'single' && sessions.length > 1) {
-      return res.status(400).json({ error: 'single-mode pooja can have only one session' });
-    }
+  // FIFO ledger for this pooja — entries in the order they arrived.
+  const ledger = await db.all(`
+    SELECT b.id AS booking_id, b.status, b.amount_committed, b.bhuvaji_planned_amount,
+           b.created_at, ps.slot_date, d.full_name, d.mobile, d.city,
+           s.value AS samaj,
+           (SELECT IFNULL(SUM(amount),0) FROM payments WHERE booking_id = b.id) AS amount_paid,
+           (SELECT IFNULL(SUM(amount),0) FROM payments
+             WHERE booking_id = b.id AND payer_type = 'bhuvaji')  AS bappa_paid,
+           (SELECT IFNULL(SUM(amount),0) FROM payments
+             WHERE booking_id = b.id AND payer_type <> 'bhuvaji') AS devotee_paid
+      FROM sevarthi_bookings b
+      JOIN pooja_slots ps ON ps.id = b.slot_id
+      JOIN devotees   d  ON d.id  = b.devotee_id
+      LEFT JOIN lookups s ON s.id = d.samaj_id
+     WHERE ps.pooja_id = ?
+     ORDER BY b.created_at ASC, b.id ASC
+  `, row.id);
 
-    const id = crypto.randomUUID();
-    let annualEventId = null;
-    if (b.annualEventId) {
-      const ae = await queryOne('SELECT id FROM annual_events WHERE (code = ? OR id = ?) AND is_deleted = 0',
-        [b.annualEventId, parseInt(b.annualEventId, 10) || -1]);
-      annualEventId = ae ? ae.id : null;
-    }
-    const code = await nextCode('pooja');
-    const color = b.color || await nextColorFor('poojas');   // auto-cycled, no picker
-    await run(
-      `INSERT INTO poojas (id, code, type_id, name, schedule_mode, default_venue, status, color,
-                           estimated_seva_amount, notes, custom_json, invitation_json, annual_event_id, created_date)
-       VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, date('now'))`,
-      [id, code, typeId, name, scheduleMode, b.defaultVenue || '', color,
-       Number(b.estimatedSevaAmount || 0), b.notes || '',
-       JSON.stringify(b.custom || []), JSON.stringify(b.invitation || {}), annualEventId]
-    );
-    for (const s of sessions) {
-      await run(
-        `INSERT INTO pooja_sessions (id, pooja_id, label, date, start_time, end_time, venue)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [crypto.randomUUID(), id, s.label || '', s.date, s.startTime || '', s.endTime || '', s.venue || b.defaultVenue || '']
-      );
-    }
-    for (const g of (Array.isArray(b.guests) ? b.guests : [])) {
-      await addGuest(id, g);
-    }
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'CREATE', entityType: 'pooja', entityId: code, details: { name } });
-    res.status(201).json(await hydrate(await poojaByIdOrCode(id)));
-  } catch (e) { next(e); }
+  res.json({ ...(await withStats(row)), slots, ledger });
 });
 
-/* ---------- patch pooja fields ---------- */
-router.patch('/:id', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
+function datesBetween(start, end) {
+  const out = [];
+  const d = new Date(start + 'T00:00:00');
+  const last = new Date(end + 'T00:00:00');
+  while (d <= last) {
+    out.push(d.toLocaleDateString('en-CA'));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
 
-    const b = req.body || {};
-    const sets = [], args = [];
-    if (typeof b.name === 'string') { sets.push('name = ?'); args.push(b.name); }
-    if (typeof b.defaultVenue === 'string') { sets.push('default_venue = ?'); args.push(b.defaultVenue); }
-    if (typeof b.notes === 'string') { sets.push('notes = ?'); args.push(b.notes); }
-    if (typeof b.color === 'string') { sets.push('color = ?'); args.push(b.color); }
-    if (b.estimatedSevaAmount !== undefined) { sets.push('estimated_seva_amount = ?'); args.push(Number(b.estimatedSevaAmount || 0)); }
-    if (b.scheduleMode === 'single' || b.scheduleMode === 'multi') { sets.push('schedule_mode = ?'); args.push(b.scheduleMode); }
-    if (b.custom !== undefined) { sets.push('custom_json = ?'); args.push(JSON.stringify(b.custom || [])); }
-    if (b.invitation !== undefined) { sets.push('invitation_json = ?'); args.push(JSON.stringify(b.invitation || {})); }
-    if (b.status && ['planned', 'today', 'completed', 'done', 'extended', 'cancelled'].includes(b.status)) {
-      sets.push('status = ?'); args.push(b.status);
-    }
-    if (!sets.length) return res.json(await hydrate(row));
-    sets.push(`updated_at = datetime('now')`);
-    args.push(row.id);
-    await run(`UPDATE poojas SET ${sets.join(', ')} WHERE id = ?`, args);
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'UPDATE', entityType: 'pooja', entityId: row.code });
-    res.json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
-});
+router.post('/', roles.needs('admin', 'Adding a seva'), async (req, res) => {
+  const b = req.body;
+  const name = String(b.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Pooja name is required' });
+  if (!CATEGORIES[b.category]) return res.status(400).json({ error: 'Pick a valid category' });
 
-router.delete('/:id', adminTier, async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    await run(`UPDATE poojas SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [row.id]);
-    await run('UPDATE pooja_sessions SET is_deleted = 1 WHERE pooja_id = ?', [row.id]);
-    await run('DELETE FROM pooja_sevarthi_links WHERE pooja_id = ?', [row.id]);
-    await run('DELETE FROM pooja_coordinator_links WHERE pooja_id = ?', [row.id]);
-    await run('DELETE FROM pooja_guest_links WHERE pooja_id = ?', [row.id]);
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'DELETE', entityType: 'pooja', entityId: row.code });
-    res.json({ ok: true });
-  } catch (e) { next(e); }
-});
+  /* Dates are optional. A pooja with no date still takes sevarthi — it
+     gets one undated slot, and real day-slots are built once the trust
+     fixes the date (PUT /poojas/:id/dates). */
+  const dated = !!(b.start_date && b.end_date);
+  if ((b.start_date && !b.end_date) || (!b.start_date && b.end_date)) {
+    return res.status(400).json({ error: 'Give both a start and an end date, or leave both blank' });
+  }
+  if (dated && b.end_date < b.start_date) {
+    return res.status(400).json({ error: 'End date cannot be before start date' });
+  }
 
-/* ---------- sessions ---------- */
-router.post('/:id/sessions', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    const s = req.body || {};
-    if (!s.date || !/^\d{4}-\d{2}-\d{2}$/.test(s.date)) return res.status(400).json({ error: 'date (YYYY-MM-DD) is required' });
-    const sid = crypto.randomUUID();
-    await run(
-      `INSERT INTO pooja_sessions (id, pooja_id, label, date, start_time, end_time, venue) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [sid, row.id, s.label || '', s.date, s.startTime || '', s.endTime || '', s.venue || row.default_venue || '']
-    );
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'CREATE', entityType: 'pooja_session', entityId: sid, scopeId: row.code });
-    res.status(201).json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
-});
+  /* Only a 'limited' pooja carries a number. The other two modes both
+     leave capacity NULL — they differ in wording, not in behaviour. */
+  const capacityMode = readCapacityMode(b);
+  const seatsPerDay = capacityMode === 'limited' ? Number(b.seats_per_day || 0) : null;
+  if (capacityMode === 'limited' && (!seatsPerDay || seatsPerDay < 1)) {
+    return res.status(400).json({ error: 'Patla count is required when the seats are limited' });
+  }
+  const fixed = capacityMode === 'limited' ? 1 : 0;
+  const mode = b.seating_mode === 'whole' ? 'whole' : 'per_day';
 
-router.patch('/:id/sessions/:sid', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    const s = req.body || {};
-    const sets = [], args = [];
-    for (const [k, col] of Object.entries({ label: 'label', startTime: 'start_time', endTime: 'end_time', venue: 'venue' })) {
-      if (typeof s[k] === 'string') { sets.push(`${col} = ?`); args.push(s[k]); }
-    }
-    if (s.date !== undefined) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(s.date)) return res.status(400).json({ error: 'bad date' });
-      sets.push('date = ?'); args.push(s.date);
-    }
-    if (!sets.length) return res.json(await hydrate(row));
-    args.push(req.params.sid, row.id);
-    await run(`UPDATE pooja_sessions SET ${sets.join(', ')} WHERE id = ? AND pooja_id = ?`, args);
-    res.json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
-});
-
-router.delete('/:id/sessions/:sid', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    await run('UPDATE pooja_sessions SET is_deleted = 1 WHERE id = ? AND pooja_id = ?', [req.params.sid, row.id]);
-    res.json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
-});
-
-/* ---------- sevarthis (add-or-reuse by mobile, link to devotee) ---------- */
-router.post('/:id/sevarthis', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    const b = req.body || {};
-
-    let sev = null;
-    if (b.sevarthiId) {
-      sev = await queryOne('SELECT * FROM sevarthis WHERE (code = ? OR id = ?) AND is_deleted = 0',
-        [b.sevarthiId, parseInt(b.sevarthiId, 10) || -1]);
-      if (!sev) return res.status(400).json({ error: 'Unknown sevarthiId' });
+  const SLOT = `INSERT INTO pooja_slots (pooja_id, slot_date, capacity) VALUES (?, ?, ?)`;
+  const id = await db.tx(async () => {
+    const info = await db.run(`
+      INSERT INTO pooja_events (category, name, description, seats_per_day, fixed_capacity,
+                                capacity_mode, seating_mode, amount, target_amount,
+                                start_date, end_date, coordinator_devotee_id)
+      VALUES (@category, @name, @description, @seats_per_day, @fixed_capacity,
+              @capacity_mode, @seating_mode, @amount, @target_amount,
+              @start_date, @end_date, @coordinator_devotee_id)
+    `, {
+      category: b.category,
+      name,
+      description: (b.description || '').trim() || null,
+      seats_per_day: seatsPerDay,
+      fixed_capacity: fixed,
+      capacity_mode: capacityMode,
+      seating_mode: mode,
+      amount: Number(b.amount || 0),
+      target_amount: Number(b.target_amount || 0),
+      start_date: dated ? b.start_date : null,
+      end_date: dated ? b.end_date : null,
+      coordinator_devotee_id: b.coordinator_devotee_id || null,
+    });
+    const poojaId = Number(info.lastInsertRowid);
+    if (!dated) {
+      await db.run(SLOT, poojaId, null, seatsPerDay);          // date to be announced
+    } else if (mode === 'whole') {
+      await db.run(SLOT, poojaId, b.start_date, seatsPerDay);  // one patla for the whole event
     } else {
-      const mobile = digits(b.mobile);
-      if (mobile && mobile.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
+      for (const date of datesBetween(b.start_date, b.end_date)) await db.run(SLOT, poojaId, date, seatsPerDay);
+    }
+    await log(req, {
+      action: 'create', entity: 'pooja', entityId: poojaId,
+      summary: `Created ${CATEGORIES[b.category].label}: ${name}` + (dated ? '' : ' (date not fixed yet)'),
+      details: { name, category: b.category, seats_per_day: seatsPerDay, amount: b.amount, dated },
+    });
+    return poojaId;
+  });
+  res.status(201).json(await db.get(`SELECT * FROM pooja_events WHERE id = ?`, id));
+});
 
-      let devoteeId = null;
-      if (b.devoteeId != null && String(b.devoteeId).trim()) {
-        const dev = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
-          [parseInt(b.devoteeId, 10) || -1, String(b.devoteeId)]);
-        if (!dev) return res.status(400).json({ error: 'That devotee no longer exists' });
-        devoteeId = dev.id;
-      } else {
-        const first = String(b.firstName || '').trim();
-        if (!first && !b.name && !mobile) return res.status(400).json({ error: 'devoteeId or firstName is required' });
-        devoteeId = await ensureDevotee({
-          firstName: first, lastName: b.lastName, name: b.name, mobile,
-          city: b.city, state: b.state,
-        });
+/** Set the dates on a pooja that had none, or MOVE a pooja that is
+    already dated — the trust changes its mind, and re-dating used to be
+    impossible once a date existed.
+
+    Days are re-dated BY POSITION: old day one becomes new day one, and
+    so on. That is what "the event moved" means to the temple, and
+    because bookings hang off the slot id (not the date) every sevarthi
+    travels with their day automatically. An undated placeholder slot
+    sorts first, so it becomes day one exactly as it did before.
+
+    Shortening a range that still has people booked on the days being
+    dropped is refused, naming those days, rather than silently
+    stranding or deleting their bookings.
+
+    The slot read and the booked check happen INSIDE the transaction, so
+    a sevarthi booked a moment earlier on a day being dropped is seen. */
+router.put('/:id/dates', roles.needs('admin', 'Changing a seva\'s dates'), async (req, res) => {
+  const { start_date, end_date } = req.body;
+  if (!start_date || !end_date) return res.status(400).json({ error: 'Give both a start and an end date' });
+  if (end_date < start_date) return res.status(400).json({ error: 'End date cannot be before start date' });
+  const dates = datesBetween(start_date, end_date);
+
+  const p = await db.tx(async () => {
+    const p = await db.get(`SELECT * FROM pooja_events WHERE id = ?`, req.params.id);
+    if (!p) throw refuse(404, 'Pooja not found');
+    const slotCapacity = p.capacity_mode === 'limited' ? p.seats_per_day : null;
+
+    /* Undated placeholder first, then by date — the positional order the
+       re-dating maps onto the new range. */
+    const slots = await db.all(`
+      SELECT * FROM pooja_slots WHERE pooja_id = ?
+       ORDER BY (slot_date IS NULL) DESC, slot_date
+    `, p.id);
+
+    /* A 'whole' pooja pools everything into one slot, so it only ever
+       needs the start date; per_day keeps one slot per calendar day. */
+    const keep = p.seating_mode === 'whole' ? 1 : dates.length;
+
+    const dropped = slots.slice(keep);
+    const booked = dropped.filter((s) => s.booked_count > 0);
+    if (booked.length) {
+      throw refuse(409,
+        `${booked.map((s) => s.slot_date || 'the undated day').join(', ')} still ` +
+        `${booked.length === 1 ? 'has' : 'have'} sevarthi booked. Move or cancel them first, ` +
+        `or keep the pooja long enough to include ${booked.length === 1 ? 'that day' : 'those days'}.`);
+    }
+
+    await db.run(`UPDATE pooja_events SET start_date=?, end_date=?, updated_at=datetime('now','+330 minutes')
+                 WHERE id=?`, start_date, end_date, p.id);
+
+    /* Clear the dates before reassigning them: shifting a range by a day
+       would otherwise collide with UNIQUE (pooja_id, slot_date) halfway
+       through. Several NULLs never conflict in a SQLite unique index. */
+    for (const s of slots) await db.run(`UPDATE pooja_slots SET slot_date = NULL WHERE id = ?`, s.id);
+
+    for (const s of dropped) await db.run(`DELETE FROM pooja_slots WHERE id = ?`, s.id);
+
+    const kept = slots.slice(0, keep);
+    for (let i = 0; i < kept.length; i++) {
+      await db.run(`UPDATE pooja_slots SET slot_date = ? WHERE id = ?`, dates[i], kept[i].id);
+    }
+
+    // days the pooja gained
+    for (let i = slots.length; i < keep; i++) {
+      await db.run(`INSERT INTO pooja_slots (pooja_id, slot_date, capacity) VALUES (?, ?, ?)`,
+        p.id, dates[i], slotCapacity);
+    }
+    return p;
+  });
+
+  const moved = p.start_date && p.start_date !== start_date;
+  await log(req, {
+    action: 'update', entity: 'pooja', entityId: p.id,
+    summary: moved
+      ? `Moved ${p.name} from ${p.start_date}–${p.end_date} to ${start_date}–${end_date}`
+      : `Dates set for ${p.name}: ${start_date} to ${end_date}`,
+    details: { from: { start: p.start_date, end: p.end_date }, to: { start: start_date, end: end_date } },
+  });
+  res.json(await withStats(await db.get(`SELECT * FROM pooja_events WHERE id = ?`, p.id)));
+});
+
+/** Clear the dates again — back to "not decided yet". Bookings survive:
+    every slot is pooled back into the single undated placeholder, which
+    is the state a pooja starts in before the trust fixes a day. */
+router.put('/:id/dates/clear', roles.needs('admin', 'Clearing a seva\'s dates'), async (req, res) => {
+  const p = await db.tx(async () => {
+    const p = await db.get(`SELECT * FROM pooja_events WHERE id = ?`, req.params.id);
+    if (!p) throw refuse(404, 'Pooja not found');
+
+    const slots = await db.all(`SELECT * FROM pooja_slots WHERE pooja_id = ? ORDER BY slot_date`, p.id);
+    const withBookings = slots.filter((s) => s.booked_count > 0);
+    if (withBookings.length > 1) {
+      throw refuse(409, 'Sevarthi are booked on more than one day, so those days cannot be merged back into ' +
+                        'one undated slot. Move them onto a single day first.');
+    }
+
+    const keeper = withBookings[0] || slots[0];
+    await db.run(`UPDATE pooja_events SET start_date=NULL, end_date=NULL,
+                       updated_at=datetime('now','+330 minutes') WHERE id=?`, p.id);
+    for (const s of slots) {
+      if (s.id !== keeper.id) await db.run(`DELETE FROM pooja_slots WHERE id = ?`, s.id);
+    }
+    if (keeper) await db.run(`UPDATE pooja_slots SET slot_date = NULL WHERE id = ?`, keeper.id);
+    return p;
+  });
+
+  await log(req, {
+    action: 'update', entity: 'pooja', entityId: p.id,
+    summary: `Dates cleared for ${p.name} — back to "date not decided"`,
+  });
+  res.json(await withStats(await db.get(`SELECT * FROM pooja_events WHERE id = ?`, p.id)));
+});
+
+/** Adjust one day's patla count (e.g. more mats arrived). Never below what is booked. */
+router.put('/slots/:slotId', roles.needs('admin', 'Changing a day\'s seats'), async (req, res) => {
+  const raw = req.body.capacity;
+  const capacity = raw === null || raw === '' ? null : Number(raw);
+  /* Checked against booked_count inside the transaction, so a booking
+     that lands meanwhile cannot end up above the new capacity. */
+  const slot = await db.tx(async () => {
+    const slot = await db.get(`SELECT * FROM pooja_slots WHERE id = ?`, req.params.slotId);
+    if (!slot) throw refuse(404, 'Slot not found');
+    if (capacity !== null && capacity < slot.booked_count) {
+      throw refuse(400, `${slot.booked_count} sevarthi already booked on this day — capacity cannot be lower than that.`);
+    }
+    await db.run(`UPDATE pooja_slots SET capacity = ? WHERE id = ?`, capacity, slot.id);
+    return slot;
+  });
+  await log(req, {
+    action: 'update', entity: 'pooja_slot', entityId: slot.id,
+    summary: `Seats for ${slotWhen(slot.slot_date)} set to ${capacity === null ? 'unlimited' : capacity}`,
+  });
+  res.json(await db.get(`SELECT * FROM pooja_slots WHERE id = ?`, slot.id));
+});
+
+router.put('/:id', roles.needs('admin', 'Editing a seva'), async (req, res) => {
+  const row = await db.get(`SELECT * FROM pooja_events WHERE id = ?`, req.params.id);
+  if (!row) return res.status(404).json({ error: 'Pooja not found' });
+  const b = req.body;
+
+  /* Registration capacity can be decided (or changed) long after the
+     pooja was created — that is the normal path for a pooja opened
+     while the trust was still thinking about it. Applying the mode
+     rewrites every slot's capacity together with the event row, in one
+     transaction, so the enforced number and the declared mode can never
+     disagree. Lowering a limit below what is already booked is refused,
+     exactly as PUT /slots/:slotId refuses it for a single day. */
+  if (b.capacity_mode !== undefined) {
+    const nextMode = readCapacityMode(b, null);
+    if (!CAPACITY_MODES.includes(nextMode)) {
+      return res.status(400).json({ error: 'Pick a valid registration capacity' });
+    }
+    let nextSeats = null;
+    if (nextMode === 'limited') {
+      nextSeats = Number(b.seats_per_day ?? row.seats_per_day ?? 0);
+      if (!nextSeats || nextSeats < 1) {
+        return res.status(400).json({ error: 'Enter the maximum number of registrations' });
       }
-
-      // reuse an existing sevarthi for this person (by devotee link, then mobile)
-      const findSev = async () => {
-        let s = devoteeId ? await queryOne('SELECT * FROM sevarthis WHERE devotee_id = ? AND is_deleted = 0', [devoteeId]) : null;
-        if (!s && mobile) s = await queryOne('SELECT * FROM sevarthis WHERE mobile = ? AND is_deleted = 0', [mobile]);
-        return s;
-      };
-      sev = await findSev();
-      if (!sev) {
-        const dev = await queryOne('SELECT * FROM devotees WHERE id = ?', [devoteeId]);
-        const parts = String((dev && dev.name) || b.firstName || '').trim().split(/\s+/);
-        const first = parts.shift() || (b.firstName || '');
-        try {
-          const code = await nextCode('sevarthi');
-          const r = await run(
-            `INSERT INTO sevarthis (code, devotee_id, first_name, last_name, mobile, city, state, committee, status, notes, added_date)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, date('now'))`,
-            [code, devoteeId, first, parts.join(' ') || (b.lastName || ''),
-             (dev && dev.mobile) || mobile, (dev && dev.city) || b.city || '',
-             (dev && dev.state) || b.state || 'Gujarat', b.committee || '', b.notes || '']
-          );
-          sev = await queryOne('SELECT * FROM sevarthis WHERE id = ?', [r.lastInsertRowid]);
-        } catch (e) {
-          sev = await findSev();                       // lost a concurrent race → reuse the winner
-          if (!sev) throw e;
+    }
+    /* Only touch the slots when the capacity decision itself changed.
+       The edit form posts the current mode back on every save, and a
+       blind rewrite would flatten a single day's hand-adjusted patla
+       count (PUT /slots/:slotId) just because someone fixed a typo in
+       the pooja's name. */
+    const changed = nextMode !== row.capacity_mode ||
+                    (nextMode === 'limited' && nextSeats !== row.seats_per_day);
+    if (changed) {
+      /* The peak is re-read inside the transaction so a booking made a
+         moment ago is counted before the limit is lowered. */
+      await db.tx(async () => {
+        if (nextMode === 'limited') {
+          const peak = (await db.get(
+            `SELECT IFNULL(MAX(booked_count), 0) AS n FROM pooja_slots WHERE pooja_id = ?`, row.id)).n;
+          if (nextSeats < peak) {
+            throw refuse(400, `${peak} sevarthi are already booked — the limit cannot be lower than that.`);
+          }
         }
-      } else if (devoteeId && !sev.devotee_id) {
-        await run('UPDATE sevarthis SET devotee_id = ? WHERE id = ?', [devoteeId, sev.id]);
-      }
+        await db.run(`UPDATE pooja_events SET capacity_mode=?, fixed_capacity=?, seats_per_day=?,
+                           updated_at=datetime('now','+330 minutes') WHERE id=?`,
+          nextMode, nextMode === 'limited' ? 1 : 0, nextSeats, row.id);
+        await db.run(`UPDATE pooja_slots SET capacity = ? WHERE pooja_id = ?`, nextSeats, row.id);
+      });
+      await log(req, {
+        action: 'update', entity: 'pooja', entityId: row.id,
+        summary: `Registration capacity for ${row.name} set to ` +
+          (nextMode === 'limited' ? `${nextSeats}` : nextMode === 'unlimited' ? 'unlimited' : 'not decided yet'),
+        details: { from: row.capacity_mode, to: nextMode, seats_per_day: nextSeats },
+      });
     }
-
-    const linked = await queryOne('SELECT 1 AS x FROM pooja_sevarthi_links WHERE pooja_id = ? AND sevarthi_id = ?', [row.id, sev.id]);
-    if (linked) return res.status(409).json({ error: 'Already a sevarthi of this pooja' });
-    try {
-      await run('INSERT INTO pooja_sevarthi_links (pooja_id, sevarthi_id) VALUES (?, ?)', [row.id, sev.id]);
-    } catch (e) {
-      // composite PK already holds this pair (concurrent double-add) — treat as done
-      const now = await queryOne('SELECT 1 AS x FROM pooja_sevarthi_links WHERE pooja_id = ? AND sevarthi_id = ?', [row.id, sev.id]);
-      if (!now) throw e;
-    }
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'LINK', entityType: 'sevarthi', entityId: sev.code, scopeId: row.code });
-    res.status(201).json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
-});
-
-router.delete('/:id/sevarthis/:sevId', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    const sev = await queryOne('SELECT id FROM sevarthis WHERE code = ? OR id = ?',
-      [req.params.sevId, parseInt(req.params.sevId, 10) || -1]);
-    if (sev) await run('DELETE FROM pooja_sevarthi_links WHERE pooja_id = ? AND sevarthi_id = ?', [row.id, sev.id]);
-    res.json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
-});
-
-/* ---------- coordinators (admin tier) ----------
-   body: { userId } — an account holder, OR { devoteeId } — a person with no login.
-   The link stores both the devotee identity and the account id when one exists;
-   the role is granted only for an actual account. */
-router.post('/:id/coordinators', adminTier, async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-
-    let u = null, devId = null;
-    if (req.body.userId != null && String(req.body.userId).trim()) {
-      const uid = parseInt(req.body.userId, 10) || -1;
-      u = await queryOne('SELECT * FROM users WHERE id = ? AND is_deleted = 0', [uid]);
-      if (!u) return res.status(400).json({ error: 'Unknown userId' });
-      devId = u.devotee_id;
-    } else if (req.body.devoteeId != null && String(req.body.devoteeId).trim()) {
-      const d = await queryOne('SELECT * FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
-        [parseInt(req.body.devoteeId, 10) || -1, String(req.body.devoteeId)]);
-      if (!d) return res.status(400).json({ error: 'Unknown devoteeId' });
-      devId = d.id;
-      u = await queryOne('SELECT * FROM users WHERE devotee_id = ? AND is_deleted = 0', [d.id]);
-    } else {
-      return res.status(400).json({ error: 'userId or devoteeId is required' });
-    }
-
-    const uid = u ? u.id : null;
-    if (!devId && u) {
-      devId = await ensureDevotee({ name: u.name || String(u.email || '').split('@')[0], mobile: u.mobile, city: u.city });
-      if (devId) await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, uid]);
-    }
-
-    if (uid) {
-      await run(`INSERT INTO user_roles (user_id, role) SELECT ?, ? WHERE NOT EXISTS
-                 (SELECT 1 FROM user_roles WHERE user_id = ? AND role = ?)`, [uid, 'pooja_coordinator', uid, 'pooja_coordinator']);
-    }
-    const linked = await queryOne(
-      'SELECT rowid AS rid, user_id FROM pooja_coordinator_links WHERE pooja_id = ? AND (devotee_id = ? OR user_id = ?) LIMIT 1',
-      [row.id, devId || -1, uid || -1]);
-    if (!linked) {
-      try {
-        await run('INSERT INTO pooja_coordinator_links (pooja_id, user_id, devotee_id) VALUES (?, ?, ?)', [row.id, uid, devId]);
-      } catch (e) {
-        // ux_pcoord_pd / ux_pcoord_pu — a concurrent grant already linked this person
-        const now = await queryOne('SELECT 1 x FROM pooja_coordinator_links WHERE pooja_id = ? AND (devotee_id = ? OR user_id = ?)', [row.id, devId || -1, uid || -1]);
-        if (!now) throw e;
-      }
-    } else if (uid && !linked.user_id) {
-      await run('UPDATE pooja_coordinator_links SET user_id = ? WHERE rowid = ?', [uid, linked.rid]);
-    }
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'GRANT', entityType: 'pooja_coordinator', entityId: String(uid || 'dev:' + devId), scopeId: row.code });
-    res.json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
-});
-
-/* Unassign one coordinator from this pooja.
-
-   Deliberately does NOT auto-revoke the pooja_coordinator role or kill
-   sessions even when this was their last pooja — that's a bigger,
-   cross-cutting action than "unassign from one pooja" and must be a
-   confirmed, separate choice (DELETE /api/users/:id/roles/pooja_coordinator,
-   which is the one place role revocation — and its matching link cleanup —
-   actually happens). Instead this reports `_orphanedRole` so the frontend
-   can ask. */
-router.delete('/:id/coordinators/:ref', adminTier, async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    const ref = req.params.ref;
-    // ref may be a user id OR a devotee id/code
-    const dev = await queryOne('SELECT id FROM devotees WHERE id = ? OR code = ?', [parseInt(ref, 10) || -1, ref]);
-    const devId = dev ? dev.id : -1;
-    const uid = parseInt(ref, 10) || -1;
-    const links = await queryAll(
-      'SELECT rowid AS rid, user_id FROM pooja_coordinator_links WHERE pooja_id = ? AND (user_id = ? OR devotee_id = ?)',
-      [row.id, uid, devId]);
-    for (const l of links) await run('DELETE FROM pooja_coordinator_links WHERE rowid = ?', [l.rid]);
-    // report (never silently act on) whether this freed an account that now coordinates nothing
-    let orphanedRole = null;
-    for (const l of links) {
-      if (!l.user_id) continue;
-      const still = await queryOne('SELECT 1 AS x FROM pooja_coordinator_links WHERE user_id = ? LIMIT 1', [l.user_id]);
-      if (!still) { orphanedRole = { userId: l.user_id, role: 'pooja_coordinator' }; break; }
-    }
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-      action: 'REVOKE', entityType: 'pooja_coordinator', entityId: String(ref), scopeId: row.code });
-    res.json({ ...(await hydrate(await poojaByIdOrCode(row.id))), _orphanedRole: orphanedRole });
-  } catch (e) { next(e); }
-});
-
-/* ---------- guests ---------- */
-/* Returns { ok, guestId?, code?, reason? }. A guest is always a devotee (a real
-   person invited to a pooja), so we require enough to resolve one — a 10-digit
-   mobile OR a name+city — and never create an unlinked / un-dedupable row. */
-async function addGuest(poojaId, g) {
-  const mobile = digits(g.mobile);
-  const city = String(g.city || '').trim();
-  const rawName = String(g.name || '').trim();
-  const parts = rawName.split(/\s+/).filter(Boolean);
-  const first = g.firstName ? String(g.firstName).trim() : (parts.shift() || '');
-  const last = g.lastName != null ? String(g.lastName).trim() : parts.join(' ');
-  const fullName = `${first} ${last}`.trim() || rawName;
-  if (!fullName) return { ok: false, reason: 'guest name is required' };
-  if (!(mobile.length === 10 || city)) {
-    return { ok: false, reason: 'a 10-digit mobile or a city is required to add a guest' };
   }
 
-  const devoteeId = await ensureDevotee({
-    firstName: first, lastName: last, name: fullName, mobile, city, state: g.state,
+  /* Seating mode rebuilds the slots themselves — one pooled patla for
+     the whole event, or one row per day — so it is only safe while
+     nobody is seated. With bookings in place the operator is told to
+     move them first rather than having the app guess which day each
+     sevarthi belongs on. */
+  if (req.body.seating_mode && req.body.seating_mode !== row.seating_mode) {
+    const nextSeating = req.body.seating_mode === 'whole' ? 'whole' : 'per_day';
+    const SLOT = `INSERT INTO pooja_slots (pooja_id, slot_date, capacity) VALUES (?, ?, ?)`;
+    await db.tx(async () => {
+      /* Re-read inside the transaction: the slots are about to be deleted,
+         so a booking landing between check and rebuild would be orphaned. */
+      const cur = await db.get(`SELECT * FROM pooja_events WHERE id = ?`, row.id);
+      const seated = (await db.get(
+        `SELECT IFNULL(SUM(booked_count), 0) AS n FROM pooja_slots WHERE pooja_id = ?`, row.id)).n;
+      if (seated > 0) {
+        throw refuse(409, `${seated} sevarthi are already seated, so the seating style cannot be changed. ` +
+                          'Move or cancel them first.');
+      }
+      const capacity = cur.capacity_mode === 'limited' ? cur.seats_per_day : null;
+      await db.run(`UPDATE pooja_events SET seating_mode=?, updated_at=datetime('now','+330 minutes')
+                   WHERE id=?`, nextSeating, row.id);
+      await db.run(`DELETE FROM pooja_slots WHERE pooja_id = ?`, row.id);
+      if (!cur.start_date) await db.run(SLOT, row.id, null, capacity);
+      else if (nextSeating === 'whole') await db.run(SLOT, row.id, cur.start_date, capacity);
+      else for (const d of datesBetween(cur.start_date, cur.end_date)) await db.run(SLOT, row.id, d, capacity);
+    });
+    await log(req, {
+      action: 'update', entity: 'pooja', entityId: row.id,
+      summary: `${row.name} seating changed to ${nextSeating === 'whole' ? 'one patla for the whole event' : 'per day'}`,
+    });
+  }
+
+  await db.run(`
+    UPDATE pooja_events SET name=@name, description=@description, amount=@amount,
+           target_amount=@target_amount, status=@status, coordinator_devotee_id=@coordinator_devotee_id,
+           updated_at=datetime('now','+330 minutes')
+     WHERE id=@id
+  `, {
+    id: row.id,
+    name: String(b.name || row.name).trim(),
+    description: (b.description ?? row.description) || null,
+    amount: Number(b.amount ?? row.amount),
+    target_amount: Number(b.target_amount ?? row.target_amount),
+    status: b.status || row.status,
+    coordinator_devotee_id: b.coordinator_devotee_id ?? row.coordinator_devotee_id,
   });
-  if (!devoteeId) return { ok: false, reason: 'could not resolve the guest to a person' };
-
-  // ONE registry guest row per person (ux_guests_devotee) — reuse or create it
-  let guest = await queryOne(
-    'SELECT id, code FROM guests WHERE devotee_id = ? AND is_deleted = 0 LIMIT 1', [devoteeId]);
-  if (!guest) {
-    const code = await nextCode('guest');
-    try {
-      const r = await run(
-        `INSERT INTO guests (code, devotee_id, first_name, last_name, mobile, city, state, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [code, devoteeId, first, last, mobile, city, g.state || 'Gujarat', g.notes || '']);
-      guest = { id: r.lastInsertRowid, code };
-    } catch (e) {
-      guest = await queryOne('SELECT id, code FROM guests WHERE devotee_id = ? AND is_deleted = 0 LIMIT 1', [devoteeId]);
-      if (!guest) throw e;
-    }
-  }
-
-  // the per-pooja role lives on the link, not the registry row
-  const role = g.role || g.title || '';
-  const linked = await queryOne(
-    'SELECT 1 AS x FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [poojaId, guest.id]);
-  if (linked) {
-    await run('UPDATE pooja_guest_links SET role = ? WHERE pooja_id = ? AND guest_id = ?', [role, poojaId, guest.id]);
-    return { ok: true, guestId: guest.id, code: guest.code, deduped: true };
-  }
-  await run('INSERT INTO pooja_guest_links (pooja_id, guest_id, role) VALUES (?, ?, ?)', [poojaId, guest.id, role]);
-  return { ok: true, guestId: guest.id, code: guest.code };
-}
-
-router.post('/:id/guests', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    const g = await addGuest(row.id, req.body);
-    if (!g.ok) return res.status(400).json({ error: g.reason });
-    if (!g.deduped) {
-      await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Pooja',
-        action: 'CREATE', entityType: 'guest', entityId: g.code, scopeId: row.code });
-    }
-    res.status(201).json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
+  await log(req, { action: 'update', entity: 'pooja', entityId: row.id, summary: `Updated pooja ${row.name}` });
+  res.json(await withStats(await db.get(`SELECT * FROM pooja_events WHERE id = ?`, row.id)));
 });
 
-router.delete('/:id/guests/:guestId', async (req, res, next) => {
-  try {
-    const row = await poojaByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Pooja not found' });
-    if (!await canManage(req, row)) return res.status(403).json({ error: 'Forbidden' });
-    const g = await queryOne('SELECT id FROM guests WHERE code = ? OR id = ?', [req.params.guestId, parseInt(req.params.guestId, 10) || -1]);
-    if (g) {
-      await run('DELETE FROM pooja_guest_links WHERE pooja_id = ? AND guest_id = ?', [row.id, g.id]);
-      await run('UPDATE guests SET is_deleted = 1 WHERE id = ?', [g.id]);
+/** Remove a pooja added by mistake. Only while nothing is booked
+    against it — a seva with sevarthi on it is history, not a typo, and
+    deleting it would take their payments with it. Close it instead. */
+router.delete('/:id', roles.needs('admin', 'Deleting a seva'), async (req, res) => {
+  /* The booking count is read inside the transaction that deletes, so a
+     sevarthi booked a moment ago can never be deleted along with it.
+     Slots are deleted explicitly — no reliance on ON DELETE CASCADE. */
+  const row = await db.tx(async () => {
+    const row = await db.get(`SELECT * FROM pooja_events WHERE id = ?`, req.params.id);
+    if (!row) throw refuse(404, 'Pooja not found');
+
+    const bookings = (await db.get(`
+      SELECT COUNT(*) AS n FROM sevarthi_bookings b
+        JOIN pooja_slots ps ON ps.id = b.slot_id WHERE ps.pooja_id = ?
+    `, row.id)).n;
+    if (bookings > 0) {
+      throw refuse(409, `${bookings} sevarthi ${bookings === 1 ? 'is' : 'are'} recorded against this seva, so it ` +
+                        'cannot be deleted. Close it instead — it stops taking new sevarthi and keeps the history.');
     }
-    res.json(await hydrate(await poojaByIdOrCode(row.id)));
-  } catch (e) { next(e); }
+    await db.run(`DELETE FROM pooja_slots WHERE pooja_id = ?`, row.id);
+    await db.run(`DELETE FROM pooja_events WHERE id = ?`, row.id);
+    return row;
+  });
+  await log(req, {
+    action: 'delete', entity: 'pooja', entityId: row.id,
+    summary: `Deleted ${CATEGORIES[row.category] ? CATEGORIES[row.category].label : 'pooja'}: ${row.name}`,
+    details: row,
+  });
+  res.json({ ok: true });
 });
 
-module.exports = router;
+module.exports = { router, CATEGORIES, poojaStats, withStats };

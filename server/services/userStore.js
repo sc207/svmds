@@ -7,10 +7,9 @@ async function rolesOf(userId) {
   return rows.map(r => r.role);
 }
 
-const USER_SELECT =
-  'SELECT u.*, d.code AS devotee_code FROM users u LEFT JOIN devotees d ON d.id = u.devotee_id';
+const USER_SELECT = 'SELECT u.* FROM users u';
 
-/** Full user row (+ devotee_code) + roles[] by id, or null. */
+/** Full user row + roles[] by id, or null. */
 async function getUser(id) {
   const row = await queryOne(`${USER_SELECT} WHERE u.id = ? AND u.is_deleted = 0`, [id]);
   if (!row) return null;

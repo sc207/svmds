@@ -1,37 +1,37 @@
-/* Server-side authorization — replaces the client persona guard.
-   ROLE_PAGES mirrors js/people.js ROLE_META so the two never drift.
-   (BACKEND_PLAN.md §5.2) */
-const { queryAll, queryOne } = require('../db/connection');
+/* Authorization — which pages an account may open, and how much it may do.
 
-// Every role can open the Unified Calendar; it self-restricts its categories
-// for non-admins on the client (public/js/calendar.js).
-//
-// devotees / invite / yagna-signups are deliberately absent from every
-// scoped role's list here too (must stay a mirror of ROLE_META) — see the
-// matching comment in public/js/people.js for why each one is admin-only.
-// dhaja IS in pooja_coordinator's list — a dhaja is a type of pooja.
-//
-// inventory → accountant: a flat, temple-wide (unscoped) register with no
-// financial line items but no owning-team either — matches the ONE other
-// place this app already grants unscoped temple-wide visibility (accountant's
-// donations/expenses), not management_lead's always-per-team-scoped model.
-//
-// visits → admin-only (explicit decision, reversed from an earlier attempt
-// to give it to management_lead). The escort on a visit can be EITHER a
-// Management team OR one-or-more individual Devotees from the central
-// registry — that's a data-model fact about ONE field, not a reason to hand
-// Committee/Management broad Visits access. No role currently owns the
-// actual padhramani-scheduling responsibility; give it to a scoped role only
-// when that ownership is genuinely confirmed, not because of the escort field.
+   Accounts keep the portal's seven roles (user_roles). Phase 1 maps them
+   onto two things:
+
+   1. PAGES — ROLE_PAGES below, mirrored by the frontend (public/js/ui.js
+      ROLE_PAGES). Keep the two in sync. Accounts, Settings and Import are
+      admin-tier only; every other Phase 1 page is the daily job and is
+      open to every role.
+
+   2. RANK — the Phase 1 permission ladder (middleware/roles.js needs()):
+        operator < accountant < admin < superadmin
+      superadmin → superadmin, admin → admin, accountant → accountant,
+      and the four scoped portal roles (management_lead, pooja_coordinator,
+      committee_leader, event_incharge) → operator: their modules do not
+      exist in Phase 1, so they do the daily counter work.
+
+   An account with NO role gets no pages and a 403 on every data route,
+   naming what to do (ask an administrator) — it is almost always an
+   account added without its role ticked. */
+
+const DAILY = ['dashboard', 'mahotsav', 'payments', 'devotees', 'visits', 'calendar', 'donations', 'invitation'];
+
 const ROLE_PAGES = {
   superadmin:        ['*'],
   admin:             ['*'],
-  management_lead:   ['dashboard', 'management', 'calendar'],
-  pooja_coordinator: ['dashboard', 'puja', 'dhaja', 'calendar'],
-  committee_leader:  ['dashboard', 'committees', 'calendar'],
-  event_incharge:    ['dashboard', 'events', 'calendar'],
-  accountant:        ['dashboard', 'donations', 'expenses', 'inventory', 'reports', 'calendar'],
+  accountant:        DAILY,
+  management_lead:   DAILY,
+  pooja_coordinator: DAILY,
+  committee_leader:  DAILY,
+  event_incharge:    DAILY,
 };
+
+const RANK = { none: -1, operator: 0, accountant: 1, admin: 2, superadmin: 3 };
 
 // Only a superadmin may grant/revoke these, disable such an account, or impersonate.
 const PRIVILEGED_ROLES = ['superadmin', 'admin'];
@@ -40,8 +40,18 @@ function pagesForUser(user) {
   const roles = (user && user.roles) || [];
   if (roles.includes('superadmin') || roles.includes('admin')) return ['*'];
   const set = new Set();
-  roles.forEach(r => (ROLE_PAGES[r] || []).forEach(p => set.add(p)));
+  roles.forEach((r) => (ROLE_PAGES[r] || []).forEach((p) => set.add(p)));
   return [...set];
+}
+
+/** The account's Phase 1 rank name: superadmin | admin | accountant | operator | none. */
+function rankOf(user) {
+  const roles = (user && user.roles) || [];
+  if (roles.includes('superadmin')) return 'superadmin';
+  if (roles.includes('admin')) return 'admin';
+  if (roles.includes('accountant')) return 'accountant';
+  if (roles.some((r) => ROLE_PAGES[r])) return 'operator';
+  return 'none';
 }
 
 function isSuperadmin(user) { return !!user && (user.roles || []).includes('superadmin'); }
@@ -54,72 +64,25 @@ function isAdminTier(user) {
 function requireRole(...roles) {
   return (req, res, next) => {
     const held = (req.user && req.user.roles) || [];
-    if (held.some(r => roles.includes(r))) return next();
+    if (held.some((r) => roles.includes(r))) return next();
     return res.status(403).json({ error: 'Forbidden' });
   };
 }
 
 const requireSuperadmin = (req, res, next) =>
-  isSuperadmin(req.user) ? next() : res.status(403).json({ error: 'Superadmin only' });
+  (isSuperadmin(req.user) ? next() : res.status(403).json({ error: 'Superadmin only' }));
 
-/**
- * attachScope — resolves the caller's owned-entity ids once per request so
- * per-resource routers can filter without re-querying. Admin tier => wildcard.
- */
-async function attachScope(req, res, next) {
-  try {
-    const user = req.user || {};
-    const roles = user.roles || [];
-    const scope = {
-      isSuperadmin: isSuperadmin(user),
-      isAdmin: isAdminTier(user),
-      roles,
-      teamIds: [],
-      committeeIds: [],
-      poojaIds: [],
-      eventIds: [],
-    };
-
-    if (!scope.isAdmin && user.id) {
-      // resolve the caller's devotee once, and match owned entities by EITHER the
-      // account (lead_id / leader_id / user_id / in_charge_id) OR the devotee
-      // link (lead_devotee_id / leader_devotee_id / …). A leader assigned only by
-      // devotee id — before their account existed — is still scoped correctly.
-      const me = await queryOne('SELECT devotee_id FROM users WHERE id = ?', [user.id]);
-      const devId = (me && me.devotee_id) || -1;   // -1 never matches a real id
-      const ids = rows => [...new Set(rows.map(r => r.id))];
-
-      if (roles.includes('management_lead')) {
-        scope.teamIds = ids(await queryAll(
-          'SELECT id FROM teams WHERE is_deleted = 0 AND (lead_id = ? OR lead_devotee_id = ?)',
-          [user.id, devId]));
-      }
-      if (roles.includes('committee_leader')) {
-        scope.committeeIds = ids(await queryAll(
-          'SELECT id FROM committees WHERE is_deleted = 0 AND (leader_id = ? OR leader_devotee_id = ?)',
-          [user.id, devId]));
-      }
-      if (roles.includes('pooja_coordinator')) {
-        scope.poojaIds = ids(await queryAll(
-          'SELECT pooja_id AS id FROM pooja_coordinator_links WHERE user_id = ? OR devotee_id = ?',
-          [user.id, devId]));
-      }
-      if (roles.includes('event_incharge')) {
-        scope.eventIds = ids(await queryAll(
-          'SELECT id FROM events WHERE is_deleted = 0 AND (in_charge_id = ? OR in_charge_devotee_id = ?)',
-          [user.id, devId]));
-      }
-    }
-
-    req.scope = scope;
-    next();
-  } catch (e) {
-    next(e);
-  }
+/** Every Phase 1 data route needs an account that holds some role. */
+function requireAnyRole(req, res, next) {
+  if (rankOf(req.user) !== 'none') return next();
+  return res.status(403).json({
+    error: 'Your account has no role yet, so there is nothing it can open. ' +
+           'Ask an administrator to give it a role in Accounts & Access.',
+  });
 }
 
 module.exports = {
-  ROLE_PAGES, PRIVILEGED_ROLES,
-  pagesForUser, isSuperadmin, isAdminTier,
-  requireRole, requireSuperadmin, attachScope,
+  ROLE_PAGES, RANK, PRIVILEGED_ROLES,
+  pagesForUser, rankOf, isSuperadmin, isAdminTier,
+  requireRole, requireSuperadmin, requireAnyRole,
 };

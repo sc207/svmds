@@ -1,231 +1,216 @@
-/* Bappa / Bhuvaji padhramani register. Reads + writes: superadmin/admin only
-   (matches ROLE_PAGES) — explicit decision, reversed from an earlier attempt
-   to give it to management_lead. The escort on a visit can be EITHER a
-   Management team OR one or more individual Devotees picked from the
-   central registry (migration 020, visit_escort_devotees roster — mirrors
-   meeting_members/session_members, not a single FK) — mutually exclusive
-   per visit, picked via escortMode ('team' | 'individual'). That's a fact
-   about one field, not a reason to hand Committee/Management broad Visits
-   access. No scoped role currently owns the actual padhramani-scheduling
-   responsibility — revisit only if that ownership is genuinely confirmed.
-   Delete: admin tier (same as everything else here).
-   Links to a devotee by mobile when one exists. */
+/* Bappa / Bhuvaji Padhramni — home & shop visits.
+
+   The person being visited links to the devotee register the same way a
+   sevarthi booking does: pick an existing devotee, or type a new one and
+   it upserts (mobile is the identity key). One or more devotees can be
+   named as the escort leading the visit — a person, not a team, since
+   there is no Management module in Phase 1 to hold a team roster. */
 const express = require('express');
-const crypto = require('crypto');
-const { queryAll, queryOne, run } = require('../db/connection');
-const { requireRole } = require('../middleware/authz');
-const { nextCode } = require('../services/entityCode');
-const { logAudit } = require('../services/audit');
-const { ensureDevotee, digits } = require('../services/people');
-const shared = require('../services/sharedTables');
-const { mapVisit } = require('../utils/mappers');
+const db = require('../db');
+const { log } = require('../middleware/audit');
+const { upsertDevotee } = require('./devotees');
 
 const router = express.Router();
-const adminTier = requireRole('superadmin', 'admin');
-router.use(adminTier);
-const PURPOSE = ['home_inauguration', 'shop_opening', 'wedding_blessing', 'health_blessing', 'business_puja', 'festival_padhramani', 'other'];
-const STATUS = ['requested', 'scheduled', 'confirmed', 'completed', 'cancelled'];
+const STATUSES = ['requested', 'confirmed', 'completed', 'cancelled'];
 
-/* current requester identity + escort team from JOINs. Individual escorts
-   (the visit_escort_devotees roster) are attached separately — see
-   withEscortDevotees / withEscortDevoteesMany — since a roster can't come
-   back as columns on a single visits row. tm.code is selected (not just
-   tm.name) so the frontend <select> can match by the SAME code
-   resolveTeam() accepts, instead of the raw numeric FK id it can't match
-   against Management module team codes. */
-const VISIT_SELECT = `SELECT v.*, dv.code AS devotee_code, dv.name AS dev_name, dv.mobile AS dev_mobile,
-  dv.city AS dev_city, dv.state AS dev_state, tm.code AS escort_team_code, tm.name AS escort_team_name
-  FROM visits v
-  LEFT JOIN devotees dv ON dv.id = v.devotee_id
-  LEFT JOIN teams tm ON tm.id = v.escort_team_id`;
-
-const byIdOrCode = v => queryOne(`${VISIT_SELECT} WHERE (v.id = ? OR v.code = ?) AND v.is_deleted = 0`, [v, v]);
-
-/* resolve an escortTeamId (numeric id or MGMT-### code) to teams.id, else null */
-async function resolveTeam(v) {
-  if (v == null || String(v).trim() === '') return null;
-  const t = await queryOne('SELECT id FROM teams WHERE (id = ? OR code = ?) AND is_deleted = 0',
-    [parseInt(v, 10) || -1, String(v)]);
-  return t ? t.id : null;
+async function escortsOf(visitId) {
+  return db.all(`
+    SELECT d.id, d.full_name, d.mobile, d.city
+      FROM visit_escorts ve JOIN devotees d ON d.id = ve.devotee_id
+     WHERE ve.visit_id = ? ORDER BY d.full_name
+  `, visitId);
 }
 
-/* Full devotee details (not just the bare code shared.getRoster returns) for
-   every individual escort on ONE visit — used by GET /:id, POST, PATCH. */
-async function escortDevoteesOf(visitId) {
-  return queryAll(
-    `SELECT d.id, d.code, d.name, d.mobile, d.city FROM visit_escort_devotees l
-     JOIN devotees d ON d.id = l.devotee_id WHERE l.visit_id = ? AND d.is_deleted = 0 ORDER BY d.name`,
-    [visitId]);
+/* Escorts for a whole list in ONE query — a per-row lookup is a network
+   round trip each on Turso, and the list can be 500 rows. */
+async function attachEscorts(rows) {
+  if (!rows.length) return;
+  const byVisit = new Map(rows.map((r) => [r.id, (r.escorts = [])]));
+  const ids = [...byVisit.keys()];
+  const found = await db.all(`
+    SELECT ve.visit_id, d.id, d.full_name, d.mobile, d.city
+      FROM visit_escorts ve JOIN devotees d ON d.id = ve.devotee_id
+     WHERE ve.visit_id IN (${ids.map(() => '?').join(',')}) ORDER BY d.full_name
+  `, ...ids);
+  for (const { visit_id, ...e } of found) byVisit.get(visit_id).push(e);
 }
-/* Same, batched for GET / (list) — one query instead of one per row. */
-async function escortDevoteesByVisit(visitIds) {
-  const map = {};
-  if (!visitIds.length) return map;
-  const qs = visitIds.map(() => '?').join(',');
-  const rows = await queryAll(
-    `SELECT l.visit_id AS vid, d.id, d.code, d.name, d.mobile, d.city FROM visit_escort_devotees l
-     JOIN devotees d ON d.id = l.devotee_id WHERE l.visit_id IN (${qs}) AND d.is_deleted = 0 ORDER BY d.name`,
-    visitIds);
-  for (const r of rows) (map[r.vid] || (map[r.vid] = [])).push({ id: r.id, code: r.code, name: r.name, mobile: r.mobile, city: r.city });
-  return map;
+
+async function setEscorts(visitId, ids) {
+  await db.run(`DELETE FROM visit_escorts WHERE visit_id = ?`, visitId);
+  for (const id of [...new Set((ids || []).filter(Boolean))]) {
+    await db.run(`INSERT OR IGNORE INTO visit_escorts (visit_id, devotee_id) VALUES (?, ?)`, visitId, id);
+  }
 }
-function withEscort(row, devotees) {
-  return Object.assign(mapVisit(row), {
-    escortMode: (devotees && devotees.length) ? 'individual' : 'team',
-    escortDevotees: devotees || [],
+
+router.get('/', async (req, res) => {
+  const { status, month, search, upcoming } = req.query;
+  const where = [];
+  const params = {};
+  /* Qualified with v. because the join brings a second `mobile` and
+     `city` into scope. */
+  if (status) { where.push(`v.status = @status`); params.status = status; }
+  if (month) { where.push(`substr(v.visit_date,1,7) = @month`); params.month = month; }
+  if (upcoming === '1') {
+    where.push(`v.visit_date >= date('now','+330 minutes') AND v.status <> 'cancelled'`);
+  }
+  if (search) {
+    where.push(`(v.devotee_name LIKE @q OR v.mobile LIKE @q OR v.city LIKE @q
+                 OR v.address LIKE @q OR d.full_name LIKE @q OR d.mobile LIKE @q
+                 OR d.city LIKE @q)`);
+    params.q = `%${String(search).trim()}%`;
+  }
+
+  /* A visit only stores mobile/city when this particular padhramni is
+     somewhere other than the devotee's usual place. Picking a devotee
+     from the register and leaving those blank is the normal case, so
+     fall back to the register rather than showing a row with nothing
+     on it but a date. `visit_*` keeps the visit's own value, which is
+     what the edit form must not overwrite. */
+  const rows = await db.all(
+    `SELECT v.id, v.devotee_id, v.purpose, v.address, v.visit_date, v.visit_time,
+            v.status, v.notes, v.created_at, v.updated_at,
+            COALESCE(d.full_name, v.devotee_name) AS devotee_name,
+            COALESCE(v.mobile, d.mobile)          AS mobile,
+            COALESCE(v.city,   d.city)            AS city,
+            v.mobile AS visit_mobile, v.city AS visit_city,
+            d.state, d.mul_vatan,
+            (SELECT value FROM lookups WHERE id = d.samaj_id) AS samaj
+       FROM visits v LEFT JOIN devotees d ON d.id = v.devotee_id
+      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+      ${/* A view of visits still to happen is a queue to work through,
+            so it reads soonest first. Completed visits, and "all", are
+            a record, so they read newest first. */''}
+      ORDER BY v.visit_date ${
+        upcoming === '1' || status === 'requested' || status === 'confirmed' ? 'ASC' : 'DESC'
+      }, v.visit_time
+      LIMIT 500`,
+    params);
+  await attachEscorts(rows);
+  res.json(rows);
+});
+
+router.get('/:id', async (req, res) => {
+  /* The form edits the visit's own columns, so they come back raw —
+     the devotee's details ride alongside as placeholders, so an
+     operator can see what will be used without it being silently
+     copied onto the visit. */
+  const row = await db.get(`
+    SELECT v.*, d.mobile AS devotee_mobile, d.city AS devotee_city
+      FROM visits v LEFT JOIN devotees d ON d.id = v.devotee_id
+     WHERE v.id = ?`, req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  row.escorts = await escortsOf(row.id);
+  res.json(row);
+});
+
+router.post('/', async (req, res) => {
+  const b = req.body;
+  let name = String(b.devotee_name || '').trim();
+  if (!b.visit_date) return res.status(400).json({ error: 'Visit date is required' });
+
+  if (!name && !b.devotee_id) return res.status(400).json({ error: 'Pick or add the devotee being visited' });
+
+  /* The devotee upsert, the visit and its escorts land together. */
+  const id = await db.tx(async () => {
+    // Pick an existing devotee, or upsert a new one from the typed name/mobile.
+    let devoteeId = b.devotee_id || null;
+    if (!devoteeId && name) {
+      devoteeId = (await upsertDevotee(req, {
+        full_name: name, mobile: b.mobile, city: b.city,
+      })).id;
+    }
+    if (!name && devoteeId) {
+      const d = await db.get(`SELECT full_name FROM devotees WHERE id = ?`, devoteeId);
+      name = d ? d.full_name : '';
+    }
+    if (!name) throw Object.assign(new Error('Pick or add the devotee being visited'), { status: 400 });
+
+    const info = await db.run(`
+      INSERT INTO visits (devotee_id, devotee_name, mobile, purpose, address, city, visit_date, visit_time, status, notes)
+      VALUES (@devotee_id, @devotee_name, @mobile, @purpose, @address, @city, @visit_date, @visit_time, @status, @notes)
+    `, {
+      devotee_id: devoteeId,
+      devotee_name: name,
+      mobile: (b.mobile || '').trim() || null,
+      purpose: (b.purpose || '').trim() || null,
+      address: (b.address || '').trim() || null,
+      city: (b.city || '').trim() || null,
+      visit_date: b.visit_date,
+      visit_time: (b.visit_time || '').trim() || null,
+      status: STATUSES.includes(b.status) ? b.status : 'requested',
+      notes: (b.notes || '').trim() || null,
+    });
+    const newId = Number(info.lastInsertRowid);
+    await setEscorts(newId, b.escort_ids);
+    return newId;
   });
-}
 
-router.get('/', async (req, res, next) => {
-  try {
-    const where = ['v.is_deleted = 0'];
-    const args = [];
-    if (req.query.status) { where.push('v.status = ?'); args.push(req.query.status); }
-    if (req.query.from) { where.push('v.date >= ?'); args.push(req.query.from); }
-    if (req.query.to) { where.push('v.date <= ?'); args.push(req.query.to); }
-    if (req.query.q) {
-      where.push('(v.devotee_name LIKE ? OR dv.name LIKE ? OR v.mobile LIKE ? OR v.city LIKE ? OR v.code LIKE ?)');
-      const like = `%${req.query.q}%`;
-      args.push(like, like, like, like, like);
-    }
-    const rows = await queryAll(`${VISIT_SELECT} WHERE ${where.join(' AND ')} ORDER BY v.date DESC, v.time`, args);
-    const escortMap = await escortDevoteesByVisit(rows.map(r => r.id));
-    res.json(rows.map(r => withEscort(r, escortMap[r.id])));
-  } catch (e) { next(e); }
+  const row = await db.get(`SELECT * FROM visits WHERE id = ?`, id);
+  row.escorts = await escortsOf(id);
+  await log(req, {
+    action: 'create', entity: 'visit', entityId: row.id,
+    summary: `Padhramni booked for ${name} on ${b.visit_date}` +
+             (row.escorts.length ? ` — escort: ${row.escorts.map((e) => e.full_name).join(', ')}` : ''),
+    details: row,
+  });
+  res.status(201).json(row);
 });
 
-router.get('/:id', async (req, res, next) => {
-  try {
-    const row = await byIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Visit not found' });
-    res.json(withEscort(row, await escortDevoteesOf(row.id)));
-  } catch (e) { next(e); }
+router.put('/:id', async (req, res) => {
+  const row = await db.get(`SELECT * FROM visits WHERE id = ?`, req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  const b = req.body;
+
+  let devoteeId = b.devotee_id !== undefined ? b.devotee_id : row.devotee_id;
+  let name = b.devotee_name !== undefined ? String(b.devotee_name).trim() : row.devotee_name;
+  await db.tx(async () => {
+    if (!devoteeId && name && b.devotee_name !== undefined) {
+      devoteeId = (await upsertDevotee(req, { full_name: name, mobile: b.mobile, city: b.city })).id;
+    }
+    await db.run(`
+      UPDATE visits SET devotee_id=@devotee_id, devotee_name=@devotee_name, mobile=@mobile, purpose=@purpose,
+             address=@address, city=@city, visit_date=@visit_date, visit_time=@visit_time, status=@status,
+             notes=@notes, updated_at=datetime('now','+330 minutes')
+       WHERE id=@id
+    `, {
+      id: row.id,
+      devotee_id: devoteeId,
+      devotee_name: name,
+      mobile: b.mobile ?? row.mobile,
+      purpose: b.purpose ?? row.purpose,
+      address: b.address ?? row.address,
+      city: b.city ?? row.city,
+      visit_date: b.visit_date ?? row.visit_date,
+      visit_time: b.visit_time ?? row.visit_time,
+      status: STATUSES.includes(b.status) ? b.status : row.status,
+      notes: b.notes ?? row.notes,
+    });
+    if (b.escort_ids !== undefined) await setEscorts(row.id, b.escort_ids);
+  });
+
+  const updated = await db.get(`SELECT * FROM visits WHERE id = ?`, row.id);
+  updated.escorts = await escortsOf(row.id);
+  await log(req, {
+    action: 'update', entity: 'visit', entityId: row.id,
+    summary: `Padhramni for ${updated.devotee_name} — ${updated.status} (${updated.visit_date})`,
+  });
+  res.json(updated);
 });
 
-router.post('/', async (req, res, next) => {
-  try {
-    const b = req.body || {};
-    const name = String(b.devoteeName || '').trim();
-    if (!name) return res.status(400).json({ error: 'devoteeName is required' });
-    if (!b.date || !/^\d{4}-\d{2}-\d{2}$/.test(b.date)) return res.status(400).json({ error: 'date (YYYY-MM-DD) is required' });
-    if (b.purpose !== undefined && !PURPOSE.includes(b.purpose)) return res.status(400).json({ error: 'bad purpose' });
-    if (b.status !== undefined && !STATUS.includes(b.status)) return res.status(400).json({ error: 'bad status' });
-    const purpose = b.purpose || 'other';
-    const status = b.status || 'requested';
-    const mobile = digits(b.mobile);
-    if (mobile && mobile.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
-    const city = String(b.city || '').trim();
-
-    // a padhramani is for a person → link to the shared devotee row, but only
-    // when the person is identifiable (explicit id, a 10-digit mobile, or a
-    // name + city). A bare name alone stays unlinked (still stored on the visit).
-    let devoteeId = null;
-    if (b.devoteeId != null && String(b.devoteeId).trim()) {
-      const d = await queryOne('SELECT id FROM devotees WHERE (id = ? OR code = ?) AND is_deleted = 0',
-        [parseInt(b.devoteeId, 10) || -1, String(b.devoteeId)]);
-      if (!d) return res.status(400).json({ error: 'That devotee no longer exists' });
-      devoteeId = d.id;
-    } else if ((mobile && mobile.length === 10) || city) {
-      devoteeId = await ensureDevotee({ name, mobile, city, state: b.state });
-    }
-    // escort is EITHER a Management team OR one-or-more individual Devotees,
-    // never both — escortMode decides which side of the request body is
-    // honored (escortDevoteeIds is an array; escort_devotee ids/codes it holds
-    // go through shared.setRoster, same as meeting_members/session_members).
-    const escortMode = b.escortMode === 'individual' ? 'individual' : 'team';
-    const escortTeamId = escortMode === 'team' ? await resolveTeam(b.escortTeamId) : null;
-    const id = crypto.randomUUID();
-    const code = await nextCode('visit');
-    await run(
-      `INSERT INTO visits (id, code, devotee_name, devotee_id, mobile, purpose, address, city, state, date, time, escort_team, escort_team_id, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, code, name, devoteeId, mobile, purpose, b.address || '', city, b.state || 'Gujarat',
-       b.date, b.time || '', escortMode === 'team' ? (b.escortTeam || '') : '', escortTeamId, status, b.notes || '']
-    );
-    if (escortMode === 'individual' && Array.isArray(b.escortDevoteeIds) && b.escortDevoteeIds.length) {
-      await shared.setRoster('visit-escort', id, b.escortDevoteeIds);
-    }
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Visits',
-      action: 'CREATE', entityType: 'visit', entityId: code, details: { name, purpose } });
-    const row = await byIdOrCode(id);
-    res.status(201).json(withEscort(row, await escortDevoteesOf(row.id)));
-  } catch (e) { next(e); }
-});
-
-router.patch('/:id', async (req, res, next) => {
-  try {
-    const row = await byIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Visit not found' });
-    const b = req.body || {};
-    const sets = [], args = [];
-    for (const [k, col] of Object.entries({
-      devoteeName: 'devotee_name', address: 'address', city: 'city', state: 'state',
-      time: 'time', escortTeam: 'escort_team', notes: 'notes',
-    })) {
-      if (typeof b[k] === 'string') { sets.push(`${col} = ?`); args.push(b[k]); }
-    }
-    if (b.mobile !== undefined) {
-      const m = digits(b.mobile);
-      if (m && m.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
-      sets.push('mobile = ?'); args.push(m);
-    }
-    // re-resolve the devotee link when the identifying fields change and the
-    // visit isn't already tied to a devotee the user picked explicitly
-    if ((b.devoteeName !== undefined || b.mobile !== undefined || b.city !== undefined)) {
-      const nm = b.devoteeName !== undefined ? String(b.devoteeName).trim() : row.devotee_name;
-      const mob = b.mobile !== undefined ? digits(b.mobile) : row.mobile;
-      const cty = b.city !== undefined ? String(b.city).trim() : row.city;
-      if ((mob && mob.length === 10) || cty) {
-        const devId = await ensureDevotee({ name: nm, mobile: mob, city: cty, state: b.state || row.state });
-        if (devId && devId !== row.devotee_id) { sets.push('devotee_id = ?'); args.push(devId); }
-      }
-    }
-    if (b.date !== undefined) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) return res.status(400).json({ error: 'bad date' });
-      sets.push('date = ?'); args.push(b.date);
-    }
-    if (b.purpose !== undefined) {
-      if (!PURPOSE.includes(b.purpose)) return res.status(400).json({ error: 'bad purpose' });
-      sets.push('purpose = ?'); args.push(b.purpose);
-    }
-    if (b.status !== undefined) {
-      if (!STATUS.includes(b.status)) return res.status(400).json({ error: 'bad status' });
-      sets.push('status = ?'); args.push(b.status);
-    }
-    let escortRosterUpdate = null;   // deferred until after the UPDATE below
-    if (b.escortMode !== undefined) {
-      if (b.escortMode === 'individual') {
-        sets.push('escort_team_id = ?'); args.push(null);
-        sets.push('escort_team = ?'); args.push('');
-        escortRosterUpdate = Array.isArray(b.escortDevoteeIds) ? b.escortDevoteeIds : [];
-      } else {
-        sets.push('escort_team_id = ?'); args.push(await resolveTeam(b.escortTeamId));
-        escortRosterUpdate = [];   // switching to team mode clears any individual roster
-      }
-    }
-    if (!sets.length && escortRosterUpdate === null) return res.json(withEscort(row, await escortDevoteesOf(row.id)));
-    if (sets.length) {
-      sets.push(`updated_at = datetime('now')`);
-      args.push(row.id);
-      await run(`UPDATE visits SET ${sets.join(', ')} WHERE id = ?`, args);
-    }
-    if (escortRosterUpdate !== null) await shared.setRoster('visit-escort', row.id, escortRosterUpdate);
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Visits',
-      action: 'UPDATE', entityType: 'visit', entityId: row.code });
-    const fresh = await byIdOrCode(row.id);
-    res.json(withEscort(fresh, await escortDevoteesOf(fresh.id)));
-  } catch (e) { next(e); }
-});
-
-router.delete('/:id', adminTier, async (req, res, next) => {
-  try {
-    const row = await byIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Visit not found' });
-    await run(`UPDATE visits SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [row.id]);
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Visits',
-      action: 'DELETE', entityType: 'visit', entityId: row.code });
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+router.delete('/:id', async (req, res) => {
+  const row = await db.get(`SELECT * FROM visits WHERE id = ?`, req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  /* Escorts explicitly — ON DELETE CASCADE needs foreign_keys, which is
+     not guaranteed on every connection to Turso. */
+  await db.tx(async () => {
+    await db.run(`DELETE FROM visit_escorts WHERE visit_id = ?`, row.id);
+    await db.run(`DELETE FROM visits WHERE id = ?`, row.id);
+  });
+  await log(req, {
+    action: 'delete', entity: 'visit', entityId: row.id,
+    summary: `Deleted padhramni for ${row.devotee_name} (${row.visit_date})`, details: row,
+  });
+  res.json({ ok: true });
 });
 
 module.exports = router;

@@ -23,7 +23,7 @@ router.delete('/others', async (req, res, next) => {
   try {
     await run('UPDATE sessions SET revoked = 1 WHERE revoked = 0 AND user_id = ? AND id != ?',
       [req.user.id, req.user.jti || '']);
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Auth',
+    await logAudit({ userId: req.user.id, userEmail: req.user.email, userName: req.user.name, module: 'Auth',
       action: 'REVOKE', entityType: 'session', entityId: 'others' });
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -33,7 +33,7 @@ router.delete('/others', async (req, res, next) => {
 router.delete('/all', requireRole('superadmin', 'admin'), async (req, res, next) => {
   try {
     await run('UPDATE sessions SET revoked = 1 WHERE revoked = 0 AND id != ?', [req.user.jti || '']);
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Auth',
+    await logAudit({ userId: req.user.id, userEmail: req.user.email, userName: req.user.name, module: 'Auth',
       action: 'REVOKE', entityType: 'session', entityId: 'all' });
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -48,7 +48,7 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
     await run('UPDATE sessions SET revoked = 1 WHERE id = ?', [req.params.id]);
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Auth',
+    await logAudit({ userId: req.user.id, userEmail: req.user.email, userName: req.user.name, module: 'Auth',
       action: 'REVOKE', entityType: 'session', entityId: req.params.id });
     res.json({ ok: true });
   } catch (e) { next(e); }

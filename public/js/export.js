@@ -1,486 +1,299 @@
 /* ============================================================
-   EXPORT SERVICE  —  one place for every "save as ..." action
+   EXPORT — the list you are looking at, as a file
    ------------------------------------------------------------
-   Loaded right after people.js so every module can call it.
+   Two outputs, one definition. A page declares its columns once
+   (`{ key, label, value(row), type }`) and both the spreadsheet and the
+   printed sheet are built from that list, so they can never disagree
+   about what a report contains.
 
-   Public API (all global):
-     registerExport(key, builderFn)   builderFn -> { filename, title,
-                                       subtitle?, columns:[], rows:[[]],
-                                       meta?:[] }  (called fresh on click)
-     exportBar(key, opts?)            -> HTML for a CSV / Excel / PDF pill
-     runExport(key, kind)             kind = 'csv' | 'xls' | 'pdf'
-     downloadCSV(filename, rows)      rows = [[...header], [...], ...]
-     downloadXLS(filename, rows, sheetName?)
-     printReportPDF({title, subtitle, columns, rows, meta})
-                                      certificate-grade A4 report window
+   Three rules, learned from doing this badly elsewhere:
+
+   1. **Export what the filter says, not what the screen shows.** The
+      lists page at 25 rows; an export that stopped at the page boundary
+      would quietly hand the trust a quarter of the answer. Pages keep
+      their fetched rows in module state, so the export takes all of
+      them — filtered and sorted as the operator left them.
+   2. **Say what it was filtered by.** A printed sheet that says
+      "15 sevarthi" without saying "still to collect" is a sheet nobody
+      can check a month later. Every export stamps its filters, its
+      totals and when it was taken.
+   3. **Amounts are numbers, not text.** ₹21,00,000 in a CSV cell is a
+      string Excel cannot sum. The formatted form belongs on the printed
+      sheet; the spreadsheet gets 2100000.
    ============================================================ */
-
-(function () {
+(function (global) {
   'use strict';
+  const { esc, attr, money, num, fmtDate, icon } = UI;
 
-  var _EXPORTS = {};
+  /* ---------- CSV ----------
+     Excel opens a .csv natively, which is why this is the "Excel"
+     export: it needs no library, and nothing is fetched at runtime —
+     the app has to work at the mandir with no connection. */
 
-  function xesc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  /** A leading = + - @ makes Excel treat the cell as a formula, so a
+      devotee's note could execute when the file is opened. Prefix it
+      with an apostrophe, which Excel strips on display. */
+  function deFang(s) {
+    return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
   }
 
-  /* Absolute URL for a bundled asset — works from the main document AND from
-     the about:blank print windows, and under a GitHub Pages sub-path. */
-  function assetURL(file) {
-    try {
-      var u = new URL(file, document.baseURI).href;
-      if (u) return u;
-    } catch (e) {}
-    try {
-      var base = String(document.baseURI || location.href).replace(/[?#].*$/, '').replace(/[^/]*$/, '');
-      return base + String(file).replace(/^\.?\//, '');
-    } catch (e2) { return file; }
-  }
-  window.assetURL = assetURL;
-
-  function toast(msg) {
-    if (typeof window.showToast === 'function') window.showToast(msg);
-    else if (typeof window.mgToast === 'function') window.mgToast(msg);
-  }
-
-  var FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&family=Noto+Serif+Devanagari:wght@400;600;700&family=Noto+Serif+Gujarati:wght@400;600;700&family=Noto+Sans+Gujarati:wght@400;600;700&display=swap');";
-
-  /* Open a print / save-as-PDF window that actually carries the app's styles.
-     We LINK css/styles.css (a stylesheet <link> always applies, even on file://
-     — only JS reading of .cssRules is blocked, which is why the old
-     serialise-every-rule approach produced an unstyled page), and we wait for
-     `window.load` (fonts + images ready) before calling print(). */
-  window.openPrintDoc = function (opt) {
-    opt = opt || {};
-    var w = window.open('', '_blank');
-    if (!w) { toast('Please allow pop-ups to print / save as PDF.'); return null; }
-    var href = assetURL('css/styles.css');
-    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' +
-      xesc(opt.title || 'Temple Document') + '</title>' +
-      '<link rel="stylesheet" href="' + href + '">' +
-      '<style>' + FONT_IMPORT +
-      'html,body{background:#fff;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}' +
-      'body{font-family:Inter,system-ui,sans-serif}' +
-      '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '@media print{html,body{background:#fff}}' +
-      (opt.css || '') + '</style></head><body>' +
-      '<div class="' + (opt.wrapClass || 'tpl-print-wrap') + '">' + (opt.inner || '') + '</div>' +
-      /* Only print once styles, fonts AND images are really ready — a fixed
-         timer used to fire window.print() before the linked stylesheet had
-         parsed, so the page printed unstyled and every sheet collapsed onto
-         one printed page. */
-      '<' + 'script>(function(){var d=false;' +
-      'function go(){if(d)return;d=true;try{window.focus()}catch(e){}try{window.print()}catch(e){}}' +
-      'function cssReady(){var ls=document.querySelectorAll(\'link[rel="stylesheet"]\');' +
-      'for(var i=0;i<ls.length;i++){var s;try{s=ls[i].sheet}catch(e){return false}' +
-      'if(!s)return false;try{if(!s.cssRules||!s.cssRules.length)return false}catch(e){}}return true}' +
-      'function imgReady(){var im=document.images;for(var i=0;i<im.length;i++){if(!im[i].complete)return false}return true}' +
-      'if(document.fonts&&document.fonts.ready){try{document.fonts.ready.then(function(){},function(){})}catch(e){}}' +
-      'function whenReady(){var n=0;(function poll(){n++;' +
-      'var fontsOk=(!document.fonts)||document.fonts.status==="loaded"||n>40;' +
-      'if((cssReady()&&imgReady()&&fontsOk)||n>60){setTimeout(go,250)}else{setTimeout(poll,100)}})()}' +
-      'if(document.readyState==="complete"){whenReady()}else{window.addEventListener("load",whenReady)}' +
-      'setTimeout(go,9000);})();<' + '/script></body></html>';
-    w.document.open(); w.document.write(html); w.document.close();
-    return w;
-  };
-
-  function templeInfo() {
-    var d = {
-      name: 'Shri Vihat Meldi Dham', loc: 'Sanand, Gujarat, India',
-      founder: 'Bhagwan Bhuvaji Karamshi Bapa', head: 'Bhuvaji Suresh Bapa'
-    };
-    try {
-      var c = JSON.parse(localStorage.getItem('svmmm_temple') || '{}');
-      if (c.name) d.name = c.name;
-      if (c.loc) d.loc = c.loc;
-      if (c.founder) d.founder = c.founder;
-      if (c.head) d.head = c.head;
-    } catch (e) {}
-    return d;
-  }
-
-  function stamp() {
-    var dt = new Date();
-    try {
-      return dt.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch (e) { return dt.toISOString().slice(0, 16).replace('T', ' '); }
-  }
-
-  function downloadBlob(filename, blob) {
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
-  }
-
-  /* ---- CSV ---- */
-  function downloadCSV(filename, rows) {
-    var csv = (rows || []).map(function (r) {
-      return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
-    }).join('\r\n');
-    downloadBlob(
-      /\.csv$/i.test(filename) ? filename : filename + '.csv',
-      new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-    );
-    toast((filename.replace(/\.csv$/i, '')) + '.csv exported.');
-  }
-
-  /* ---- Excel (.xls, Excel-openable HTML workbook) ---- */
-  function downloadXLS(filename, rows, sheetName) {
-    sheetName = (sheetName || 'Sheet1').replace(/[^A-Za-z0-9 _-]/g, '').slice(0, 28) || 'Sheet1';
-    var body = (rows || []).map(function (r, i) {
-      var tag = i === 0 ? 'th' : 'td';
-      return '<tr>' + r.map(function (c) {
-        var v = String(c == null ? '' : c);
-        var isNum = v !== '' && /^-?[₹]?\s?[\d,]+(\.\d+)?%?$/.test(v);
-        return '<' + tag + (isNum ? ' style="mso-number-format:\'\\@\'"' : '') + '>' + xesc(v) + '</' + tag + '>';
-      }).join('') + '</tr>';
-    }).join('');
-    var html =
-      '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">' +
-      '<head><meta charset="utf-8">' +
-      '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>' +
-      '<x:Name>' + xesc(sheetName) + '</x:Name>' +
-      '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>' +
-      '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->' +
-      '<style>' +
-      'table{border-collapse:collapse}' +
-      'th{background:#6B1F2A;color:#fff;font-family:Calibri,Arial,sans-serif;font-size:11pt;padding:5px 8px;border:1px solid #b98;text-align:left}' +
-      'td{font-family:Calibri,Arial,sans-serif;font-size:11pt;padding:4px 8px;border:1px solid #d9c7ad}' +
-      '</style></head><body><table>' + body + '</table></body></html>';
-    downloadBlob(
-      /\.xls$/i.test(filename) ? filename : filename + '.xls',
-      new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' })
-    );
-    toast((filename.replace(/\.xls$/i, '')) + '.xls exported.');
-  }
-
-  /* ---- Certificate-grade PDF report ----------------------------------------
-     Rendered device-independently: the report HTML is laid out in a FIXED-WIDTH
-     off-screen node (never the device viewport), rasterised with html2canvas,
-     and each page's image is placed into a real pdfMake PDF that .download()s
-     the same on desktop and mobile. Rows are paginated at the row level so a
-     row is never cut and the header repeats on every page. Falls back to the
-     browser print window if the PDF engine can't load. ---------------------- */
-  function reportCss(wide, tblFont) {
-    var pageW = wide ? '297mm' : '210mm';
-    return "@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Cormorant+Garamond:ital@0;1&family=Inter:wght@400;600;700&family=Noto+Serif+Gujarati:wght@400;600;700&family=Noto+Sans+Gujarati:wght@400;600;700&display=swap');" +
-      '*{box-sizing:border-box}' +
-      '.rptdoc{margin:0;padding:0;background:#fff;font-family:"Inter","Noto Sans Gujarati",sans-serif}' +
-      '.rpt{position:relative;width:' + pageW + ';min-height:190mm;background:#fff;overflow:hidden}' +
-      '.rc{position:absolute;width:54px;height:54px;pointer-events:none;background:linear-gradient(#b8892f,#b8892f) left top/100% 3px no-repeat,linear-gradient(#b8892f,#b8892f) left top/3px 100% no-repeat}' +
-      '.rc.tl{top:14px;left:14px}.rc.tr{top:14px;right:14px;transform:scaleX(-1)}.rc.bl{bottom:14px;left:14px;transform:scaleY(-1)}.rc.br{bottom:14px;right:14px;transform:scale(-1)}' +
-      '.rpt-hero{position:absolute;right:-24px;bottom:-20px;width:40%;opacity:.06;pointer-events:none}' +
-      '.rpt-in{position:relative;padding:14mm 15mm 12mm}' +
-      '.rpt-head{text-align:center;border-bottom:2px solid #6B1F2A;padding-bottom:10px}' +
-      '.rpt-emblem{width:50px;height:50px;border-radius:50%;object-fit:cover;border:2px solid #C9A24A}' +
-      '.rpt-temple{font-family:"Cinzel",serif;font-weight:800;font-size:16px;color:#6B1F2A;letter-spacing:.5px;margin-top:6px}' +
-      '.rpt-loc{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#8a7a5c;margin-top:2px}' +
-      '.rpt-dign{font-size:8.5px;color:#8a7a5c;margin-top:4px;font-style:italic}' +
-      '.rpt-ribbon{text-align:center;font-family:"Cinzel","Noto Serif Gujarati",serif;letter-spacing:2.5px;text-transform:uppercase;font-size:12.5px;color:#6B1F2A;margin:12px 0 2px;font-weight:700}' +
-      '.rpt-ribbon i{color:#C9A24A;font-style:normal;margin:0 10px;font-size:9px;vertical-align:middle}' +
-      '.rpt-sub{text-align:center;font-family:"Cormorant Garamond","Noto Serif Gujarati",serif;font-style:italic;color:#5b4a37;font-size:12.5px;margin-bottom:10px}' +
-      '.rpt-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 16px;font-size:9px;color:#8a7a5c;margin-bottom:12px}' +
-      '.rpt-meta strong{color:#3B2418}' +
-      'table.rpt-t{width:100%;border-collapse:collapse;font-family:"Inter","Noto Sans Gujarati",sans-serif;font-size:' + tblFont + ';table-layout:fixed}' +
-      '.rpt-t th,.rpt-t td{overflow-wrap:anywhere;word-break:break-word;white-space:normal}' +
-      '.rpt-t thead th{background:#6B1F2A;color:#fff;text-align:left;padding:6px 8px;font-weight:700;font-size:8px;letter-spacing:.4px;text-transform:uppercase}' +
-      '.rpt-t tbody td{padding:5px 8px;border-bottom:1px solid #e5d5c0;color:#3B2418;vertical-align:top}' +
-      '.rpt-t tbody tr:nth-child(even) td{background:#faf6ec}' +
-      '.rpt-foot{margin-top:14px;border-top:1px solid #C9A24A;padding-top:8px;display:flex;justify-content:space-between;align-items:flex-end;font-size:8px;color:#8a7a5c}' +
-      '.rpt-sign{text-align:center}.rpt-sign span{display:block;width:150px;border-top:1px solid #3B2418;margin-bottom:3px}' +
-      '.rpt-pg{font-size:8px;color:#8a7a5c}';
-  }
-
-  function reportPageHtml(opt, chunk, pageIx, pageCount, wide) {
-    var tpl = templeInfo();
-    var cols = opt.columns || [];
-    var metaBits = ['Generated <strong>' + xesc(stamp()) + '</strong>',
-      'Records <strong>' + (opt.rows || []).length + '</strong>'].concat((opt.meta || []).map(xesc));
-    return '<div class="rpt">' +
-      '<span class="rc tl"></span><span class="rc tr"></span><span class="rc bl"></span><span class="rc br"></span>' +
-      '<img class="rpt-hero" src="' + assetURL('assets/temple.png') + '" alt="" crossorigin="anonymous" onerror="this.style.display=\'none\'">' +
-      '<div class="rpt-in">' +
-      '<div class="rpt-head"><img class="rpt-emblem" src="' + assetURL('assets/icon.png') + '" alt="" crossorigin="anonymous" onerror="this.style.display=\'none\'">' +
-      '<div class="rpt-temple">' + xesc(tpl.name) + '</div><div class="rpt-loc">' + xesc(tpl.loc) + '</div>' +
-      '<div class="rpt-dign">Founder: ' + xesc(tpl.founder) + ' &nbsp;·&nbsp; Head: ' + xesc(tpl.head) + '</div></div>' +
-      '<div class="rpt-ribbon"><i>&#9670;</i>' + xesc(opt.title || 'Report') + '<i>&#9670;</i></div>' +
-      (opt.subtitle ? '<div class="rpt-sub">' + xesc(opt.subtitle) + '</div>' : '') +
-      '<div class="rpt-meta">' + metaBits.map(function (m) { return '<span>' + m + '</span>'; }).join('') + '</div>' +
-      '<table class="rpt-t"><thead><tr>' + cols.map(function (c) { return '<th>' + xesc(c) + '</th>'; }).join('') + '</tr></thead>' +
-      '<tbody>' + (chunk.length
-        ? chunk.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + xesc(c) + '</td>'; }).join('') + '</tr>'; }).join('')
-        : '<tr><td colspan="' + Math.max(cols.length, 1) + '" style="text-align:center;color:#8a7a5c;padding:18px">No records.</td></tr>') +
-      '</tbody></table>' +
-      '<div class="rpt-foot"><div>System-generated report &middot; ' + xesc(tpl.name) + '<br>' +
-      xesc(String(location.href).split('#')[0]) + '</div>' +
-      (pageCount > 1 ? '<div class="rpt-pg">Page ' + (pageIx + 1) + ' / ' + pageCount + '</div>' : '') +
-      '<div class="rpt-sign"><span></span>Authorised Signatory / Trustee</div></div>' +
-      '</div></div>';
-  }
-
-  function fontsSettled() {
-    return new Promise(function (res) {
-      var done = false, n = 0;
-      function fin() { if (!done) { done = true; res(); } }
-      try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(fin, fin); } catch (e) {}
-      (function poll() { n++; if (n > 30) return fin(); setTimeout(poll, 60); })();
-      setTimeout(fin, 2500);
-    });
-  }
-
-  function chunk(arr, n) {
-    var out = [];
-    for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
-    return out.length ? out : [[]];
-  }
-
-  async function printReportPDF(opt) {
-    opt = opt || {};
-    var cols = opt.columns || [];
-    var rows = opt.rows || [];
-    var wide = cols.length >= 8;                                   // many cols -> A4 landscape
-    var tblFont = cols.length >= 11 ? '8px' : (wide ? '8.6px' : '10px');
-    var perPage = wide ? 12 : 18;
-
-    var libs;
-    try { libs = await ensurePdfLibs(); }
-    catch (e) { return legacyPrintReportPDF(opt); }               // engine unavailable -> print window
-
-    try {
-      toast('Preparing PDF…');
-      var groups = chunk(rows, perPage);
-      var host = document.createElement('div');
-      host.className = 'rptdoc';
-      host.style.cssText = 'position:fixed;left:-99999px;top:0;z-index:-1;background:#fff';
-      var st = document.createElement('style');
-      st.textContent = reportCss(wide, tblFont);
-      host.appendChild(st);
-      var page = document.createElement('div');
-      host.appendChild(page);
-      document.body.appendChild(host);
-
-      var images = [];
-      for (var i = 0; i < groups.length; i++) {
-        page.innerHTML = reportPageHtml(opt, groups[i], i, groups.length, wide);
-        var rptEl = page.querySelector('.rpt');
-        await fontsSettled();
-        var canvas = await libs.html2canvas(rptEl, {
-          scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, imageTimeout: 5000,
-          windowWidth: (rptEl && rptEl.offsetWidth) || (wide ? 1123 : 794),
-        });
-        images.push({ data: canvas.toDataURL('image/jpeg', 0.92), w: canvas.width, h: canvas.height });
-      }
-      document.body.removeChild(host);
-
-      var M = 22;                                                  // pt margin
-      var pageWpt = (wide ? 841.89 : 595.28) - 2 * M;
-      var pageHpt = (wide ? 595.28 : 841.89) - 2 * M;
-      var content = images.map(function (im, i) {
-        var w = pageWpt, h = w * im.h / im.w;
-        if (h > pageHpt) { h = pageHpt; w = h * im.w / im.h; }     // never overflow the page
-        return { image: im.data, width: w, alignment: 'center', pageBreak: i ? 'before' : undefined };
-      });
-      libs.pdfMake.createPdf({
-        pageSize: 'A4', pageOrientation: wide ? 'landscape' : 'portrait',
-        pageMargins: [M, M, M, M], content: content,
-      }).download((opt.filename || 'report') + '.pdf');
-    } catch (e) {
-      try { document.querySelectorAll('.rptdoc').forEach(function (n) { n.remove(); }); } catch (_) {}
-      legacyPrintReportPDF(opt);                                   // any failure -> print window
+  function csvCell(v, type) {
+    if (v === null || v === undefined) return '';
+    if (type === 'money' || type === 'num') {
+      const n = Number(v);
+      return Number.isFinite(n) ? String(n) : '';   // bare, so SUM() works
     }
+    const s = deFang(String(v));
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
 
-  /* ---- fallback: browser print window (kept for when the PDF engine fails) ---- */
-  function legacyPrintReportPDF(opt) {
-    opt = opt || {};
-    var cols = opt.columns || [];
-    var rows = opt.rows || [];
-    var tpl = templeInfo();
-    var wide = cols.length >= 8;                    // many columns -> A4 landscape
-    var pageW = wide ? '297mm' : '210mm';
-    var tblFont = cols.length >= 11 ? '8px' : (wide ? '8.6px' : '10px');
-    var w = window.open('', '_blank');
-    if (!w) { toast('Please allow pop-ups to save as PDF.'); return; }
-
-    var metaBits = ['Generated <strong>' + xesc(stamp()) + '</strong>',
-      'Records <strong>' + rows.length + '</strong>'].concat((opt.meta || []).map(xesc));
-
-    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' +
-      xesc(opt.title || 'Temple Report') + '</title><style>' +
-      "@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Cormorant+Garamond:ital@0;1&family=Inter:wght@400;600;700&family=Noto+Serif+Gujarati:wght@400;600;700&display=swap');" +
-      '*{box-sizing:border-box}' +
-      'html,body{margin:0;padding:0;background:#efe7d7;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.rpt{position:relative;width:' + pageW + ';min-height:297mm;margin:14px auto;background:#fff;overflow:hidden;box-shadow:0 12px 40px rgba(59,20,23,.25)}' +
-      '.rc{position:absolute;width:60px;height:60px;pointer-events:none;background:linear-gradient(#b8892f,#b8892f) left top/100% 3px no-repeat,linear-gradient(#b8892f,#b8892f) left top/3px 100% no-repeat}' +
-      '.rc.tl{top:16px;left:16px}.rc.tr{top:16px;right:16px;transform:scaleX(-1)}.rc.bl{bottom:16px;left:16px;transform:scaleY(-1)}.rc.br{bottom:16px;right:16px;transform:scale(-1)}' +
-      '.rpt-hero{position:absolute;right:-28px;bottom:-24px;width:44%;opacity:.06;pointer-events:none}' +
-      '.rpt-in{position:relative;padding:22mm 17mm 18mm}' +
-      '.rpt-head{text-align:center;border-bottom:2px solid #6B1F2A;padding-bottom:12px}' +
-      '.rpt-emblem{width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #C9A24A}' +
-      '.rpt-temple{font-family:"Cinzel",serif;font-weight:800;font-size:17px;color:#6B1F2A;letter-spacing:.5px;margin-top:6px}' +
-      '.rpt-loc{font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:#8a7a5c;margin-top:2px}' +
-      '.rpt-dign{font-size:9px;color:#8a7a5c;margin-top:4px;font-style:italic}' +
-      '.rpt-ribbon{text-align:center;font-family:"Cinzel","Noto Serif Gujarati",serif;letter-spacing:2.5px;text-transform:uppercase;font-size:13px;color:#6B1F2A;margin:14px 0 2px;font-weight:700}' +
-      '.rpt-ribbon i{color:#C9A24A;font-style:normal;margin:0 10px;font-size:9px;vertical-align:middle}' +
-      '.rpt-sub{text-align:center;font-family:"Cormorant Garamond",serif;font-style:italic;color:#5b4a37;font-size:13px;margin-bottom:12px}' +
-      '.rpt-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:5px 16px;font-size:9.5px;color:#8a7a5c;margin-bottom:14px}' +
-      '.rpt-meta strong{color:#3B2418}' +
-      'table.rpt-t{width:100%;border-collapse:collapse;font-family:"Inter",sans-serif;font-size:' + tblFont + ';table-layout:fixed}' +
-      '.rpt-t th,.rpt-t td{overflow-wrap:anywhere;word-break:break-word;white-space:normal}' +
-      '.rpt-t thead th{background:#6B1F2A;color:#fff;text-align:left;padding:7px 9px;font-weight:700;font-size:8.5px;letter-spacing:.5px;text-transform:uppercase}' +
-      '.rpt-t tbody td{padding:6px 9px;border-bottom:1px solid #e5d5c0;color:#3B2418;vertical-align:top}' +
-      '.rpt-t tbody tr:nth-child(even) td{background:#faf6ec}' +
-      '.rpt-foot{margin-top:16px;border-top:1px solid #C9A24A;padding-top:9px;display:flex;justify-content:space-between;align-items:flex-end;font-size:8.5px;color:#8a7a5c}' +
-      '.rpt-sign{text-align:center}.rpt-sign span{display:block;width:150px;border-top:1px solid #3B2418;margin-bottom:3px}' +
-      '@media print{' +
-        '@page{size:A4 ' + (wide ? 'landscape' : 'portrait') + ';margin:12mm}' +
-        'html,body{background:#fff}' +
-        /* overflow:visible is critical — with overflow:hidden Chrome treats .rpt
-           as one unbreakable block and clips every row past page 1 */
-        '.rpt{width:auto;min-height:0;margin:0;box-shadow:none;overflow:visible;position:static}' +
-        '.rpt-in{padding:0}' +
-        '.rc,.rpt-hero{display:none}' +
-        '.rpt-t{page-break-inside:auto}' +
-        '.rpt-t thead{display:table-header-group}' +
-        '.rpt-t tr{page-break-inside:avoid}' +
-        '.rpt-foot{page-break-inside:avoid}' +
-      '}' +
-      '</style></head><body><div class="rpt">' +
-      '<span class="rc tl"></span><span class="rc tr"></span><span class="rc bl"></span><span class="rc br"></span>' +
-      '<img class="rpt-hero" src="' + assetURL('assets/temple.png') + '" alt="" onerror="this.style.display=\'none\'">' +
-      '<div class="rpt-in">' +
-      '<div class="rpt-head"><img class="rpt-emblem" src="' + assetURL('assets/icon.png') + '" alt="" onerror="this.style.display=\'none\'">' +
-      '<div class="rpt-temple">' + xesc(tpl.name) + '</div><div class="rpt-loc">' + xesc(tpl.loc) + '</div>' +
-      '<div class="rpt-dign">Founder: ' + xesc(tpl.founder) + ' &nbsp;·&nbsp; Head: ' + xesc(tpl.head) + '</div></div>' +
-      '<div class="rpt-ribbon"><i>&#9670;</i>' + xesc(opt.title || 'Report') + '<i>&#9670;</i></div>' +
-      (opt.subtitle ? '<div class="rpt-sub">' + xesc(opt.subtitle) + '</div>' : '') +
-      '<div class="rpt-meta">' + metaBits.map(function (m) { return '<span>' + m + '</span>'; }).join('') + '</div>' +
-      '<table class="rpt-t"><thead><tr>' + cols.map(function (c) { return '<th>' + xesc(c) + '</th>'; }).join('') + '</tr></thead>' +
-      '<tbody>' + (rows.length
-        ? rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + xesc(c) + '</td>'; }).join('') + '</tr>'; }).join('')
-        : '<tr><td colspan="' + Math.max(cols.length, 1) + '" style="text-align:center;color:#8a7a5c;padding:18px">No records.</td></tr>') +
-      '</tbody></table>' +
-      '<div class="rpt-foot"><div>System-generated report &middot; ' + xesc(tpl.name) + '<br>' +
-      xesc(String(location.href).split('#')[0]) + '</div>' +
-      '<div class="rpt-sign"><span></span>Authorised Signatory / Trustee</div></div>' +
-      '</div></div>' +
-      '<' + 'script>(function(){var d=false;' +
-      'function go(){if(d)return;d=true;try{window.focus()}catch(e){}try{window.print()}catch(e){}}' +
-      'function imgReady(){var im=document.images;for(var i=0;i<im.length;i++){if(!im[i].complete)return false}return true}' +
-      'if(document.fonts&&document.fonts.ready){try{document.fonts.ready.then(function(){},function(){})}catch(e){}}' +
-      'function whenReady(){var n=0;(function poll(){n++;' +
-      'var fontsOk=(!document.fonts)||document.fonts.status==="loaded"||n>40;' +
-      'if((imgReady()&&fontsOk)||n>60){setTimeout(go,250)}else{setTimeout(poll,100)}})()}' +
-      'if(document.readyState==="complete"){whenReady()}else{window.addEventListener("load",whenReady)}' +
-      'setTimeout(go,9000);})();<' + '/script>' +
-      '</body></html>';
-
-    w.document.open(); w.document.write(html); w.document.close();
-  }
-
-  /* ---- registry + UI ---- */
-  function registerExport(key, builder) { _EXPORTS[key] = builder; }
-
-  function runExport(key, kind) {
-    var b = _EXPORTS[key];
-    if (typeof b !== 'function') { toast('Nothing to export here yet.'); return; }
-    var d;
-    try { d = b() || {}; } catch (e) { toast('Export failed: ' + e.message); return; }
-    var cols = d.columns || [];
-    var rows = d.rows || [];
-    var fname = d.filename || key;
-    if (kind === 'xls') downloadXLS(fname, [cols].concat(rows), d.title || key);
-    else if (kind === 'pdf') printReportPDF(d);
-    else downloadCSV(fname, [cols].concat(rows));
-  }
-
-  function exportBar(key, opts) {
-    opts = opts || {};
-    var label = opts.label || 'Export';
-    return '<span class="export-bar" role="group" aria-label="Export">' +
-      '<span class="export-bar-label">' + xesc(label) + '</span>' +
-      '<button type="button" class="export-bar-btn" onclick="runExport(\'' + key + '\',\'csv\')" title="Comma-separated values">CSV</button>' +
-      '<button type="button" class="export-bar-btn" onclick="runExport(\'' + key + '\',\'xls\')" title="Excel workbook">Excel</button>' +
-      '<button type="button" class="export-bar-btn export-bar-pdf" onclick="runExport(\'' + key + '\',\'pdf\')" title="Print / Save as PDF">PDF</button>' +
-      '</span>';
-  }
-
-  /* ---- lazy PDF engine (pdfmake + html2canvas from cdnjs) ----
-     Same technique the AdminLTE / DataTables "PDF" button uses: build the
-     document with pdfMake and call .download().  html2canvas rasterises each
-     invitation card to an image, pdfMake places one image per page with an
-     explicit `pageBreak:'before'` so page N+1 always starts a fresh sheet.
-     Loaded only on first use so the app stays lean / offline-friendly for
-     everyone who never exports. Resolves with { pdfMake, html2canvas }. */
-  var _pdfLibs = null;
-  function loadScript(src) {
-    return new Promise(function (res, rej) {
-      var s = document.createElement('script');
-      s.src = src; s.async = true;
-      s.onload = function () { res(); };
-      s.onerror = function () { rej(new Error('load failed: ' + src)); };
-      document.head.appendChild(s);
+  function toCsv(columns, rows, meta) {
+    const lines = [];
+    /* Meta rides above the header as its own rows. Excel shows them as
+       ordinary cells and they survive a re-save, unlike a comment. */
+    (meta || []).forEach(([k, v]) => lines.push(csvCell(k) + ',' + csvCell(v)));
+    if (meta && meta.length) lines.push('');
+    lines.push(columns.map((c) => csvCell(c.label)).join(','));
+    rows.forEach((r) => {
+      lines.push(columns.map((c) => csvCell(c.value(r), c.type)).join(','));
     });
+    return lines.join('\r\n');
   }
-  function ensurePdfLibs() {
-    if (_pdfLibs) return _pdfLibs;
-    var CDN = 'https://cdnjs.cloudflare.com/ajax/libs/';
-    _pdfLibs = Promise.resolve()
-      .then(function () {
-        // html2canvas-pro (maintained fork) — the original 1.4.1 THROWS on the
-        // modern color(srgb …) / color-mix() / oklch() values Chrome now returns
-        // from getComputedStyle, which killed every invitation capture.
-        return window.html2canvas ? null
-          : loadScript('https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas-pro.min.js');
-      })
-      .then(function () {
-        return (window.pdfMake && window.pdfMake.createPdf) ? null
-          : loadScript(CDN + 'pdfmake/0.2.7/pdfmake.min.js');
-      })
-      .then(function () {
-        // vfs_fonts registers pdfMake.vfs (the default Roboto font data)
-        return (window.pdfMake && window.pdfMake.vfs) ? null
-          : loadScript(CDN + 'pdfmake/0.2.7/vfs_fonts.js');
-      })
-      .then(function () {
-        if (!window.pdfMake || !window.pdfMake.createPdf || !window.html2canvas)
-          throw new Error('PDF engine unavailable');
-        return { pdfMake: window.pdfMake, html2canvas: window.html2canvas };
-      });
-    _pdfLibs.catch(function () { _pdfLibs = null; });   // allow retry after a failure
-    return _pdfLibs;
-  }
-  window.ensurePdfLibs = ensurePdfLibs;
 
-  /* lazy JSZip (cdnjs) — for bundling individual invitation PDFs into one .zip */
-  var _zipLib = null;
-  function ensureZipLib() {
-    if (_zipLib) return _zipLib;
-    _zipLib = (window.JSZip ? Promise.resolve()
-      : loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'))
-      .then(function () {
-        if (!window.JSZip) throw new Error('ZIP engine unavailable');
-        return window.JSZip;
-      });
-    _zipLib.catch(function () { _zipLib = null; });
-    return _zipLib;
+  /** Save a string as a file. The BOM matters: without it Excel reads
+      the bytes as the system codepage and every Gujarati name becomes
+      mojibake. */
+  function download(name, text, mime) {
+    const blob = new Blob(['﻿' + text], { type: (mime || 'text/csv') + ';charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
-  window.ensureZipLib = ensureZipLib;
 
-  window.registerExport = registerExport;
-  window.runExport = runExport;
-  window.exportBar = exportBar;
-  window.downloadCSV = downloadCSV;
-  window.downloadXLS = downloadXLS;
-  window.printReportPDF = printReportPDF;
-  window.exportKeys = function () { return Object.keys(_EXPORTS); };
-  window.buildExport = function (key) {   /* dev/debug: run one builder, no download */
-    var b = _EXPORTS[key];
-    return typeof b === 'function' ? b() : null;
-  };
-})();
+  const stamp = () => new Date().toLocaleDateString('en-CA');
+  const safeName = (s) => String(s).replace(/[<>:"/\\|?*]+/g, '_').replace(/\s+/g, '-');
+
+  function csv(opt) {
+    const rows = opt.rows || [];
+    if (!rows.length) { UI.toast('Nothing to export in this view.', 'err'); return; }
+    download(`${safeName(opt.filename || 'export')}-${stamp()}.csv`,
+      toCsv(opt.columns, rows, opt.meta), 'text/csv');
+    UI.toast(`${num(rows.length)} row${rows.length === 1 ? '' : 's'} exported`, 'ok');
+  }
+
+  /* ---------- printed sheet / PDF ----------
+     openPrintDoc links the real stylesheets, so the print dialog's
+     "Save as PDF" produces something that matches the app rather than a
+     bare table. No PDF library is involved, and none can be: the
+     browser's own print engine is the only one available offline. */
+
+  function cell(c, r) {
+    const v = c.value(r);
+    if (c.type === 'money') return esc(money(Number(v) || 0));
+    if (c.type === 'num') return esc(num(Number(v) || 0));
+    return esc(v == null ? '' : String(v));
+  }
+
+  /* A4 landscape at these margins is about 277mm of printable width. A
+     table with 15–17 columns wants half as much again, and a normal
+     (auto) table layout cannot shrink below its min-content width — so
+     it simply ran off the right edge and the last columns were cut off
+     the page with nothing to say they existed.
+
+     Three things together fix it, and all three are needed:
+       1. `table-layout: fixed` — the width is decided by the colgroup,
+          not the content, so the table can never exceed the page.
+       2. cells wrap. Under a fixed layout a `nowrap` cell still spills
+          out of its own column, so wide tables drop nowrap and break
+          long values instead.
+       3. the type scales down with the column count, so wrapping does
+          not turn every row into four lines. */
+  const PRINT_CSS = `
+  @page { size: A4 landscape; margin: 12mm 10mm; }
+  .ex-doc { padding: 0; }
+  .ex-head { border-bottom: 2px solid var(--primary-maroon); padding-bottom: .6rem; margin-bottom: .9rem; }
+  .ex-title { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 800;
+              color: var(--primary-maroon); margin: 0; }
+  .ex-sub { font-size: .85rem; color: var(--muted-brown); margin: .2rem 0 0; }
+  .ex-meta { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; margin: .55rem 0 0;
+             font-size: .78rem; color: var(--dark-brown); }
+  .ex-meta b { color: var(--primary-maroon); }
+  table.ex {
+    width: 100%; table-layout: fixed; border-collapse: collapse;
+    font-size: var(--ex-fs, .76rem);
+  }
+  table.ex th {
+    text-align: left; padding: .4rem var(--ex-pad, .5rem); background: var(--warm-ivory);
+    border-bottom: 1.5px solid var(--warm-border); font-weight: 700; color: var(--dark-brown);
+  }
+  table.ex td {
+    padding: .34rem var(--ex-pad, .5rem); border-bottom: 1px solid var(--warm-border);
+    vertical-align: top;
+  }
+  /* Free text may break mid-word to fit its column. Numbers and dates
+     may NOT: an amount split as 11,00,0 / 00 across two lines is worse
+     than not printing it, so those keep nowrap however tight it gets
+     and the colgroup gives them room instead.
+     (No backticks in here: this whole block is a template literal, and
+     one inside a CSS comment ends the string. That is how this rule
+     broke the first time — everything after it parsed as JS.) */
+  table.ex td { overflow-wrap: anywhere; }
+  table.ex td.n, table.ex th.n { text-align: right; }
+  /* nowrap is for the VALUES, never the headings: "Paid by devotee" is
+     a phrase and must be allowed onto a second line, or it runs into
+     the next column's heading. */
+  table.ex td.n { font-variant-numeric: tabular-nums; white-space: nowrap; overflow-wrap: normal; }
+  table.ex td.w { white-space: nowrap; overflow-wrap: normal; }
+  table.ex th { overflow-wrap: anywhere; word-break: normal; hyphens: none; }
+  table.ex tbody tr:nth-child(even) td { background: #FCF8F0; }
+  .ex-foot { margin-top: .8rem; font-size: .72rem; color: var(--muted-brown);
+             display: flex; justify-content: space-between; gap: 1rem; }
+  /* A long report must not lose its column headings on page two. */
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }`;
+
+  function pdf(opt) {
+    const rows = opt.rows || [];
+    if (!rows.length) { UI.toast('Nothing to print in this view.', 'err'); return; }
+
+    /* A sheet of paper is not a spreadsheet. The devotee register has
+       seventeen columns; on A4 landscape that is about 60px each, which
+       is narrower than a name or an amount, and the result fits only by
+       becoming unreadable. Columns marked `print: false` stay in the
+       CSV and leave the printed copy — and the sheet says so, so nobody
+       reads it as the whole record. */
+    const cols = opt.columns.filter((c) => c.print !== false);
+    const dropped = opt.columns.filter((c) => c.print === false).map((c) => c.label);
+    const numeric = (c) => c.type === 'money' || c.type === 'num';
+    /* Dates and short labels must not break across lines — "2027-02-" on
+       one row and "04" on the next is unreadable on a printed sheet.
+       Long free text (address, note, seva name) is left to wrap. */
+    /* nowrap is decided per cell, not per column. "2027-02-04" must not
+       break; "Date to be announced" lives in the same column and must,
+       or it runs straight over the next one. A value with no space is
+       an atom; anything else is a phrase. */
+    const headCls = (c) => numeric(c) ? 'n' : '';
+    const cls = (c, r) => {
+      if (numeric(c)) return 'n';
+      if (!(c.type === 'date' || c.nowrap)) return '';
+      const v = String(c.value(r) == null ? '' : c.value(r));
+      return /\s/.test(v) ? '' : 'w';
+    };
+
+    /* Under a fixed layout every column would otherwise get an equal
+       share — starving a name to give a one-digit count the same width.
+       Each column gets a base weight for the kind of thing it holds,
+       raised to fit its widest *unbreakable* run: the whole value in a
+       nowrap column, the longest word elsewhere. Hand-tuned weights
+       were always one dataset away from being a pixel too narrow;
+       measuring the content is self-correcting. */
+    const WEIGHT = { num: 0.6, money: 0.95, date: 0.85 };
+    const atomOf = (c) => {
+      const unbreakable = numeric(c) || c.type === 'date' || c.nowrap;
+      let longest = String(c.label || '').split(/\s+/)
+        .reduce((a, w) => Math.max(a, w.length), 0);
+      for (const r of rows) {
+        const v = String(cell(c, r)).replace(/<[^>]*>/g, '');
+        const n = unbreakable ? v.length
+          : v.split(/\s+/).reduce((a, w) => Math.max(a, w.length), 0);
+        if (n > longest) longest = n;
+      }
+      return longest;
+    };
+    const weightOf = (c) => {
+      const base = c.weight || WEIGHT[c.type] || (c.nowrap ? 1 : 1.35);
+      // ~10 characters per unit of weight, plus the cell's own padding.
+      return Math.max(base, atomOf(c) / 10 + 0.15);
+    };
+    const totalWeight = cols.reduce((a, c) => a + weightOf(c), 0);
+    const colgroup = `<colgroup>${cols.map((c) =>
+      `<col style="width:${(weightOf(c) / totalWeight * 100).toFixed(3)}%">`).join('')}</colgroup>`;
+
+    /* Shrink the type as the table gets busier, so wrapping does not
+       turn every row into a paragraph. 9 columns keeps the comfortable
+       size; 17 lands near .6rem, which is still readable in print. */
+    const n = cols.length;
+    const tight = n > 10;
+    const fs = n <= 9 ? 0.76 : Math.max(0.6, 0.76 - (n - 9) * 0.02);
+    const pad = tight ? 0.32 : 0.5;
+
+    const inner = `
+      <div class="ex-doc">
+        <div class="ex-head">
+          <h1 class="ex-title">${esc(opt.title || 'Report')}</h1>
+          ${opt.subtitle ? `<p class="ex-sub">${esc(opt.subtitle)}</p>` : ''}
+          <div class="ex-meta">
+            ${(opt.meta || []).map(([k, v]) =>
+              `<span><b>${esc(k)}:</b> ${esc(v)}</span>`).join('')}
+          </div>
+        </div>
+        <table class="ex ${tight ? 'ex-tight' : ''}"
+               style="--ex-fs:${fs}rem;--ex-pad:${pad}rem">
+          ${colgroup}
+          <thead><tr>${cols.map((c) =>
+            `<th class="${headCls(c)}">${esc(c.label)}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${rows.map((r) => `<tr>${cols.map((c) =>
+              `<td class="${cls(c, r)}">${cell(c, r)}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+          ${opt.totals ? `<tfoot><tr>${cols.map((c) => {
+            const t = opt.totals[c.key];
+            /* A totals row carries both sums and a label ("Total (28)"),
+               so format by the value's own type, not the column's —
+               num() over a label produced a cell reading "NaN". */
+            const text = t === undefined || t === null ? ''
+              : typeof t === 'number' ? (c.type === 'money' ? money(t) : num(t))
+              : String(t);
+            return `<td class="${headCls(c)}" style="font-weight:800;border-top:2px solid var(--warm-border)">${
+              esc(text)}</td>`;
+          }).join('')}</tr></tfoot>` : ''}
+        </table>
+        <div class="ex-foot">
+          <span>${esc(opt.footer || 'Shri Vihat Meldi Dham — Sanand')}</span>
+          <span>${dropped.length
+            ? esc('Also in the Excel export: ' + dropped.join(', ')) + ' · '
+            : ''}${esc(num(rows.length))} row${rows.length === 1 ? '' : 's'}</span>
+        </div>
+      </div>`;
+
+    global.openPrintDoc({ title: opt.title || 'Report', wrapClass: 'ex-wrap', inner, css: PRINT_CSS });
+  }
+
+  /* ---------- the toolbar ----------
+     One pair of buttons, identical on every page, so an operator who
+     finds the export once finds it everywhere. */
+  function toolbar(id) {
+    /* The words are wrapped so a phone can drop them and keep the two
+       marks, which lets both buttons share a row with the page's own
+       primary action instead of taking a row of their own above the
+       list. `title` and `aria-label` carry the name either way, so the
+       button is never a bare icon to a screen reader or a long press. */
+    return `<div class="ex-bar" id="${attr(id || 'exportBar')}">
+      <button type="button" class="btn btn-outline mg-btn-xs" data-export="pdf"
+              title="Print / PDF" aria-label="Print / PDF">
+        ${icon('print', 'ico-sm')}<span class="ex-label">Print / PDF</span></button>
+      <button type="button" class="btn btn-outline mg-btn-xs" data-export="csv"
+              title="Excel (CSV)" aria-label="Excel (CSV)">
+        ${icon('sheet', 'ico-sm')}<span class="ex-label">Excel (CSV)</span></button>
+    </div>`;
+  }
+
+  /** Wire the toolbar. `build()` is called at click time, not at render
+      time, so the export always reflects the filters as they are now. */
+  function bindToolbar(root, build) {
+    if (!root) return;
+    root.querySelectorAll('[data-export]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const spec = build();
+        if (!spec) return;
+        (b.getAttribute('data-export') === 'csv' ? csv : pdf)(spec);
+      }));
+  }
+
+  global.Export = { csv, pdf, toolbar, bindToolbar, toCsv, download };
+})(window);

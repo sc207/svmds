@@ -1,252 +1,228 @@
-/* Devotees — the shared person registry every module's member picker points at.
-   Mounted behind authRequired + attachScope. Reads: any signed-in user.
-   Writes: any signed-in user (matches the client, where leaders add devotees);
-   hard delete is admin tier. Dedupe is by mobile. (BACKEND_PLAN.md §10.4) */
+/* Devotee register — the permanent asset. Every sevarthi booking,
+   payment and donation hangs off one of these rows.
+
+   Dedup rule: a mobile number is treated as the identity key. Saving a
+   devotee whose mobile already exists updates that person instead of
+   creating a second copy of them, so the register does not fragment. */
 const express = require('express');
-const { queryAll, queryOne, run } = require('../db/connection');
-const { requireRole } = require('../middleware/authz');
-const { nextCode } = require('../services/entityCode');
-const { logAudit } = require('../services/audit');
-const { digits } = require('../services/people');
-const { mapDevotee } = require('../utils/mappers');
+const db = require('../db');
+const { log } = require('../middleware/audit');
 
 const router = express.Router();
-const adminTier = requireRole('superadmin', 'admin');
 
-const LIST_SQL = `
+/* The register is the hub a devotee's whole relationship hangs off, so
+   the list carries enough to judge them at a glance without opening
+   each profile: how many seva, what they committed against what is
+   covered, what is still outstanding, plus donations and padhramni.
+
+   Outstanding is summed PER BOOKING (max(committed - paid, 0)) for the
+   same reason it is everywhere else — netting one seat's overpayment
+   against another's shortfall understates what is owed. */
+const SELECT = `
   SELECT d.*,
-         (SELECT COUNT(*) FROM visits v WHERE v.devotee_id = d.id AND v.is_deleted = 0) AS visit_count
-  FROM devotees d
-  WHERE d.is_deleted = 0`;
+         s.value AS samaj,
+         c.value AS category,
+         (SELECT COUNT(*) FROM sevarthi_bookings b
+            WHERE b.devotee_id = d.id AND b.status <> 'cancelled')       AS booking_count,
+         (SELECT IFNULL(SUM(p.amount), 0) FROM payments p
+            JOIN sevarthi_bookings b2 ON b2.id = p.booking_id
+           WHERE b2.devotee_id = d.id)                                    AS total_paid,
+         (SELECT IFNULL(SUM(b.amount_committed), 0) FROM sevarthi_bookings b
+            WHERE b.devotee_id = d.id AND b.status <> 'cancelled')        AS total_committed,
+         (SELECT IFNULL(SUM(pb.amount), 0) FROM payments pb
+            JOIN sevarthi_bookings b3 ON b3.id = pb.booking_id
+           WHERE b3.devotee_id = d.id AND pb.payer_type = 'bhuvaji')      AS bappa_paid,
+         (SELECT IFNULL(SUM(CASE WHEN b.amount_committed > IFNULL(pd.paid, 0)
+                                 THEN b.amount_committed - IFNULL(pd.paid, 0) ELSE 0 END), 0)
+            FROM sevarthi_bookings b
+            LEFT JOIN (SELECT booking_id, SUM(amount) AS paid FROM payments GROUP BY booking_id) pd
+                   ON pd.booking_id = b.id
+           WHERE b.devotee_id = d.id AND b.status <> 'cancelled')         AS outstanding,
+         /* Cancelled seats are excluded from booking_count but their
+            payments still sit in total_paid — money the trust holds
+            and owes back. Counted so a row can say so rather than
+            showing a figure with no seva to explain it. */
+         (SELECT COUNT(*) FROM sevarthi_bookings b
+            WHERE b.devotee_id = d.id AND b.status = 'cancelled')         AS cancelled_count,
+         (SELECT IFNULL(SUM(amount), 0) FROM donations WHERE devotee_id = d.id) AS donation_total,
+         (SELECT COUNT(*) FROM visits WHERE devotee_id = d.id)            AS visit_count
+    FROM devotees d
+    LEFT JOIN lookups s ON s.id = d.samaj_id
+    LEFT JOIN lookups c ON c.id = d.category_id
+`;
 
-/* GET /            ?q=<search>&status=active|inactive&limit=&offset= */
-router.get('/', async (req, res, next) => {
-  try {
-    const where = [];
-    const args = [];
-    if (req.query.q) {
-      where.push('(d.name LIKE ? OR d.mobile LIKE ? OR d.city LIKE ? OR d.code LIKE ?)');
-      const like = `%${req.query.q}%`;
-      args.push(like, like, like, like);
-    }
-    if (req.query.status) { where.push('d.status = ?'); args.push(req.query.status); }
-    if (req.query.category) { where.push('d.category = ?'); args.push(String(req.query.category).toLowerCase()); }
-    if (req.query.committeeId) {
-      where.push(`d.id IN (
-        SELECT cm.devotee_id FROM committee_members cm
-        JOIN committees c ON c.id = cm.committee_id
-        WHERE (c.id = ? OR c.code = ?) AND cm.is_deleted = 0 AND cm.devotee_id IS NOT NULL
-      )`);
-      args.push(parseInt(req.query.committeeId, 10) || -1, req.query.committeeId);
-    }
+router.get('/', async (req, res) => {
+  const q = String(req.query.search || '').trim();
+  const samajId = req.query.samaj_id;
+  const categoryId = req.query.category_id;
 
-    let sql = LIST_SQL + (where.length ? ' AND ' + where.join(' AND ') : '') + ' ORDER BY d.name';
-    const limit = Math.min(parseInt(req.query.limit, 10) || 500, 2000);
-    const offset = parseInt(req.query.offset, 10) || 0;
-    sql += ' LIMIT ? OFFSET ?';
-    args.push(limit, offset);
+  const where = [];
+  const params = {};
+  if (q) {
+    where.push(`(d.full_name LIKE @q OR d.mobile LIKE @q OR d.city LIKE @q OR d.mul_vatan LIKE @q
+                 OR s.value LIKE @q OR c.value LIKE @q)`);
+    params.q = `%${q}%`;
+  }
+  if (samajId) { where.push(`d.samaj_id = @samajId`); params.samajId = samajId; }
+  if (categoryId) { where.push(`d.category_id = @categoryId`); params.categoryId = categoryId; }
 
-    const rows = await queryAll(sql, args);
-    res.json(rows.map(mapDevotee));
-  } catch (e) { next(e); }
+  const sql = SELECT + (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
+    ` ORDER BY d.full_name COLLATE NOCASE LIMIT 500`;
+  res.json(await db.all(sql, params));
 });
 
-/* GET /directory  ?q=<search> — the SAME "everyone may search the whole
-   register" access as GET / above (writes still go through the full POST/
-   PATCH below), but a lean projection: id/code/name/mobile/city/state/
-   category only. category is included because pooja-ui.js's invitation
-   audience picker filters by it for a pooja_coordinator's own pooja; status/
-   notes/visit_count are admin-only detail (Devotees 360°) that nothing
-   outside that admin-only page currently reads — hydrate.js's hydrateDevotees()
-   uses this for every non-admin-tier session instead of the full list below,
-   so a scoped role's browser never downloads every devotee's free-text notes
-   just to populate the shared "pick a person" combobox. Declared before
-   GET /:id or the :id route would swallow this path. */
-router.get('/directory', async (req, res, next) => {
-  try {
-    const where = [];
-    const args = [];
-    if (req.query.q) {
-      where.push('(d.name LIKE ? OR d.mobile LIKE ? OR d.city LIKE ? OR d.code LIKE ?)');
-      const like = `%${req.query.q}%`;
-      args.push(like, like, like, like);
-    }
-    const sql = `SELECT id, code, name, mobile, city, state, category FROM devotees d
-      WHERE is_deleted = 0` + (where.length ? ' AND ' + where.join(' AND ') : '') + ' ORDER BY name LIMIT 2000';
-    const rows = await queryAll(sql, args);
-    res.json(rows.map(r => ({
-      id: r.code || String(r.id), rowId: r.id, code: r.code || '',
-      name: r.name, mobile: r.mobile || '', city: r.city || '',
-      state: r.state || 'Gujarat', category: r.category || 'normal',
-    })));
-  } catch (e) { next(e); }
+router.get('/:id', async (req, res) => {
+  const row = await db.get(SELECT + ` WHERE d.id = ?`, req.params.id);
+  if (!row) return res.status(404).json({ error: 'Devotee not found' });
+
+  row.bookings = await db.all(`
+    SELECT b.*, pe.name AS pooja_name, pe.category, ps.slot_date,
+           (SELECT IFNULL(SUM(amount),0) FROM payments WHERE booking_id = b.id) AS amount_paid,
+           (SELECT IFNULL(SUM(amount),0) FROM payments
+             WHERE booking_id = b.id AND payer_type = 'bhuvaji')  AS bappa_paid,
+           (SELECT IFNULL(SUM(amount),0) FROM payments
+             WHERE booking_id = b.id AND payer_type <> 'bhuvaji') AS devotee_paid
+      FROM sevarthi_bookings b
+      JOIN pooja_slots  ps ON ps.id = b.slot_id
+      JOIN pooja_events pe ON pe.id = ps.pooja_id
+     WHERE b.devotee_id = ?
+     ORDER BY ps.slot_date
+  `, row.id);
+
+  row.donations = await db.all(`
+    SELECT dn.*, l.value AS category
+      FROM donations dn LEFT JOIN lookups l ON l.id = dn.category_id
+     WHERE dn.devotee_id = ? ORDER BY dn.donation_date DESC
+  `, row.id);
+
+  res.json(row);
 });
 
-async function findByIdOrCode(idOrCode) {
-  const rows = await queryAll(
-    LIST_SQL + ' AND (d.id = ? OR d.code = ?) LIMIT 1',
-    [parseInt(idOrCode, 10) || -1, idOrCode]
-  );
-  return rows[0] || null;
+/* Mobile is how the trust reaches a sevarthi, and it is the dedup key,
+   so the REGISTRATION paths (devotee register, sevarthi booking) require
+   it. Padhramni and walk-in donations deliberately do not: a visit or an
+   offering still has to be recordable for someone whose number nobody
+   has, and blocking that would stall event-day entry.
+
+   The check is loose on purpose — at least ten digits — so a +91 prefix,
+   a landline or an out-of-state number is not rejected. The stored form
+   is unchanged (whitespace stripped only), so existing dedup matching
+   keeps behaving exactly as it did. */
+function assertMobile(mobile) {
+  const digits = String(mobile || '').replace(/\D/g, '');
+  if (!digits) {
+    throw Object.assign(new Error('Mobile number is required'), { status: 400 });
+  }
+  if (digits.length < 10) {
+    throw Object.assign(new Error('Enter the full mobile number (at least 10 digits)'), { status: 400 });
+  }
 }
 
-/* GET /:id  (numeric id or code) */
-router.get('/:id', async (req, res, next) => {
-  try {
-    const row = await findByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Devotee not found' });
-    res.json(mapDevotee(row));
-  } catch (e) { next(e); }
-});
+/** Create, or update in place when the mobile number already exists.
+    Pass { requireMobile: true } from a registration path. Async; called
+    inside a caller's db.tx() it joins that transaction. */
+async function upsertDevotee(req, body, opts = {}) {
+  const full_name = String(body.full_name || '').trim();
+  if (!full_name) throw Object.assign(new Error('Full name is required'), { status: 400 });
 
-function normStatus(s) {
-  return String(s || '').toLowerCase() === 'inactive' ? 'inactive' : 'active';
-}
+  const mobile = String(body.mobile || '').replace(/\s+/g, '').trim() || null;
+  if (opts.requireMobile) assertMobile(mobile);
+  const payload = {
+    full_name,
+    mobile,
+    city: (body.city || '').trim() || null,
+    state: (body.state || 'Gujarat').trim() || null,
+    mul_vatan: (body.mul_vatan || '').trim() || null,
+    samaj_id: body.samaj_id || null,
+    category_id: body.category_id || null,
+    notes: (body.notes || '').trim() || null,
+  };
 
-const CATEGORIES = ['normal', 'vip', 'guest', 'gurudev_bhuvaji'];
-function normCategory(c) {
-  const v = String(c || '').toLowerCase().trim();
-  return CATEGORIES.includes(v) ? v : 'normal';
-}
+  const existing = mobile
+    ? await db.get(`SELECT * FROM devotees WHERE mobile = ?`, mobile)
+    : null;
 
-/* POST /   { name, mobile, city?, state?, status?, category?, notes? }
-   Dedupe by mobile; when no mobile, dedupe by lower(name)+lower(city). */
-router.post('/', async (req, res, next) => {
-  try {
-    const name = String(req.body.name || '').trim();
-    const mobile = digits(req.body.mobile || req.body.phone);
-    const city = String(req.body.city || '').trim();
-    if (!name) return res.status(400).json({ error: 'name is required' });
-    if (mobile && mobile.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
-
-    const dedupe = async () => {
-      if (mobile) {
-        return queryOne('SELECT * FROM devotees WHERE mobile = ? AND is_deleted = 0', [mobile]);
-      }
-      if (name && city) {
-        return queryOne(
-          `SELECT * FROM devotees WHERE lower(trim(name)) = lower(trim(?))
-             AND lower(trim(city)) = lower(trim(?)) AND is_deleted = 0`, [name, city]);
-      }
-      return null;
+  if (existing) {
+    /* Merge, never clobber. The Add-Sevarthi form may not carry every
+       field (e.g. samaj left blank on a repeat booking) — a blank there
+       means "unchanged", not "erase what we already know". */
+    const merged = {
+      id: existing.id,
+      full_name: payload.full_name || existing.full_name,
+      mobile: payload.mobile || existing.mobile,
+      city: payload.city ?? existing.city,
+      state: payload.state || existing.state,
+      mul_vatan: payload.mul_vatan ?? existing.mul_vatan,
+      samaj_id: payload.samaj_id ?? existing.samaj_id,
+      category_id: payload.category_id ?? existing.category_id,
+      notes: payload.notes ?? existing.notes,
     };
+    await db.run(`
+      UPDATE devotees SET full_name=@full_name, mobile=@mobile, city=@city, state=@state,
+             mul_vatan=@mul_vatan, samaj_id=@samaj_id, category_id=@category_id, notes=@notes,
+             updated_at=datetime('now','+330 minutes')
+       WHERE id=@id
+    `, merged);
+    await log(req, {
+      action: 'update', entity: 'devotee', entityId: existing.id,
+      summary: `Updated devotee ${merged.full_name}`, details: merged,
+    });
+    return { id: existing.id, created: false };
+  }
 
-    const dup = await dedupe();
-    if (dup) {
-      const row = await findByIdOrCode(dup.id);
-      return res.status(200).json({ ...mapDevotee(row), _deduped: true });
-    }
+  const info = await db.run(`
+    INSERT INTO devotees (full_name, mobile, city, state, mul_vatan, samaj_id, category_id, notes)
+    VALUES (@full_name, @mobile, @city, @state, @mul_vatan, @samaj_id, @category_id, @notes)
+  `, payload);
+  await log(req, {
+    action: 'create', entity: 'devotee', entityId: info.lastInsertRowid,
+    summary: `Registered devotee ${full_name}`, details: payload,
+  });
+  return { id: Number(info.lastInsertRowid), created: true };
+}
 
-    // a person soft-deleted earlier (only possible once nothing referenced them)
-    // and re-added → revive the SAME id, never mint a new devotee.
-    const dead = mobile
-      ? await queryOne('SELECT * FROM devotees WHERE mobile = ? AND is_deleted = 1 LIMIT 1', [mobile])
-      : (name && city
-          ? await queryOne(`SELECT * FROM devotees WHERE lower(trim(name)) = lower(trim(?)) AND lower(trim(city)) = lower(trim(?)) AND is_deleted = 1 LIMIT 1`, [name, city])
-          : null);
-    if (dead) {
-      // category is preserved unless the caller explicitly sends a new one —
-      // unlike status, reviving a person shouldn't silently reset their tier.
-      const revivedCategory = req.body.category !== undefined ? normCategory(req.body.category) : dead.category;
-      await run(`UPDATE devotees SET is_deleted = 0, status = ?, category = ?, updated_at = datetime('now') WHERE id = ?`,
-        [normStatus(req.body.status), revivedCategory, dead.id]);
-      const row = await findByIdOrCode(dead.id);
-      return res.status(200).json({ ...mapDevotee(row), _revived: true });
-    }
-
-    const code = await nextCode('devotee');
-    let newId;
-    try {
-      const r = await run(
-        `INSERT INTO devotees (code, name, mobile, city, state, status, category, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [code, name, mobile, city, req.body.state || 'Gujarat',
-         normStatus(req.body.status), normCategory(req.body.category), req.body.notes || '']
-      );
-      newId = r.lastInsertRowid;
-    } catch (e) {
-      // lost a race against a UNIQUE index added by repair.js — reselect + return
-      const again = await dedupe();
-      if (again) {
-        const row = await findByIdOrCode(again.id);
-        return res.status(200).json({ ...mapDevotee(row), _deduped: true });
-      }
-      throw e;
-    }
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Devotees',
-      action: 'CREATE', entityType: 'devotee', entityId: code, details: { name } });
-
-    const row = await findByIdOrCode(newId);
-    res.status(201).json(mapDevotee(row));
-  } catch (e) { next(e); }
-});
-
-/* PATCH /:id */
-router.patch('/:id', async (req, res, next) => {
+router.post('/', async (req, res) => {
   try {
-    const row = await findByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Devotee not found' });
-
-    const sets = [];
-    const args = [];
-    for (const f of ['name', 'city', 'state', 'notes']) {
-      if (typeof req.body[f] === 'string') { sets.push(`${f} = ?`); args.push(req.body[f]); }
-    }
-    if (req.body.mobile !== undefined || req.body.phone !== undefined) {
-      const m = digits(req.body.mobile ?? req.body.phone);
-      if (m && m.length !== 10) return res.status(400).json({ error: 'mobile must be 10 digits' });
-      if (m && m !== row.mobile) {
-        const dup = await queryOne('SELECT id FROM devotees WHERE mobile = ? AND is_deleted = 0 AND id != ?', [m, row.id]);
-        if (dup) return res.status(409).json({ error: 'Another devotee already has that mobile' });
-      }
-      sets.push('mobile = ?'); args.push(m);
-    }
-    if (req.body.status !== undefined) { sets.push('status = ?'); args.push(normStatus(req.body.status)); }
-    if (req.body.category !== undefined) { sets.push('category = ?'); args.push(normCategory(req.body.category)); }
-    if (!sets.length) return res.json(mapDevotee(row));
-
-    sets.push(`updated_at = datetime('now')`);
-    args.push(row.id);
-    try {
-      await run(`UPDATE devotees SET ${sets.join(', ')} WHERE id = ?`, args);
-    } catch (e) {
-      // ux_devotees_mobile — a concurrent edit already claimed that number
-      return res.status(409).json({ error: 'Another devotee already has that mobile' });
-    }
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Devotees',
-      action: 'UPDATE', entityType: 'devotee', entityId: row.code, details: req.body });
-
-    res.json(mapDevotee(await findByIdOrCode(row.id)));
-  } catch (e) { next(e); }
+    const { id, created } = await upsertDevotee(req, req.body, { requireMobile: true });
+    const row = await db.get(SELECT + ` WHERE d.id = ?`, id);
+    res.status(created ? 201 : 200).json(row);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
 });
 
-/* DELETE /:id  — soft delete (admin tier).
-   Refuses with 409 + the live links when the person is still in use anywhere,
-   unless ?force=1 (then the links are left dangling for repair.js to reconcile). */
-router.delete('/:id', adminTier, async (req, res, next) => {
+router.put('/:id', async (req, res) => {
+  const existing = await db.get(`SELECT * FROM devotees WHERE id = ?`, req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Devotee not found' });
+  const b = req.body;
+  /* Editing an older record without a number is where the register gets
+     cleaned up, so the requirement applies here too. */
   try {
-    const row = await findByIdOrCode(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Devotee not found' });
-
-    const force = req.query.force === '1' || req.query.force === 'true';
-    if (!force) {
-      let links = [];
-      try {
-        links = await queryAll('SELECT link_type, ref_id FROM v_person_links WHERE devotee_id = ? LIMIT 20', [row.id]);
-      } catch (_) { links = []; }   // view absent on an un-migrated DB → allow
-      if (links.length) {
-        return res.status(409).json({
-          error: 'This devotee is still linked elsewhere. Remove those links first, or delete with ?force=1.',
-          links,
-        });
-      }
-    }
-
-    await run(`UPDATE devotees SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?`, [row.id]);
-    await logAudit({ userId: req.user.id, userEmail: req.user.email, module: 'Devotees',
-      action: 'DELETE', entityType: 'devotee', entityId: row.code, details: { force } });
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+    assertMobile((b.mobile ?? existing.mobile));
+  } catch (e) {
+    return res.status(e.status || 400).json({ error: e.message });
+  }
+  await db.run(`
+    UPDATE devotees SET full_name=@full_name, mobile=@mobile, city=@city, state=@state,
+           mul_vatan=@mul_vatan, samaj_id=@samaj_id, category_id=@category_id, notes=@notes,
+           updated_at=datetime('now','+330 minutes')
+     WHERE id=@id
+  `, {
+    id: existing.id,
+    full_name: String(b.full_name || existing.full_name).trim(),
+    mobile: (b.mobile || '').replace(/\s+/g, '').trim() || null,
+    city: (b.city || '').trim() || null,
+    state: (b.state || 'Gujarat').trim() || null,
+    mul_vatan: (b.mul_vatan || '').trim() || null,
+    samaj_id: b.samaj_id || null,
+    category_id: b.category_id || null,
+    notes: (b.notes || '').trim() || null,
+  });
+  await log(req, {
+    action: 'update', entity: 'devotee', entityId: existing.id,
+    summary: `Updated devotee ${b.full_name || existing.full_name}`,
+  });
+  res.json(await db.get(SELECT + ` WHERE d.id = ?`, existing.id));
 });
 
-module.exports = router;
+module.exports = { router, upsertDevotee };

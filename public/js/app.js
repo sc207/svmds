@@ -1,589 +1,222 @@
-/* ============================================================
-   SHRI VISAT MELDI MATA MANDIR — DIVINE MANDALA JAVASCRIPT ENGINE
-   ============================================================ */
+/* Router + shell wiring. Pages register themselves on window.Pages
+   as { render(host) }. Navigation is hash-based so back/forward and
+   deep links work. */
+(function () {
+  'use strict';
 
-// Master State Store
-const state = {
-  activePage: 'dashboard',
-  roleScope: 'admin',
-  // Admin/superadmin "view as" preview — a ROLE_META key (e.g. 'accountant'),
-  // set only when no specific-person module scope (CMT/POOJA/MG session) is
-  // active. See changeRoleScope().
-  previewRole: null,
-  currentLang: 'en',
+  const PAGES = {
+    dashboard:  { title: 'Dashboard' },
+    mahotsav:   { title: 'Murti Pran Pratishtha Mahotsav' },
+    payments:   { title: 'Payments' },
+    devotees:   { title: 'Devotee' },
+    visits:     { title: 'Bappa / Bhuvaji Padhramni' },
+    calendar:   { title: 'Universal Calendar' },
+    donations:  { title: 'Donation' },
+    invitation: { title: 'Invitation' },
+    import:     { title: 'Import from Excel' },
+    settings:   { title: 'Settings' },
+    accounts:   { title: 'Accounts & Access' },
+  };
 
-  // Devotees Register (Central Person Model)
-  devotees: [],
-  
-  // Financial Donations Log — superseded by the Donations module (donations.js)
-  donations: [],
+  const main = () => document.getElementById('main');
 
-  // 36 Pooja Master Catalog — superseded by POOJA.poojaTypes (pooja.js); kept for reference only
-  poojas: [],
+  function parseHash() {
+    const raw = (location.hash || '#/dashboard').replace(/^#\/?/, '');
+    const [page, ...rest] = raw.split('/');
+    return { page: PAGES[page] ? page : 'dashboard', params: rest };
+  }
 
-  // Inventory Stock
-  inventory: [],
+  async function render() {
+    let { page, params } = parseHash();
+    const host = main();
 
-  // Expense Records
-  expenses: []
-};
-
-// Initialize Application Engine
-document.addEventListener('DOMContentLoaded', () => {
-  setupNavigation();
-  applySessionChrome();
-  renderInventoryTable();
-  renderExpensesTable();
-  initCharts();
-  renderCalendar();
-  injectMandalaDecorations();
-});
-
-// Setup Navigation & Router
-function setupNavigation() {
-  const navItems = document.querySelectorAll('.nav-item, .mobile-nav-item');
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const pageId = item.getAttribute('data-page');
-      if (pageId) {
-        switchPage(pageId);
+    /* A page the account's roles do not include (server: ROLE_PAGES) is
+       never drawn — a deep link or an old bookmark lands on the
+       dashboard instead, saying why. The server refuses the data anyway;
+       this keeps anyone from meeting that refusal. */
+    if (!UI.canOpen(page)) {
+      if (UI.canOpen('dashboard') && page !== 'dashboard') {
+        UI.toast(`${PAGES[page].title} is not part of your account's access.`, 'err');
+        location.replace('#/dashboard');
+        return;
       }
+      host.innerHTML = UI.empty('No access yet',
+        'Your account has no role, so there is nothing it can open. ' +
+        'Ask an administrator to give it a role in Accounts & Access.', 'shield');
+      appReady();
+      return;
+    }
+
+    document.querySelectorAll('[data-page]').forEach((el) => {
+      el.classList.toggle('active', el.getAttribute('data-page') === page);
     });
-  });
+    document.title = PAGES[page].title + ' · Shri Vihat Meldi Dham';
 
-  const toggleBtn = document.getElementById('toggleSidebar');
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', toggleSidebarMenu);
-  }
-}
-
-function toggleSidebarMenu() {
-  const sidebar = document.getElementById('sidebar');
-  if (sidebar) {
-    sidebar.classList.toggle('open');
-  }
-}
-
-/**
- * Pages the currently active session may open.
- * Returns null for an unrestricted (admin / core-team) session, otherwise
- * the allow-list for the one restricted module scope that is active.
- * Kept here (not in a module -ui.js) so switchPage can enforce it centrally.
- */
-function currentAllowedPages() {
-  // ROLE_META (people.js) via rolePages() — the single source of truth every
-  // branch below reads from, so none of them can drift from what a real
-  // login with that role actually sees. '' falls back to a hardcoded list
-  // only for legacy/offline harnesses where people.js never loaded.
-  var rp = function (role, fallback) {
-    return (typeof rolePages === 'function' && rolePages(role).length) ? rolePages(role) : fallback;
-  };
-  // Preview personas (topbar "view as" switcher), most specific first.
-  // 1) a specific person's scope — this also drives that module's own data
-  //    filtering (visiblePoojas() etc.), not just the nav.
-  if (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader') return rp('committee_leader', ['dashboard', 'committees', 'calendar']);
-  if (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator') return rp('pooja_coordinator', ['dashboard', 'puja', 'calendar']);
-  if (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead') return rp('management_lead', ['dashboard', 'management', 'calendar']);
-  if (typeof EV !== 'undefined' && EV.session && EV.session.role === 'incharge') return rp('event_incharge', ['dashboard', 'events', 'calendar']);
-  // 2) a generic "what would this role see" preview — page-shape only, no
-  //    specific person's data (also covers the "specific Accountant" preview,
-  //    which personalises the toast/topbar name only — accountant has no
-  //    ownable data of its own to scope).
-  if (state.previewRole && typeof rolePages === 'function') {
-    var pr = rolePages(state.previewRole);
-    if (pr.length) return pr.slice();
-  }
-  // Real signed-in session — honour the page list the backend computed for this
-  // user's roles (accountant, event_incharge, committee_leader, …). '*' or no
-  // backend (demo mode) → unrestricted.
-  var s = (typeof window !== 'undefined' && window.__SESSION) || null;
-  if (s && Array.isArray(s.pages) && s.pages.length && s.pages.indexOf('*') === -1) {
-    return s.pages.slice();
-  }
-  return null;
-}
-
-/** True while the admin/superadmin "view as" switcher is previewing a
- * restricted role — either a specific person's module scope, or a generic
- * role-shape preview. */
-function isPreviewActive() {
-  return !!(state.previewRole
-    || (typeof CMT !== 'undefined' && CMT.session && CMT.session.role === 'leader')
-    || (typeof POOJA !== 'undefined' && POOJA.session && POOJA.session.role === 'coordinator')
-    || (typeof MG !== 'undefined' && MG.session && MG.session.role === 'lead')
-    || (typeof EV !== 'undefined' && EV.session && EV.session.role === 'incharge'));
-}
-
-/* Trim the sidebar / mobile nav to what the active session/preview may
-   actually open, and bounce off any forbidden page. Runs once at boot for a
-   real signed-in session, and again on every "view as" change so a preview
-   stays live. No-op (fully open) for admins and demo mode. */
-function applySessionChrome() {
-  var allowed = currentAllowedPages();
-  var preview = isPreviewActive();
-  // The "view as" switcher is an admin-only tool — hide it only for a REAL
-  // restricted login. Never hide it while the admin is merely previewing
-  // one, or they would lose the only way back to "My view — full access".
-  var sw = document.getElementById('viewSwitchWrap');
-  if (sw) sw.style.display = (allowed && !preview) ? 'none' : '';
-  document.querySelectorAll('.nav-item[data-page], .mobile-nav-item[data-page]').forEach(function (el) {
-    el.style.display = (allowed && allowed.indexOf(el.getAttribute('data-page')) === -1) ? 'none' : '';
-  });
-  // the sidebar nav is flat: a .nav-group-title followed by its .nav-items as
-  // siblings. Hide a heading when every item under it is now hidden. (This
-  // also correctly RE-SHOWS everything when allowed goes back to null, e.g.
-  // the admin switching a preview back to "My view — full access".)
-  document.querySelectorAll('.sidebar-nav .nav-group-title').forEach(function (title) {
-    var anyVisible = false;
-    for (var n = title.nextElementSibling; n && !n.classList.contains('nav-group-title'); n = n.nextElementSibling) {
-      if (n.classList.contains('nav-item') && n.style.display !== 'none') { anyVisible = true; break; }
+    const mod = window.Pages && window.Pages[page];
+    if (!mod) {
+      host.innerHTML = UI.errorState('That section is not available yet.');
+      appReady();                 // an error still counts as "screen drawn"
+      return;
     }
-    title.style.display = anyVisible ? '' : 'none';
-  });
-  if (allowed && allowed.indexOf(state.activePage || 'dashboard') === -1) switchPage('dashboard');
-}
 
-/** True when the active session is allowed to open pageId. */
-function canOpenPage(pageId) {
-  const allowed = currentAllowedPages();
-  return !allowed || allowed.indexOf(pageId) !== -1;
-}
-
-function switchPage(pageId) {
-  // Central access guard — a scoped leader/coordinator can never be routed
-  // (via a dashboard shortcut, calendar item, deep link, etc.) into a module
-  // they are not authorised for.
-  if (!canOpenPage(pageId)) {
-    if (typeof showToast === 'function') showToast('You do not have access to that section.');
-    pageId = 'dashboard';
-  }
-  state.activePage = pageId;
-
-  document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(el => {
-    if (el.getAttribute('data-page') === pageId) {
-      el.classList.add('active');
-    } else {
-      el.classList.remove('active');
+    host.innerHTML = UI.loading(3);
+    try {
+      await mod.render(host, params);
+      Lang.translateTree(host);
+    } catch (err) {
+      console.error(err);
+      host.innerHTML = UI.errorState(err.message || 'Unexpected error');
     }
-  });
+    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
 
-  document.querySelectorAll('.page').forEach(page => {
-    if (page.id === `page-${pageId}`) {
-      page.classList.add('active');
-    } else {
-      page.classList.remove('active');
+    appReady();
+  }
+
+  /* Tell the splash the first screen is actually on the page. The window
+     `load` event fires while this render is still fetching, so without
+     this the loader would lift onto skeletons. Fired whether the render
+     succeeded or errored — a visible error beats a splash that never
+     leaves — and only ever the first time. */
+  function appReady() {
+    if (window.__appReady) { window.__appReady(); window.__appReady = null; }
+  }
+
+  function go(page, ...params) {
+    location.hash = '#/' + [page, ...params].join('/');
+  }
+  window.navigate = go;
+  window.refreshPage = render;
+
+  /* ---------- shell events (delegated) ---------- */
+  document.addEventListener('click', (e) => {
+    const nav = e.target.closest('[data-page]');
+    if (nav) {
+      e.preventDefault();
+      /* Close on the TAP, not only on the navigation: tapping the
+         section you are already on changes no hash, fires no
+         hashchange, and left the drawer sitting open over the page it
+         had just confirmed you were looking at. */
+      closeDrawer();
+      go(nav.getAttribute('data-page'));
+      return;
     }
+
+    const action = e.target.closest('[data-action]');
+    if (action) {
+      const name = action.getAttribute('data-action');
+      if (name === 'quick-add') { closeDrawer(); Forms.quickAddMenu(); }
+      /* "More" opens the sidebar, not a second menu of its own.
+         There were two: the drawer behind the hamburger, and an "All
+         sections" sheet behind this button — different labels for the
+         same pages ("Padhramni" against "Bappa / Bhuvaji Padhramni"),
+         a different order, and the SAME hamburger glyph on both
+         buttons. Two menus is one too many, and the drawer is the one
+         that already matches the desktop and groups its sections. */
+      if (name === 'more') setDrawer(true);
+      return;
+    }
+
+    if (e.target.closest('[data-sheet-close]')) { UI.closeSheet(); return; }
   });
 
-  const sidebar = document.getElementById('sidebar');
-  if (sidebar) sidebar.classList.remove('open');
-  
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+  document.getElementById('sheetClose').addEventListener('click', UI.closeSheet);
+  // clicking the dark area outside the box closes it
+  document.getElementById('sheet').addEventListener('click', (e) => {
+    if (e.target.id === 'sheet') UI.closeSheet();
+  });
 
-// Admin/superadmin "view as" preview switcher.
-// Only ONE restricted scope is ever active at a time — either a specific
-// person's module scope (Committee Leader / Pooja Coordinator / Management
-// Lead, which also filters that module's own data) or a generic role-shape
-// preview (state.previewRole, page-list only, for roles with no per-module
-// scoped session of their own, e.g. Accountant / Event In-charge). Every
-// other scope is reset FIRST (silently), the target is activated LAST, and
-// applySessionChrome() is called before navigating so the nav reflects the
-// new scope immediately.
-function changeRoleScope(role) {
-  state.roleScope = role;
-  state.previewRole = null;
+  /* ---- the off-canvas drawer ----
+     Three things were missing, and all three are the same omission:
+     the drawer knew how to open and nothing else knew it was open.
+       - Tapping a link inside it navigated and left the drawer sitting
+         over the page you had just asked for, with the hamburger the
+         only way back out.
+       - There was nothing to tap outside it. Escape worked, which is
+         no help at all on the phone and tablet this layout exists for.
+       - The page behind stayed scrollable underneath it.
+     `setDrawer` owns all of that in one place, so a future caller
+     cannot open it and forget half. */
+  const drawer = document.getElementById('sidebar');
+  const scrim = document.getElementById('sidebarScrim');
 
-  const resetOthers = (except) => {
-    if (except !== 'mg' && typeof setMgSession === 'function') setMgSession('admin', null, false);
-    if (except !== 'pj' && typeof setPoojaSession === 'function') setPoojaSession('admin', null, false);
-    if (except !== 'cmt' && typeof setCmtSession === 'function') setCmtSession('admin', null, false);
-    if (except !== 'ev' && typeof setEvSession === 'function') setEvSession('admin', null, false);
-  };
-
-  // Pooja Coordinator scope — a specific person
-  if (role.indexOf('coord:') === 0) {
-    resetOthers('pj');
-    if (typeof setPoojaSession === 'function') setPoojaSession('coordinator', role.slice(6));
-    applySessionChrome();
-    return;
+  function setDrawer(open) {
+    drawer.classList.toggle('open', open);
+    if (scrim) scrim.hidden = !open;
+    document.body.classList.toggle('drawer-open', open);
   }
-  // Management Lead scope — a specific person
-  if (role.indexOf('lead:') === 0) {
-    resetOthers('mg');
-    if (typeof setMgSession === 'function') setMgSession('lead', role.slice(5));
-    applySessionChrome();
-    return;
-  }
-  // Committee Leader scope — a specific person
-  if (role.indexOf('cmt:') === 0) {
-    resetOthers('cmt');
-    if (typeof setCmtSession === 'function') setCmtSession('leader', role.slice(4));
-    applySessionChrome();
-    return;
-  }
-  // Event In-charge scope — a specific person (also filters EV.events to
-  // just their own, mirroring the three modules above).
-  if (role.indexOf('incharge:') === 0) {
-    resetOthers('ev');
-    if (typeof setEvSession === 'function') setEvSession('incharge', role.slice(9));
-    applySessionChrome();
-    return;
-  }
+  const closeDrawer = () => setDrawer(false);
 
-  // Every specific-person module scope back to admin.
-  resetOthers(null);
+  document.getElementById('toggleSidebar').addEventListener('click', () => {
+    setDrawer(!drawer.classList.contains('open'));
+  });
+  if (scrim) scrim.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
+  });
+  /* Any navigation closes it, wherever it came from — a link in the
+     drawer, the bottom bar, the More sheet or a card on the page. */
+  window.addEventListener('hashchange', closeDrawer);
 
-  if (role === 'admin') {
-    showToast('Context switched to: Super Admin (Full Platform)');
-    applySessionChrome();
-    if (typeof renderDashboard === 'function') renderDashboard();
-    switchPage('dashboard');
-    return;
-  }
+  const search = document.getElementById('globalSearchInput');
+  if (search) search.addEventListener('focus', () => { search.blur(); Forms.globalSearch(); });
 
-  // Accountant scope — a specific person. Accountant has no ownable data of
-  // its own to filter by (temple-wide by design — donations/expenses aren't
-  // assigned to one accountant), so this only personalises the toast/topbar
-  // name on top of the same page-shape as the generic Accountant preview.
-  if (role.indexOf('acct:') === 0) {
-    const id = role.slice(5);
-    const a = (typeof accountById === 'function') ? accountById(id) : null;
-    const name = (a && a.name) || 'Temple Accountant';
-    state.previewRole = 'accountant';
+  document.getElementById('userChip').addEventListener('click', () => {
+    Forms.userMenu();
+  });
+
+  document.getElementById('langToggle').addEventListener('click', () => {
+    Lang.setLang(Lang.lang() === 'gu' ? 'en' : 'gu');
+  });
+
+
+  /* ---------- boot ---------- */
+  function paintUser() {
+    const u = API.currentUser();
+    const name = u.name || u.email || '';
+    document.getElementById('userInitial').textContent = (name || '?').trim().charAt(0).toUpperCase();
     const nameEl = document.getElementById('topbarUserName');
     if (nameEl) nameEl.textContent = name;
-    showToast(`Context switched to: ${name} (Temple Accountant)`);
-    applySessionChrome();
-    if (typeof renderDashboard === 'function') renderDashboard();
-    switchPage('donations');
-    return;
-  }
-
-  // Generic "what would this role see" preview — page-shape only, driven by
-  // ROLE_META (people.js) via rolePages() so it can never drift from what a
-  // real login with that role actually sees.
-  const GENERIC_ROLE = {
-    pooja_manager: { key: 'pooja_coordinator', label: 'Pooja Coordinator', landing: 'puja' },
-    accountant: { key: 'accountant', label: 'Temple Accountant', landing: 'donations' },
-    event_incharge: { key: 'event_incharge', label: 'Event In-charge', landing: 'events' },
-  };
-  const g = GENERIC_ROLE[role];
-  if (g && typeof rolePages === 'function' && rolePages(g.key).length) {
-    state.previewRole = g.key;
-    showToast(`Context switched to: ${g.label}`);
-    applySessionChrome();
-    if (typeof renderDashboard === 'function') renderDashboard();
-    switchPage(g.landing);
-    return;
-  }
-
-  // Unknown value — fall back to the admin's own unrestricted view.
-  showToast('Context switched to: Super Admin (Full Platform)');
-  applySessionChrome();
-  if (typeof renderDashboard === 'function') renderDashboard();
-  switchPage('dashboard');
-}
-
-
-// Trilingual layer lives in i18n.js (window.setLanguage / t / tData).
-// This wrapper keeps older callers working and syncs state.currentLang.
-function changeLanguage(lang) {
-  state.currentLang = lang;
-  if (typeof setLanguage === 'function') setLanguage(lang);
-}
-
-// Devotees are handled by the Devotees 360° module (devotees.js).
-// Donations are handled by the Donations module (donations*.js).
-
-// Inventory Table Renderer
-function renderInventoryTable() {
-  const tbody = document.getElementById('inventoryTableBody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  state.inventory.forEach(inv => {
-    const badgeClass = inv.status === 'In Stock' ? 'badge-confirmed' : inv.status === 'Low Stock' ? 'badge-pending' : 'badge-cancelled';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${inv.id}</strong></td>
-      <td>${inv.item}</td>
-      <td>${inv.category}</td>
-      <td><strong>${inv.stock}</strong></td>
-      <td>${inv.minStock}</td>
-      <td><span class="badge ${badgeClass}">${inv.status}</span></td>
-      <td>
-        <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="showToast('Reorder requested for ${inv.item}')">Reorder</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-// Expenses Table Renderer
-function renderExpensesTable() {
-  const tbody = document.getElementById('expensesTableBody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  state.expenses.forEach(exp => {
-    const badgeClass = exp.status === 'Paid' ? 'badge-confirmed' : 'badge-pending';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${exp.id}</strong></td>
-      <td>${exp.title}</td>
-      <td>${exp.category}</td>
-      <td><strong>₹${exp.amount.toLocaleString('en-IN')}</strong></td>
-      <td>${exp.date}</td>
-      <td><span class="badge ${badgeClass}">${exp.status}</span></td>
-      <td>
-        <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="showToast('Voucher details for ${exp.id}')">Voucher</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-// Modal Management
-function openModal(id) {
-  const modal = document.getElementById(id);
-  if (modal) modal.classList.add('active');
-}
-
-function closeModal(id) {
-  const modal = document.getElementById(id);
-  if (modal) modal.classList.remove('active');
-}
-
-// Form Submission Handlers
-function handleSaveExpense(e) {
-  e.preventDefault();
-  const title = document.getElementById('inputExpenseTitle').value;
-  const amount = parseInt(document.getElementById('inputExpenseAmount').value);
-  const category = document.getElementById('inputExpenseCategory').value;
-
-  const date = new Date().toISOString().slice(0, 10);
-  const newExpense = {
-    id: `EXP-${500 + state.expenses.length + 1}`,
-    title, category, amount, date, status: 'Paid'
-  };
-
-  state.expenses.unshift(newExpense);
-  renderExpensesTable();
-  closeModal('modalAddExpense');
-  e.target.reset();
-  showToast(`Expense voucher created for ₹${amount.toLocaleString('en-IN')}!`);
-  if (window.API && window.API.online) {
-    window.API.post('/expenses', { title, category, amount, date, status: 'Paid' })
-      .then(function (dto) { if (dto && (dto.code || dto.id)) { newExpense.id = dto.code || dto.id; renderExpensesTable(); } })
-      .catch(function () { showToast('Saved locally — expense sync failed'); });
-  }
-}
-
-function handleSaveInventory(e) {
-  e.preventDefault();
-  const item = document.getElementById('inputInventoryItem').value;
-  const category = document.getElementById('inputInventoryCategory').value;
-  const stock = document.getElementById('inputInventoryStock').value;
-  const minStock = document.getElementById('inputInventoryMinStock').value;
-
-  const newInventory = {
-    id: `INV-${state.inventory.length + 1}`,
-    item, category, stock, minStock, status: 'In Stock'
-  };
-
-  state.inventory.unshift(newInventory);
-  renderInventoryTable();
-  closeModal('modalAddInventory');
-  e.target.reset();
-  showToast(`Item '${item}' added to temple inventory!`);
-  if (window.API && window.API.online) {
-    window.API.post('/inventory', { item, category, stock, minStock, status: 'In Stock' })
-      .then(function (dto) { if (dto && (dto.code || dto.id)) { newInventory.id = dto.code || dto.id; renderInventoryTable(); } })
-      .catch(function () { showToast('Saved locally — inventory sync failed'); });
-  }
-}
-
-/* Auth is a real page now (public/login.html + Google Sign-In). The in-app
-   "Sign in" button and the user menu route here to end the session. */
-function signOut() {
-  try {
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-      .finally(function () { window.location.href = '/login'; });
-  } catch (e) { window.location.href = '/login'; }
-}
-
-/* Top-bar account menu (the only sign-out affordance in the header). */
-function toggleUserMenu(ev) {
-  if (ev) ev.stopPropagation();
-  var pop = document.getElementById('userMenuPop');
-  var btn = document.getElementById('userMenuBtn');
-  if (!pop || !btn) return;
-  if (pop.hidden) {
-    // position:fixed has no positioning parent, so anchor it to the
-    // button's real screen position on every open (see styles.css for why
-    // it's fixed, not absolute).
-    var r = btn.getBoundingClientRect();
-    pop.style.top = (r.bottom + 8) + 'px';
-    pop.style.right = (window.innerWidth - r.right) + 'px';
-  }
-  pop.hidden = !pop.hidden;
-}
-document.addEventListener('click', function (ev) {
-  var pop = document.getElementById('userMenuPop');
-  var btn = document.getElementById('userMenuBtn');
-  if (pop && !pop.hidden && btn && !btn.contains(ev.target)) pop.hidden = true;
-});
-
-/* Fill the account menu (and the top-bar name) from the real signed-in user. */
-function initAccountMenu() {
-  var s = (typeof window !== 'undefined' && window.__SESSION) || null;
-  var u = s && s.user;
-  var emailEl = document.getElementById('userMenuEmail');
-  var nameEl = document.getElementById('topbarUserName');
-  if (u) {
-    if (emailEl) emailEl.textContent = u.email || '';
-    if (nameEl && u.name) nameEl.textContent = u.name;
-    if (s.impersonating && emailEl) emailEl.textContent = (u.email || '') + '  (impersonating)';
-  } else {
-    if (emailEl) emailEl.textContent = 'Demo mode — no backend';
-  }
-}
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAccountMenu);
-} else {
-  initAccountMenu();
-}
-
-function openBadgeGeneratorModal() {
-  openModal('modalBadgeViewer');
-}
-
-function approveVolunteer(btn) {
-  const parent = btn.closest('.summary-item');
-  if (parent) {
-    parent.innerHTML = `
-      <div>
-        <strong>Volunteer Application Approved</strong>
-        <div style="font-size: 0.8rem; color: var(--success);">Added to Active Roster</div>
-      </div>
-      <span class="badge badge-confirmed">Accepted</span>
-    `;
-    showToast('Volunteer application approved!');
-  }
-}
-
-function terminateSession(btn) {
-  const row = btn.closest('tr');
-  if (row) {
-    row.remove();
-    showToast('User session terminated.');
-  }
-}
-
-function toggleNotificationsDrawer() {
-  showToast('No new notifications');
-}
-
-function showToast(msg) {
-  const container = document.getElementById('toastContainer');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.innerHTML = `
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-    <span>${msg}</span>
-  `;
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(100%)';
-    toast.style.transition = 'all 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-function handleGlobalSearch(val) {
-  if (val.length > 2) {
-    showToast(`Searching temple records for: "${val}"...`);
-  }
-}
-
-// High-DPI Canvas Charts Initializer
-function initCharts() {
-  // 1. Donation Bar Chart
-  const barCanvas = document.getElementById('donationBarChart');
-  if (barCanvas) {
-    const ctx = barCanvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    const rect = barCanvas.getBoundingClientRect();
-    barCanvas.width = (rect.width || 500) * dpr;
-    barCanvas.height = (rect.height || 230) * dpr;
-    ctx.scale(dpr, dpr);
-
-    const data = [18, 24, 20, 32, 30, 42, 36, 48, 52, 40, 50, 58];
-    const maxVal = 65;
-    const barWidth = 14;
-    const width = rect.width || 500;
-    const height = rect.height || 230;
-    const gap = (width - (data.length * barWidth)) / (data.length + 1);
-
-    ctx.clearRect(0, 0, width, height);
-
-    data.forEach((val, i) => {
-      const x = gap + i * (barWidth + gap);
-      const barHeight = (val / maxVal) * (height - 30);
-      const y = height - barHeight - 20;
-
-      ctx.fillStyle = i % 2 === 0 ? '#6B1F2A' : '#C96A20';
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(x, y, barWidth, barHeight, [4, 4, 0, 0]);
-      } else {
-        ctx.rect(x, y, barWidth, barHeight);
+    document.getElementById('userChip').title = 'Signed in as ' + name + (u.email ? ' (' + u.email + ')' : '');
+    /* Only the sections this account can open are offered at all. */
+    document.querySelectorAll('.sidebar [data-page], .mobile-bottom-nav [data-page]').forEach((el) => {
+      el.hidden = !UI.canOpen(el.getAttribute('data-page'));
+    });
+    /* …and a group heading goes with its last visible item, or an
+       operator sees an "Administration" title over nothing. */
+    document.querySelectorAll('.sidebar-nav .nav-group-title').forEach((title) => {
+      let el = title.nextElementSibling;
+      let any = false;
+      while (el && !el.classList.contains('nav-group-title')) {
+        if (el.matches('[data-page]') && !el.hidden) any = true;
+        el = el.nextElementSibling;
       }
-      ctx.fill();
+      title.hidden = !any;
     });
   }
+  window.paintUser = paintUser;
 
-  // 2. Donation Categories Donut Chart
-  const donutCanvas = document.getElementById('sourcesDonutChart');
-  if (donutCanvas) {
-    const ctx = donutCanvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    donutCanvas.width = 140 * dpr;
-    donutCanvas.height = 140 * dpr;
-    ctx.scale(dpr, dpr);
-
-    const segments = [
-      { percentage: 0.48, color: '#6B1F2A' },
-      { percentage: 0.32, color: '#C96A20' },
-      { percentage: 0.12, color: '#C9A24A' },
-      { percentage: 0.08, color: '#EFE3CF' }
-    ];
-
-    let startAngle = -Math.PI / 2;
-    const cx = 70, cy = 70, radius = 55, innerRadius = 35;
-
-    segments.forEach(seg => {
-      const sliceAngle = seg.percentage * 2 * Math.PI;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, startAngle, startAngle + sliceAngle);
-      ctx.arc(cx, cy, innerRadius, startAngle + sliceAngle, startAngle, true);
-      ctx.closePath();
-      ctx.fillStyle = seg.color;
-      ctx.fill();
-      startAngle += sliceAngle;
-    });
+  async function paintBrand() {
+    try {
+      const s = await API.settings();
+      if (s.temple_name) document.getElementById('brandName').textContent = s.temple_name;
+      if (s.temple_location) document.getElementById('brandSub').textContent = s.temple_location;
+    } catch (e) { /* offline — keep defaults */ }
   }
-}
 
-// The Unified Calendar is rendered by calendar.js into #calendarRoot.
-function renderCalendar() { if (typeof renderUnifiedCalendar === 'function') renderUnifiedCalendar(); }
+  document.documentElement.lang = Lang.lang();
+  document.documentElement.classList.toggle('lang-gu', Lang.lang() === 'gu');
+  Lang.paintStaticLabels();
 
-// Mandala Geometric SVG Decorator
-function injectMandalaDecorations() {
-  // Can programmatically append background mandala overlays or corner flourishes if needed
-}
+  /* Who is signed in comes first: the nav, the page guard and every
+     UI.can() depend on it. No session → the login page (api.js). */
+  (async () => {
+    let me = null;
+    try { me = await API.loadMe(); } catch (e) { console.error(e); }
+    if (!me) { appReady(); return; }
+    paintUser();
+    if (me.rank !== 'none') paintBrand();
+    window.addEventListener('hashchange', render);
+    if (!location.hash) location.hash = '#/dashboard';
+    render();
+  })();
+})();

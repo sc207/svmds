@@ -1,36 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="is-loading">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shri Vihat Meldi Dham — Temple Management Platform</title>
-
-  <!-- Auth gate — runs during head parse, before any module script. The
-       synchronous request is deliberate: an auth check belongs here and it
-       blocks ~1 frame. If the backend is unreachable (opened as a static
-       file / plain static host) the app falls through and boots in demo mode. -->
-  <script>
-  (function () {
-    try {
-      var x = new XMLHttpRequest();
-      x.open('GET', '/api/auth/me', false);
-      x.withCredentials = true;
-      x.send();
-      if (x.status === 401) { window.location.replace('/login'); return; }
-      if (x.status === 200) {
-        var r = JSON.parse(x.responseText || '{}');
-        if (!r || !r.user) { window.location.replace('/login'); return; }
-        window.__SESSION = r;   // { user, pages, isSuperadmin, impersonating }
-      }
-      /* other status (404 / 501 / offline) → demo mode */
-    } catch (e) { /* backend down → demo mode */ }
-  })();
-  </script>
-
-  <link rel="icon" type="image/png" href="assets/icon.png">
-
-  <!-- Splash loader — inlined so it paints instantly, before styles.css / JS
-       have downloaded (matters most on a fresh GitHub Pages visit). -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B1F2A">
+<title>Shri Vihat Meldi Dham — Sanand</title>
+<link rel="icon" type="image/png" href="/assets/icon.png">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="stylesheet" href="/css/app-extras.css">
+<!-- Splash loader — inlined so it paints instantly, before styles.css and
+     the page scripts have downloaded. Ported unchanged from the trust's
+     portal (sc207/svmds public/index.html); see CLAUDE.md. -->
   <style id="loaderStyle">
     html.is-loading, body.is-loading { overflow: hidden; }
     #appLoader {
@@ -86,8 +66,6 @@
       #appLoader { transition: none; }
     }
   </style>
-
-  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="is-loading">
 
@@ -145,28 +123,6 @@
   </div>
 </div>
 
-<!-- Opening announcement — a full-screen temple notification shown once per
-     user per day for upcoming poojas / meetings / sessions / events / annual
-     tithis relevant to the signed-in user's role & relationships. Content is
-     rendered by js/announcements.js from GET /api/reminders (canonical data,
-     no separate event store). Hidden until then. -->
-<div id="openingAnnounce" class="annc-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="anncTitle">
-  <div class="annc-card" role="document">
-    <div class="annc-head">
-      <div class="annc-emblem" aria-hidden="true"><img src="assets/icon.png" alt="" onerror="this.style.display='none'"></div>
-      <div>
-        <div class="annc-kicker" id="anncKicker">Today's Temple Updates</div>
-        <h2 class="annc-title" id="anncTitle">જય શ્રી વિહત મેલડી ધામ 🙏</h2>
-      </div>
-      <button type="button" class="annc-x" id="anncClose" aria-label="Close">&times;</button>
-    </div>
-    <div class="annc-list" id="anncList"><!-- reminder cards --></div>
-    <div class="annc-foot">
-      <button type="button" class="btn btn-primary" id="anncContinue">Continue to Dashboard</button>
-    </div>
-  </div>
-</div>
-
 <script>
 (function () {
   var loader = document.getElementById('appLoader');
@@ -177,24 +133,27 @@
   var pct = 8, target = 12, done = false, hi = 0, ni = 0;
   var t0 = Date.now();
   var hints = ['Preparing the mandir', 'Lighting the diyas', 'Gathering the seva records', 'Almost ready'];
-  // Devotional invocations, cycled one at a time in the title spot while the
-  // mandir loads. The real page can finish loading (often ~2s) well before a
-  // human has read all 5 — so closing waits on BOTH the real `load` event AND
-  // this cycle completing naturally (see cycleDone/pageDone below); it never
-  // force-jumps mid-cycle to the last name, and the loader stays up long
-  // enough for every name to actually be read.
+  /* Devotional invocations, cycled one at a time in the title spot while
+     the mandir loads. The page can finish loading well before a human has
+     read all five, so closing waits on the cycle completing naturally as
+     well; it never force-jumps mid-cycle to the last name. */
   var names = ['શ્રી વિહત માતાય નમઃ', 'શ્રી મેલડી માતાય નમઃ', 'જય શ્રી ગોગા મહારાજ',
     'ભગવાન શ્રી કરમશી બાપાને નમન', 'ભુવાજી શ્રી સુરેશ બાપાને નમન'];
-  var NAME_HOLD = 800;    // ms each name is shown
-  // floor so the loader always stays up for the full name cycle plus a short
-  // hold on the last name, even when the real page loads in ~2s or less.
-  var MIN_SHOW = names.length * NAME_HOLD + 400;
-  var pageDone = false, cycleDone = false;
+  var NAME_HOLD = 800;                                  // ms each name is shown
+  var MIN_SHOW = names.length * NAME_HOLD + 400;        // floor, even on a fast load
+
+  /* Three gates, not the portal's two. This app is a single page whose
+     first screen is fetched after the scripts run, so `load` fires while
+     the dashboard is still showing skeletons — lifting the splash there
+     would reveal a half-drawn page. app.js calls window.__appReady()
+     once its first render has actually painted. */
+  var pageDone = false, cycleDone = false, appDone = false;
+
   function paint() { if (bar) bar.style.width = pct.toFixed(1) + '%'; }
   function tick() {
     if (done) return;
     pct += (target - pct) * 0.14;
-    if (target < 90) target += 0.4;                 // gentle creep until a real signal
+    if (target < 90) target += 0.4;                     // gentle creep until a real signal
     paint();
     requestAnimationFrame(tick);
   }
@@ -202,6 +161,8 @@
     target = Math.max(target, Math.min(t, 100));
     if (msg && hint) hint.textContent = msg;
   };
+  window.__appReady = function () { appDone = true; maybeFinish(); };
+
   var rot = setInterval(function () {
     if (done || !hint) return;
     hi = (hi + 1) % 3;
@@ -220,12 +181,17 @@
     }
     namesEl.textContent = names[ni];
   }, NAME_HOLD);
+
   document.addEventListener('DOMContentLoaded', function () { window.__boot(84, hints[2]); });
   window.addEventListener('load', function () { pageDone = true; maybeFinish(); });
-  var guard = setTimeout(function () { pageDone = true; cycleDone = true; maybeFinish(); },
-    names.length * NAME_HOLD + 4000);                // never trap the user
+  /* Never trap the operator: if a fetch hangs or app.js throws before it
+     can report ready, this lifts the splash anyway. */
+  var guard = setTimeout(function () {
+    pageDone = true; cycleDone = true; appDone = true; maybeFinish();
+  }, names.length * NAME_HOLD + 4000);
+
   function maybeFinish() {
-    if (done || !pageDone || !cycleDone) return;
+    if (done || !pageDone || !cycleDone || !appDone) return;
     finish();
   }
   function finish() {
@@ -234,7 +200,7 @@
     clearInterval(rot); clearInterval(nameRot); clearTimeout(guard);
     target = 100; pct = 100; paint();
     if (hint) hint.textContent = hints[3];
-    // If the real load was slow this waits 0ms; if it was fast, hold to MIN_SHOW.
+    // Slow load: waits 0ms. Fast load: holds so every name can be read.
     setTimeout(close, Math.max(0, MIN_SHOW - (Date.now() - t0)));
   }
   function close() {
@@ -255,93 +221,62 @@
   <!-- ==========================================
        DIVINE MANDALA SIDEBAR NAVIGATION
        ========================================== -->
+  <!-- Below 1200px the sidebar is an off-canvas drawer. A drawer with
+       nothing behind it looks like part of the page, so the page under
+       it looks tappable when it is not what the operator means to
+       touch. This is the way out, and the sign that there is one. -->
+  <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
+
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <img src="assets/icon.png" class="temple-emblem-img" alt="Shri Vihat Meldi Dham"
-           onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'temple-emblem-fallback',innerHTML:'🛕'}))">
+      <img src="/assets/icon.png" class="temple-emblem-img" alt="Shri Vihat Meldi Dham"
+           onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'temple-emblem-fallback'}))">
       <div class="sidebar-brand-text">
-        <div class="sidebar-logo-title" data-i18n="temple_name">શ્રી વિહત મેલડી ધામ</div>
-        <div class="sidebar-logo-subtitle" data-i18n="temple_loc">Sanand, Gujarat</div>
+        <div class="sidebar-logo-title" id="brandName">શ્રી વિહત મેલડી ધામ</div>
+        <div class="sidebar-logo-subtitle" id="brandSub">Sanand, Gujarat</div>
       </div>
     </div>
 
     <div class="sidebar-nav">
-      <div class="nav-group-title" data-i18n="nav_grp_overview">Overview</div>
-
-      <div class="nav-item active" data-page="dashboard">
-        <span data-i18n="nav_dashboard">🏠 Dashboard</span>
+      <div class="nav-group-title" data-i18n="Overview">Overview</div>
+      <div class="nav-item" data-page="dashboard">
+        <svg class="ico"><use href="/assets/icons.svg#home"/></svg><span data-i18n="Dashboard">Dashboard</span>
       </div>
-
       <div class="nav-item" data-page="calendar">
-        <span data-i18n="nav_calendar">🗓️ Unified Calendar</span>
+        <svg class="ico"><use href="/assets/icons.svg#calendar"/></svg><span data-i18n="Universal Calendar">Universal Calendar</span>
       </div>
 
-      <div class="nav-group-title" data-i18n="nav_grp_seva">Seva &amp; Events</div>
-
-      <div class="nav-item" data-page="puja">
-        <span data-i18n="nav_puja">🪔 Pooja &amp; Seva</span>
+      <div class="nav-group-title" data-i18n="Mahotsav">Mahotsav</div>
+      <div class="nav-item nav-item-featured" data-page="mahotsav">
+        <svg class="ico"><use href="/assets/icons.svg#temple"/></svg><span data-i18n="Pran Pratishtha">Pran Pratishtha</span>
+      </div>
+      <div class="nav-item" data-page="payments">
+        <svg class="ico"><use href="/assets/icons.svg#rupee"/></svg><span data-i18n="Payments">Payments</span>
+      </div>
+      <div class="nav-item" data-page="invitation">
+        <svg class="ico"><use href="/assets/icons.svg#mail"/></svg><span data-i18n="Invitation">Invitation</span>
       </div>
 
-      <div class="nav-item" data-page="invite">
-        <span data-i18n="nav_invite">🎴 Combined Invitation</span>
-      </div>
-
-      <div class="nav-item" data-page="events">
-        <span data-i18n="nav_events">📅 Events</span>
-      </div>
-
-      <div class="nav-item" data-page="dhaja">
-        <span data-i18n="nav_dhaja">🚩 Dhaja Pooja</span>
-      </div>
-
-      <div class="nav-item" data-page="yagna-signups">
-        <span data-i18n="nav_yagna_signups">🔥 Maha Yagna Signups</span>
-      </div>
-
-      <div class="nav-item" data-page="visits">
-        <span data-i18n="nav_visits">🙏 Bappa / Bhuvaji Visits</span>
-      </div>
-
-      <div class="nav-group-title" data-i18n="nav_grp_people">People &amp; Governance</div>
-
+      <div class="nav-group-title" data-i18n="Devotees &amp; Seva">Devotees &amp; Seva</div>
       <div class="nav-item" data-page="devotees">
-        <span data-i18n="nav_devotees">👥 Devotees</span>
+        <svg class="ico"><use href="/assets/icons.svg#users"/></svg><span data-i18n="Devotee Register">Devotee Register</span>
       </div>
-
-      <div class="nav-item" data-page="committees">
-        <span data-i18n="nav_committees">🏛️ Committee / Samaj</span>
+      <div class="nav-item" data-page="visits">
+        <svg class="ico"><use href="/assets/icons.svg#diya"/></svg><span data-i18n="Padhramni">Padhramni</span>
       </div>
-
-      <div class="nav-item nav-item-featured" data-page="management">
-        <span data-i18n="nav_management">🗂️ Management Apps</span>
-      </div>
-
-      <div class="nav-group-title" data-i18n="nav_grp_resources">Donations &amp; Resources</div>
-
       <div class="nav-item" data-page="donations">
-        <span data-i18n="nav_donations">💰 Donations</span>
+        <svg class="ico"><use href="/assets/icons.svg#gift"/></svg><span data-i18n="Donation">Donation</span>
       </div>
 
-      <div class="nav-item" data-page="expenses">
-        <span data-i18n="nav_expenses">💸 Expenses</span>
+      <div class="nav-group-title" data-i18n="Administration">Administration</div>
+      <div class="nav-item" data-page="import">
+        <svg class="ico"><use href="/assets/icons.svg#upload"/></svg><span data-i18n="Import from Excel">Import from Excel</span>
       </div>
-
-      <div class="nav-item" data-page="inventory">
-        <span data-i18n="nav_inventory">📦 Inventory</span>
-      </div>
-
-      <div class="nav-group-title" data-i18n="nav_grp_admin">Administration</div>
-
-      <div class="nav-item" data-page="reports">
-        <span data-i18n="nav_reports">📊 Reports</span>
-      </div>
-
       <div class="nav-item" data-page="settings">
-        <span data-i18n="nav_settings">⚙️ Settings</span>
+        <svg class="ico"><use href="/assets/icons.svg#settings"/></svg><span data-i18n="Settings">Settings</span>
       </div>
-
-      <div class="nav-item" data-page="admin">
-        <span data-i18n="nav_admin">🛡️ Accounts &amp; Access</span>
+      <div class="nav-item" data-page="accounts">
+        <svg class="ico"><use href="/assets/icons.svg#shield"/></svg><span data-i18n="Accounts &amp; Access">Accounts &amp; Access</span>
       </div>
     </div>
 
@@ -384,7 +319,7 @@
           <path d="M49 92 Q60 99 71 92 Q67 101 60 101 Q53 101 49 92 Z" fill="#7A4417"/>
         </svg>
       </div>
-      <div class="sidebar-footer-blessing" data-i18n="banner_headline">જય શ્રી વિહત મેલડી ધામ</div>
+      <div class="sidebar-footer-blessing">જય શ્રી વિહત મેલડી ધામ</div>
     </div>
   </aside>
 
@@ -393,419 +328,106 @@
        ========================================== -->
   <main class="main-container">
 
-    <!-- Top Sticky Navbar -->
     <header class="top-navbar">
       <div class="nav-left">
         <button class="sidebar-toggle-btn" id="toggleSidebar" aria-label="Toggle sidebar">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
 
         <div class="header-logo-title">
-          <img src="assets/icon.png" class="header-emblem-img" alt="" aria-hidden="true" onerror="this.style.display='none'">
-          <span data-i18n="temple_name">શ્રી વિહત મેલડી ધામ</span>
+          <img src="/assets/icon.png" class="header-emblem-img" alt="" aria-hidden="true" onerror="this.style.display='none'">
+          <span>શ્રી વિહત મેલડી ધામ</span>
         </div>
 
         <div class="nav-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="globalSearchInput" autocomplete="off" data-i18n-ph="search_placeholder" placeholder="Search anything…" oninput="handleGlobalSearch(this.value)" onkeydown="gsearchKeydown(event)">
-          <kbd class="nav-search-kbd">⌘K</kbd>
+          <input type="text" id="globalSearchInput" autocomplete="off" placeholder="Search devotee, sevarthi, pooja…">
         </div>
       </div>
 
       <div class="nav-right">
-        <!-- Language Selector -->
         <div class="lang-select-wrapper">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          <select id="langSelect" onchange="setLanguage(this.value)">
-            <option value="en">English</option>
-            <option value="hi">हिन्दी (Hindi)</option>
-            <option value="gu">ગુજરાતી (Gujarati)</option>
-          </select>
+          <button class="lang-toggle" id="langToggle" aria-label="Switch language">
+            <span data-lang-en>EN</span><span data-lang-gu>ગુ</span>
+          </button>
         </div>
 
-        <!-- View switcher (superadmin / admin can preview a staff member's view) -->
-        <div class="role-badge-select" id="viewSwitchWrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          <select id="roleScopeSelect" onchange="changeRoleScope(this.value)" title="Preview the portal the way a staff member with a limited login would see it. Your own access is unchanged.">
-            <option value="admin">My view — full access</option>
-            <optgroup label="Preview a staff view ↓">
-              <option value="pooja_manager">as Pooja Coordinator (Pooja &amp; Seva only)</option>
-              <option value="accountant">as Accountant (Donations, Expenses, Reports)</option>
-              <option value="event_incharge">as Event In-charge (Events only)</option>
-            </optgroup>
-            <optgroup label="Preview a specific Management Lead" id="roleLeadGroup"></optgroup>
-            <optgroup label="Preview a specific Pooja Coordinator" id="roleCoordGroup"></optgroup>
-            <optgroup label="Preview a specific Committee Leader" id="roleCmtGroup"></optgroup>
-            <optgroup label="Preview a specific Event In-charge" id="roleEventGroup"></optgroup>
-            <optgroup label="Preview a specific Accountant" id="roleAcctGroup"></optgroup>
-          </select>
-        </div>
-
-        <!-- Notification Bell -->
-        <button class="nav-action-btn" onclick="toggleNotificationsDrawer()" aria-label="Notifications">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span class="notification-badge" id="notifBadgeCount" hidden></span>
-        </button>
-
-        <!-- User menu -->
-        <div class="user-profile-menu" id="userMenuBtn" onclick="toggleUserMenu(event)" title="Account">
-          <img src="assets/icon.png" class="user-avatar" alt="">
+        <div class="user-profile-menu" id="userChip" title="Signed in as">
+          <span class="mg-avatar" id="userInitial">A</span>
           <span class="user-name" id="topbarUserName">Administrator</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-          <div class="user-menu-pop" id="userMenuPop" hidden onclick="event.stopPropagation()">
-            <div class="user-menu-email" id="userMenuEmail">—</div>
-            <button type="button" class="user-menu-item user-menu-signout" onclick="signOut()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              Sign out
-            </button>
-          </div>
         </div>
       </div>
     </header>
 
-    <!-- Page Body Area -->
     <div class="content-wrapper">
-
-      <!-- ==========================================
-           PAGE 1: DASHBOARD
-           ========================================== -->
-      <section class="page active" id="page-dashboard">
-        <!-- ==========================================
-             DIVINE MANDALA WELCOME BANNER (Cream / Temple Art)
-             ========================================== -->
-        <div class="welcome-banner">
-
-          <!-- Shared gradient definitions for diyas & temple stone -->
-          <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-            <defs>
-              <linearGradient id="flameGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#FFF6DC"/><stop offset="45%" stop-color="#E6C978"/>
-                <stop offset="100%" stop-color="#E88535"/>
-              </linearGradient>
-              <linearGradient id="lampGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#E6C978"/><stop offset="100%" stop-color="#C96A20"/>
-              </linearGradient>
-            </defs>
-          </svg>
-
-          <!-- Left decorative mandala quarter -->
-          <svg class="banner-mandala banner-mandala-left" viewBox="0 0 200 200" aria-hidden="true">
-            <g fill="none" stroke="#C9A24A" stroke-width="1">
-              <circle cx="0" cy="100" r="120"/><circle cx="0" cy="100" r="98"/>
-              <circle cx="0" cy="100" r="76"/><circle cx="0" cy="100" r="54"/>
-              <g stroke-width="1.1">
-                <path d="M0 100 m40 0 a20 20 0 0 1 34 -14 a20 20 0 0 1 -34 42 z"/>
-                <path d="M0 40 q60 20 70 60 q-50 -10 -70 -60 z"/>
-                <path d="M0 160 q60 -20 70 -60 q-50 10 -70 60 z"/>
-                <path d="M0 100 q80 -50 108 0 q-28 50 -108 0 z"/>
-              </g>
-            </g>
-          </svg>
-
-          <!-- Right decorative mandala quarter -->
-          <svg class="banner-mandala banner-mandala-right" viewBox="0 0 200 200" aria-hidden="true">
-            <g fill="none" stroke="#C9A24A" stroke-width="1">
-              <circle cx="200" cy="100" r="120"/><circle cx="200" cy="100" r="98"/>
-              <circle cx="200" cy="100" r="76"/><circle cx="200" cy="100" r="54"/>
-              <g stroke-width="1.1">
-                <path d="M200 40 q-60 20 -70 60 q50 -10 70 -60 z"/>
-                <path d="M200 160 q-60 -20 -70 -60 q50 10 70 60 z"/>
-                <path d="M200 100 q-80 -50 -108 0 q28 50 108 0 z"/>
-              </g>
-            </g>
-          </svg>
-
-          <!-- Hanging diyas — LEFT pair -->
-          <div class="hanging-diya-container diya-left">
-            <div class="hanging-diya">
-              <div class="diya-string"></div>
-              <svg class="diya-lamp" viewBox="0 0 60 70">
-                <ellipse cx="30" cy="14" rx="7" ry="9" fill="url(#flameGrad)"/>
-                <path d="M8 30 Q30 26 52 30 Q46 52 30 56 Q14 52 8 30 Z" fill="url(#lampGrad)"/>
-                <path d="M4 30 Q30 22 56 30 Q30 38 4 30 Z" fill="#E6C978"/>
-                <path d="M18 56 Q30 66 42 56" fill="none" stroke="#C9A24A" stroke-width="2"/>
-              </svg>
-            </div>
-            <div class="hanging-diya" style="animation-delay:-2.2s">
-              <div class="diya-string" style="height:64px"></div>
-              <svg class="diya-lamp" viewBox="0 0 60 70" style="width:30px">
-                <ellipse cx="30" cy="14" rx="6" ry="8" fill="url(#flameGrad)"/>
-                <path d="M8 30 Q30 26 52 30 Q46 52 30 56 Q14 52 8 30 Z" fill="url(#lampGrad)"/>
-                <path d="M4 30 Q30 22 56 30 Q30 38 4 30 Z" fill="#E6C978"/>
-              </svg>
-            </div>
-          </div>
-
-          <!-- Hanging diyas — RIGHT pair -->
-          <div class="hanging-diya-container diya-right">
-            <div class="hanging-diya" style="animation-delay:-1.4s">
-              <div class="diya-string" style="height:58px"></div>
-              <svg class="diya-lamp" viewBox="0 0 60 70" style="width:30px">
-                <ellipse cx="30" cy="14" rx="6" ry="8" fill="url(#flameGrad)"/>
-                <path d="M8 30 Q30 26 52 30 Q46 52 30 56 Q14 52 8 30 Z" fill="url(#lampGrad)"/>
-                <path d="M4 30 Q30 22 56 30 Q30 38 4 30 Z" fill="#E6C978"/>
-              </svg>
-            </div>
-            <div class="hanging-diya" style="animation-delay:-3.1s">
-              <div class="diya-string" style="height:88px"></div>
-              <svg class="diya-lamp" viewBox="0 0 60 70">
-                <ellipse cx="30" cy="14" rx="7" ry="9" fill="url(#flameGrad)"/>
-                <path d="M8 30 Q30 26 52 30 Q46 52 30 56 Q14 52 8 30 Z" fill="url(#lampGrad)"/>
-                <path d="M4 30 Q30 22 56 30 Q30 38 4 30 Z" fill="#E6C978"/>
-                <path d="M18 56 Q30 66 42 56" fill="none" stroke="#C9A24A" stroke-width="2"/>
-              </svg>
-            </div>
-          </div>
-
-          <!-- Centered greeting -->
-          <div class="banner-text-area">
-            <h1 class="banner-title banner-headline" data-i18n="banner_headline">જય શ્રી વિહત મેલડી ધામ</h1>
-            <div class="banner-flourish" aria-hidden="true">
-              <svg viewBox="0 0 220 16" preserveAspectRatio="xMidYMid meet">
-                <g fill="none" stroke="#C9A24A" stroke-width="1.4">
-                  <path d="M2 8 H78"/><path d="M142 8 H218"/>
-                  <path d="M96 8 q7 -7 14 0 q7 7 14 0"/>
-                </g>
-                <circle cx="110" cy="8" r="2.4" fill="#C96A20"/>
-                <circle cx="82" cy="8" r="1.6" fill="#C9A24A"/><circle cx="138" cy="8" r="1.6" fill="#C9A24A"/>
-              </svg>
-            </div>
-            <div class="banner-tagline" data-i18n="banner_tagline">માતાજીની કૃપા, ભક્તોની શ્રદ્ધા</div>
-            <div class="banner-khamma" data-i18n="banner_khamma">ખમ્મા માડી, ખમ્મા 🙏</div>
-            <div class="banner-welcome-chip">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <span><span data-i18n="welcome_back">Welcome back</span>, <strong id="bannerAdminName">Admin</strong></span>
-              <span class="banner-chip-dot"></span>
-              <span data-i18n="temple_loc">Sanand, Gujarat</span>
-              <button type="button" class="banner-signout" onclick="signOut()" title="Sign out">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                <span data-i18n="sign_out">Sign out</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Detailed temple silhouette (right) -->
-          <div class="banner-mandir-graphic">
-            <img src="assets/temple.png" alt="Shri Vihat Meldi Dham" onerror="this.closest('.banner-mandir-graphic').style.display='none'">
-          </div>
-        </div>
-
-        <div id="dashboardRoot"></div>
-
-      </section>
-
-      <!-- ==========================================
-           PAGE 2: DEVOTEES
-           ========================================== -->
-      <section class="page" id="page-devotees">
-        <div id="devoteesRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 3: POOJA & SEVA
-           ========================================== -->
-      <section class="page" id="page-puja">
-        <div id="poojaScopeBanner"></div>
-        <div id="poojaRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE: COMBINED / UNIVERSAL INVITATION
-           ========================================== -->
-      <section class="page" id="page-invite">
-        <div id="inviteRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 4: DONATIONS
-           ========================================== -->
-      <section class="page" id="page-donations">
-        <div id="donationsRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE: MANAGEMENT APPS
-           Admin Portal → Management Directory → Workspace
-           Lead Portal  → My Managements    → Workspace
-           Rendered entirely by management-ui.js
-           ========================================== -->
-      <section class="page" id="page-management">
-        <div id="leadScopeBanner"></div>
-        <div id="managementRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 5: COMMITTEE / SAMAJ
-           ========================================== -->
-      <section class="page" id="page-committees">
-        <div id="committeeScopeBanner"></div>
-        <div id="committeeRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 6: STAFF & TEAMS
-           ========================================== -->
-      <section class="page" id="page-teams">
-        <div id="teamsRedirectRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 7: EVENTS
-           ========================================== -->
-      <section class="page" id="page-events">
-        <div id="eventScopeBanner"></div>
-        <div id="eventsRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 7b: DHAJA POOJA
-           ========================================== -->
-      <section class="page" id="page-dhaja">
-        <div id="dhajaRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 7c: MAHA YAGNA SEVARTHI SIGNUPS
-           ========================================== -->
-      <section class="page" id="page-yagna-signups">
-        <div id="yagnaSignupsRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 8: INVENTORY
-           ========================================== -->
-      <section class="page" id="page-inventory">
-        <div id="inventoryRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 9: EXPENSES
-           ========================================== -->
-      <section class="page" id="page-expenses">
-        <div id="expensesRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 10: BAPPA VISITS
-           ========================================== -->
-      <section class="page" id="page-visits">
-        <div id="visitsRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 11: UNIFIED CALENDAR
-           ========================================== -->
-      <section class="page" id="page-calendar">
-        <div id="calendarRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 12: REPORTS
-           ========================================== -->
-      <section class="page" id="page-reports">
-        <div id="reportsRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 13: SETTINGS
-           ========================================== -->
-      <section class="page" id="page-settings">
-        <div id="settingsRoot"></div>
-      </section>
-
-      <!-- ==========================================
-           PAGE 14: SECURITY AUDIT
-           ========================================== -->
-      <section class="page" id="page-admin">
-        <div id="accessRoot"></div>
-      </section>
-
+      <section class="page active" id="main"></section>
     </div>
   </main>
-
 </div>
-
-<!-- ==========================================
-     PUBLIC VOLUNTEERING PAGE (no-login route: #/volunteer/<MGMT-ID>)
-     Rendered by management-ui.js → renderPublicRouter()
-     ========================================== -->
-<div id="publicVolunteerRoot"></div>
 
 <!-- ==========================================
      MOBILE BOTTOM NAVIGATION BAR
      ========================================== -->
 <nav class="mobile-bottom-nav">
-  <div class="mobile-nav-item active" data-page="dashboard">
-    <span class="mob-nav-ico">🏠</span>
-    <span data-i18n="mob_home">Home</span>
+  <div class="mobile-nav-item" data-page="dashboard">
+    <svg class="ico"><use href="/assets/icons.svg#home"/></svg><span data-i18n="Home">Home</span>
   </div>
-  <div class="mobile-nav-item" data-page="puja">
-    <span class="mob-nav-ico">🪔</span>
-    <span data-i18n="mob_seva">Seva</span>
+  <div class="mobile-nav-item" data-page="mahotsav">
+    <svg class="ico"><use href="/assets/icons.svg#temple"/></svg><span data-i18n="Mahotsav">Mahotsav</span>
   </div>
-  <div class="mobile-nav-item" data-page="donations">
-    <span class="mob-nav-ico">💰</span>
-    <span data-i18n="mob_donations">Donations</span>
+  <div class="mobile-nav-item mob-fab" data-action="quick-add" aria-label="Quick add">
+    <svg class="ico"><use href="/assets/icons.svg#plus"/></svg>
   </div>
-  <div class="mobile-nav-item" data-page="management">
-    <span class="mob-nav-ico">🗂️</span>
-    <span data-i18n="mob_management">Teams</span>
+  <div class="mobile-nav-item" data-page="payments">
+    <svg class="ico"><use href="/assets/icons.svg#rupee"/></svg><span data-i18n="Payments">Payments</span>
   </div>
-  <div class="mobile-nav-item" onclick="toggleSidebarMenu()">
-    <span class="mob-nav-ico">☰</span>
-    <span data-i18n="mob_more">More</span>
+  <div class="mobile-nav-item" data-action="more">
+    <svg class="ico"><use href="/assets/icons.svg#menu"/></svg><span data-i18n="More">More</span>
   </div>
 </nav>
 
+<!-- ==========================================
+     SHARED MODAL  (sk's .modal-overlay pattern)
+     ========================================== -->
+<!-- A real <dialog>: the browser gives focus trapping, Esc to close and
+     top-layer stacking, which a div overlay has to fake and never quite
+     gets right. closedby="any" adds light dismiss where it is supported;
+     app.js keeps a click fallback for Safari. -->
+<dialog class="modal-overlay" id="sheet" closedby="any" aria-labelledby="sheetTitle">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="sheetTitle">Title</div>
+      <button class="modal-close-btn" id="sheetClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="sheetBody"></div>
+    <div class="modal-footer" id="sheetFoot"></div>
+  </div>
+</dialog>
 
-<div class="toast-container" id="toastContainer"></div>
+<div class="toast-container" id="toasts"></div>
 
-<!-- JavaScript Logic Engine -->
-<script src="js/api.js"></script>
-<script src="js/i18n.js"></script>
+<script src="/js/lang.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/ui.js"></script>
+<script src="/js/print.js"></script>
+<script src="/js/export.js"></script>
 <script>window.__boot && window.__boot(34, 'Lighting the diyas');</script>
-<script src="js/people.js"></script>
-<script src="js/export.js"></script>
-<script src="js/app.js"></script>
-<script src="js/core-ui.js"></script>
-<script src="js/people-picker.js"></script>
-<script src="js/devotee-picker.js"></script>
-<script>window.__boot && window.__boot(48);</script>
-<script src="js/management.js"></script>
-<script src="js/management-ui.js"></script>
-<script src="js/management-forms.js"></script>
-<script src="js/pooja.js"></script>
-<script src="js/pooja-ui.js"></script>
-<script src="js/pooja-forms.js"></script>
-<script src="js/invite-ui.js"></script>
-<script src="js/panchang.js"></script>
-<script src="js/annual.js"></script>
-<script src="js/annual-ui.js"></script>
-<script src="js/donations.js"></script>
-<script src="js/donations-ui.js"></script>
-<script src="js/donations-forms.js"></script>
-<script src="js/committee.js"></script>
-<script src="js/committee-ui.js"></script>
-<script src="js/committee-forms.js"></script>
-<script src="js/events.js"></script>
-<script src="js/events-ui.js"></script>
-<script src="js/events-forms.js"></script>
-<script src="js/dhaja.js"></script>
-<script src="js/dhaja-ui.js"></script>
-<script src="js/dhaja-forms.js"></script>
-<script src="js/yagna-signups.js"></script>
-<script src="js/yagna-signups-ui.js"></script>
-<script src="js/yagna-signups-forms.js"></script>
-<script src="js/visits.js"></script>
-<script src="js/devotees.js"></script>
-<script src="js/calendar.js"></script>
-<script src="js/dashboard.js"></script>
-<script src="js/access.js"></script>
-<script src="js/access-api.js"></script>
-<script src="js/search.js"></script>
-<script src="js/hydrate.js"></script>
-<script src="js/announcements.js"></script>
-<script>window.__boot && window.__boot(92, 'Almost ready');</script>
-
+<script src="/js/pages/dashboard.js"></script>
+<script src="/js/pages/mahotsav.js"></script>
+<script src="/js/pages/payments.js"></script>
+<script src="/js/pages/devotees.js"></script>
+<script src="/js/pages/visits.js"></script>
+<script src="/js/pages/calendar.js"></script>
+<script src="/js/pages/donations.js"></script>
+<script src="/js/pages/invitation.js"></script>
+<script src="/js/pages/import.js"></script>
+<script src="/js/pages/settings.js"></script>
+<script src="/js/pages/accounts.js"></script>
+<script>window.__boot && window.__boot(62);</script>
+<script src="/js/forms.js"></script>
+<script>window.__boot && window.__boot(88, 'Almost ready');</script>
+<script src="/js/app.js"></script>
 </body>
 </html>

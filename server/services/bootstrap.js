@@ -58,32 +58,6 @@ async function ensureAdminUser() {
     await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [user.id, 'superadmin']);
     console.log(`  ✓ granted superadmin role to ${email}`);
   }
-
-  // the owner is a person too — link a devotee record (fill mobile/city later in
-  // the UI). A one-time `root_owner_devotee_id` marker means that even if the
-  // link is ever cleared we re-attach the SAME devotee instead of minting a
-  // second "Administrator".
-  if (!user.devotee_id) {
-    try {
-      const { ensureDevotee } = require('./people');
-      const marked = await queryOne(`SELECT value FROM app_settings WHERE key = 'root_owner_devotee_id'`);
-      let devId = (marked && Number(marked.value)) || null;
-      if (devId) {
-        const still = await queryOne('SELECT id FROM devotees WHERE id = ? AND is_deleted = 0', [devId]);
-        if (!still) devId = null;
-      }
-      if (!devId) devId = await ensureDevotee({ name: user.name || 'Administrator' });
-      if (devId) {
-        await run('UPDATE users SET devotee_id = ? WHERE id = ?', [devId, user.id]);
-        await run(
-          `INSERT INTO app_settings (key, value) VALUES ('root_owner_devotee_id', ?)
-           ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-          [String(devId)]
-        );
-        console.log(`  ✓ linked ${email} to devotee ${devId}`);
-      }
-    } catch (e) { console.warn('  · could not link owner devotee:', e.message); }
-  }
 }
 
 module.exports = { ensureAdminUser };

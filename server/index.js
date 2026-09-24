@@ -1,6 +1,9 @@
-/* SVMDS — Shri Vihat Meldi Dham — backend entry.
-   Boot sequence: BACKEND_PLAN.md §1.2.  Phase 0: health + static + migrations.
-   API routers are mounted in Phase 2+ where marked below. */
+/* Shri Vihat Meldi Dham — Sanand
+   Phase 1: Murti Pran Pratishtha Mahotsav sevarthi & contribution tracking,
+   behind the portal's Google Sign-In, sessions and Accounts & Access.
+
+   Boot: migrations → invariant repairs → receipt backfill → ADMIN_EMAIL
+   superadmin → listen. A deploy only installs and starts; it never wipes. */
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -10,32 +13,24 @@ const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 
 const config = require('./config');
-const { runMigrations } = require('./db/migrate');
-const { seedPlatform } = require('./db/seed/platform');
-const { getDb, queryOne, isTurso } = require('./db/connection');
+require('./util/async-routes');                 // async handlers → next(err)
+const db = require('./db');
+const { runMigrations, bootRepairs } = require('./db/migrate');
 const { notFound, errorHandler } = require('./middleware/error');
+const { authRequired, readSession } = require('./middleware/auth');
+const { requireAnyRole } = require('./middleware/authz');
 
-/* ---- fail-fast: strong JWT secret in production ---- */
-if (config.isProd && (
-  !process.env.JWT_SECRET ||
-  config.jwtSecret === 'dev-secret-change-in-production' ||
-  config.jwtSecret.length < 32
-)) {
+/* ---- fail-fast: production needs a strong secret and a real database ---- */
+if (config.isProd && (!process.env.JWT_SECRET ||
+    config.jwtSecret === 'dev-secret-change-in-production' || config.jwtSecret.length < 32)) {
   console.error('FATAL: JWT_SECRET must be a strong 32+ character value in production.');
   process.exit(1);
 }
-
-/* ---- fail-fast: a real (Turso) database in production ----
-   Without TURSO_* the driver silently falls back to an EPHEMERAL local SQLite
-   file (data/svmds.db). On Render that file is wiped on every restart / deploy,
-   so every account, donation and audit row created through the live site would
-   vanish. Refuse to boot rather than lose data silently. */
+/* Without TURSO_* the driver falls back to a local file, which Render wipes
+   on every restart / deploy — every sevarthi and payment would vanish. */
 if (config.isProd && !(config.turso.url && config.turso.token)) {
-  console.error(
-    '\nFATAL: NODE_ENV=production but TURSO_DATABASE_URL / TURSO_AUTH_TOKEN are not set.\n' +
-    'The server would write to an ephemeral local file and lose all data on the next\n' +
-    'restart. Add both values in the Render dashboard → Environment, then redeploy.\n'
-  );
+  console.error('FATAL: NODE_ENV=production but TURSO_DATABASE_URL / TURSO_AUTH_TOKEN are not set.\n' +
+    'The server would write to an ephemeral local file and lose all data on the next restart.');
   process.exit(1);
 }
 
@@ -46,14 +41,14 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://accounts.google.com/gsi/client"],
+      scriptSrc:      ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/client'],
       scriptSrcAttr:  ["'unsafe-inline'"],
-      styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://accounts.google.com/gsi/style"],
+      styleSrc:       ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style'],
       styleSrcAttr:   ["'unsafe-inline'"],
-      fontSrc:        ["'self'", "https://fonts.gstatic.com", "data:"],
-      imgSrc:         ["'self'", "data:", "blob:", "https://images.unsplash.com"],
-      connectSrc:     ["'self'", "https://accounts.google.com"],
-      frameSrc:       ["https://accounts.google.com"],
+      fontSrc:        ["'self'", 'data:'],
+      imgSrc:         ["'self'", 'data:', 'blob:', 'https://*.googleusercontent.com'],
+      connectSrc:     ["'self'", 'https://accounts.google.com'],
+      frameSrc:       ['https://accounts.google.com'],
       objectSrc:      ["'none'"],
       frameAncestors: ["'self'"],
     },
@@ -61,26 +56,16 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-/* Let Google Identity Services use the FedCM credential API from this origin
-   (needed by the "Sign in with Google" button on modern Chrome). */
+/* Google Identity Services uses the FedCM credential API from this origin. */
 app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'identity-credentials-get=(self "https://accounts.google.com")');
   next();
 });
 
 app.use(cors((req, cb) => {
-  // POST /api/auth/google/redirect is the one endpoint in this app that is
-  // SUPPOSED to receive a cross-origin POST: Google's GIS ux_mode:'redirect'
-  // (the iOS sign-in path) submits a real top-level <form> from
-  // accounts.google.com straight to this URL, and browsers attach
-  // Origin: https://accounts.google.com to that POST. CORS enforcement is
-  // meaningless here anyway (it's a navigation the browser renders, not a
-  // fetch() reading the response cross-origin) — but the origin allowlist
-  // below would otherwise reject the request before it reaches the route
-  // handler, surfacing as a raw 500 ("Not allowed by CORS"). Skip the
-  // allowlist for this one path only; every other route is unaffected.
+  /* The iOS redirect sign-in is a real top-level form POST from
+     accounts.google.com — let that one path through the allowlist. */
   if (req.path === '/api/auth/google/redirect') return cb(null, { origin: true, credentials: true });
-
   const origin = req.headers.origin;
   const allowed = !origin || !config.allowedOrigins.length || config.allowedOrigins.includes(origin);
   cb(allowed ? null : new Error('Not allowed by CORS'), { origin: allowed, credentials: true });
@@ -89,138 +74,105 @@ app.use(cors((req, cb) => {
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use('/api/auth/google', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many sign-in attempts' } }));
 
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many sign-in attempts' } });
-app.use('/api/auth/google', authLimiter);
-
-/* Health + live DB diagnostic. No auth — reports only infra status (which
-   driver is active, row counts), never PII. Hit https://<host>/health to
-   confirm the live site is really talking to Turso. */
+/* Health + DB diagnostic. No auth, no PII — infra status and counts only. */
 app.get('/health', async (req, res) => {
-  const info = {
-    status: 'ok',
-    env: config.nodeEnv,
-    tursoConfigured: !!(config.turso.url && config.turso.token),
-    adminEmailSet: !!config.adminEmail,
-    db: null,
-    counts: null,
-  };
+  const info = { status: 'ok', env: config.nodeEnv, tursoConfigured: !!(config.turso.url && config.turso.token),
+    adminEmailSet: !!config.adminEmail, db: null, counts: null };
   try {
-    await getDb();
-    info.db = isTurso()
-      ? 'turso (persistent)'
-      : 'local-file (EPHEMERAL — data is lost on every restart/redeploy)';
+    await db.init();
+    info.db = db.isTurso() ? 'turso (persistent)' : 'local-file';
     try {
-      const u = await queryOne('SELECT COUNT(*) AS n FROM users WHERE is_deleted = 0');
-      const a = await queryOne('SELECT COUNT(*) AS n FROM audit_logs');
-      const s = await queryOne('SELECT COUNT(*) AS n FROM sessions WHERE revoked = 0');
-      info.counts = { users: Number(u.n), auditLogs: Number(a.n), activeSessions: Number(s.n) };
-    } catch (e) {
-      info.counts = { error: e.message };   // DB reachable but not migrated yet
-    }
-  } catch (e) {
-    info.status = 'degraded';
-    info.db = 'ERROR: ' + e.message;
-  }
-  res.status(200).json(info);
+      const n = async (t, w = '') => Number((await db.get(`SELECT COUNT(*) AS n FROM ${t} ${w}`)).n);
+      info.counts = {
+        users: await n('users', 'WHERE is_deleted = 0'),
+        activeSessions: await n('sessions', 'WHERE revoked = 0'),
+        devotees: await n('devotees'),
+        bookings: await n('sevarthi_bookings'),
+        payments: await n('payments'),
+      };
+    } catch (e) { info.counts = { error: e.message }; }
+  } catch (e) { info.status = 'degraded'; info.db = 'ERROR: ' + e.message; }
+  res.json(info);
 });
 
-/* ============================================================
-   API ROUTERS
-   Phase 2 (live): auth + sessions + users.
-   Phase 3+ adds one protected Router per resource below the guard —
-   see BACKEND_PLAN.md §4.4.
-   ============================================================ */
-const { authRequired } = require('./middleware/auth');
-const { attachScope } = require('./middleware/authz');
+/* ---- API ---- */
+app.use('/api/auth', require('./routes/auth'));             // public: Google sign-in
 
-app.use('/api/auth', require('./routes/auth'));                 // public
-app.use('/api/public', require('./routes/publicSignups'));      // public (no session)
-app.use('/api/public', require('./routes/publicYagna'));        // public (no session)
-
-app.use('/api', authRequired);                                  // everything below needs a session
-app.use('/api', attachScope);
-
-app.use('/api/settings', require('./routes/settings'));
+app.use('/api', authRequired);                              // everything below needs a session
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/users', require('./routes/users'));
-app.use('/api/devotees', require('./routes/devotees'));
-app.use('/api/donation-categories', require('./routes/donationCategories'));
-app.use('/api/donors', require('./routes/donors'));
-app.use('/api/donations', require('./routes/donations'));
-app.use('/api/pooja-types', require('./routes/poojaTypes'));
-app.use('/api/poojas', require('./routes/poojas'));
-app.use('/api/sevarthis', require('./routes/sevarthis'));
-app.use('/api/annual-events', require('./routes/annualEvents'));
-app.use('/api/dhaja', require('./routes/dhaja'));
-app.use('/api/yagna-signups', require('./routes/yagnaSignups'));
-app.use('/api/committees', require('./routes/committees'));
-app.use('/api/teams', require('./routes/teams'));
-app.use('/api/events', require('./routes/events'));
-app.use('/api/visits', require('./routes/visits'));
-app.use('/api/expenses', require('./routes/expenses'));
-app.use('/api/inventory', require('./routes/inventory'));
-app.use('/api/reminders', require('./routes/reminders'));   // opening announcements (derived, no event copy)
-app.use('/api', require('./routes/derived'));   // /calendar /dashboard /activity /reports
+app.use('/api', requireAnyRole);                            // …and an account with a role
 
+app.use('/api/lookups', require('./routes/lookups'));
+app.use('/api/devotees', require('./routes/devotees').router);
+app.use('/api/poojas', require('./routes/poojas').router);
+app.use('/api/bookings', require('./routes/bookings').router);
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/donations', require('./routes/donations'));
+app.use('/api/visits', require('./routes/visits'));
+app.use('/api/import', require('./routes/import'));         // mounts its own express.raw
+app.use('/api', require('./routes/misc'));                  // /dashboard /calendar /settings /audit
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));
 
-/* ---- static front-end (moved into public/ in Phase 2) ----
-   express.static serves every real file under public/ (including "/" ->
-   index.html, its default `index` option) plus the explicit named pages
-   below. Anything else is a broken/unknown link — it falls through to
-   notFound (middleware/error.js), which renders public/404.html instead of
-   silently handing back the SPA shell (the old app.get('*', ...) catch-all
-   here used to do exactly that, so a typo'd or stale link never looked
-   broken — it just loaded the whole app at the wrong URL). The SPA itself
-   has no server- or client-side path routing beyond these named pages
-   (switchPage() never touches the URL — BACKEND_PLAN.md / CLAUDE.md), so
-   this is the complete, real set of front-end routes. */
+/* ---- front end ----
+   The app shell needs a session; without one, go to the Google sign-in
+   page. CSS / JS / fonts / images are public (the login page uses them).
+   HTML, CSS, JS and the icon sprite revalidate every load so an update
+   never leaves an operator on a stale screen; fonts and images cache for
+   a week (replaced by adding a new file, never by editing one). */
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-if (fs.existsSync(PUBLIC_DIR)) {
-  app.use(express.static(PUBLIC_DIR));
-  app.get(['/login', '/login.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'login.html')));
-  app.get(['/yagna', '/yagna.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'yagna.html')));
-} else {
-  console.warn('⚠ public/ not found — front-end not served. Run: git mv index.html css js assets public/');
+
+async function shell(req, res, next) {
+  try {
+    if (!(await readSession(req))) return res.redirect('/login');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  } catch (e) { next(e); }
 }
+app.get(['/', '/index.html'], shell);
+app.get(['/login', '/login.html'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
+});
+app.use(express.static(PUBLIC_DIR, {
+  index: false,
+  etag: true,
+  setHeaders(res, filePath) {
+    if (/icons\.svg$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+    else if (/\.(woff2?|png|jpe?g|svg|ico)$/i.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=604800');
+    else res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 
 app.use(notFound);
 app.use(errorHandler);
 
 async function start() {
-  console.log(`▶ SVMDS backend — ${config.nodeEnv}`);
+  console.log(`▶ Shri Vihat Meldi Dham — ${config.nodeEnv} — ${db.where()}`);
   await runMigrations();
-  await seedPlatform();               // app_settings + counters
-  // Structural reference data the temple asked to keep — idempotent, so it's
-  // safe on every boot and guarantees a fresh deploy (or a reset DB) has the
-  // donation categories, the 3 samaj committees, the 3 management teams and the
-  // 7 annual Tithi events. It never touches devotees / donations / poojas etc.
-  await require('./db/seed/reference-data').seedReferenceData();
+  await bootRepairs();
+  /* Receipt numbers are issued, not typed: fill any blanks and lift each
+     series past anything hand-typed so an issued number cannot collide. */
+  await require('./util/receipts').backfillMissing();
   await require('./services/bootstrap').ensureAdminUser();
 
-  // Optional data-hygiene pass. Default unset = do nothing. 'dry' logs drift on
-  // every deploy (recommended steady state); '1'/'true' actually applies the
-  // repair. A failure here is logged and the server still starts.
-  const mode = String(process.env.DB_REPAIR_ON_BOOT || '').toLowerCase();
-  if (['dry', '1', 'true'].includes(mode)) {
-    try {
-      const { repairDatabase } = require('./db/repair');
-      const s = await repairDatabase({ dryRun: mode === 'dry' });
-      const drift = s.devoteesMerged + s.rosterRowsMerged + s.usersDevoteeBackfilled
-        + s.leadersLinkedForward + s.leadersLinkedReverse + s.guestsBackfilled
-        + s.donorsBackfilled + s.sevarthisBackfilled + s.coordinatorDevoteeBackfilled;
-      console.log(`▶ DB_REPAIR_ON_BOOT=${mode}: ${mode === 'dry' ? 'drift' : 'changed'} ${drift} row(s)` +
-        (s.indexesSkipped.length ? `, ${s.indexesSkipped.length} index(es) blocked` : ''));
-    } catch (e) {
-      console.error('[repair] failed, continuing to listen —', e.message);
-    }
-  }
-
   const port = process.env.PORT || config.port || 3000;
-  app.listen(port, () => console.log(`✔ listening on :${port}  (health: /health)`));
+  const server = app.listen(port, () => console.log(`✔ listening on http://localhost:${port}  (health: /health)`));
+
+  let closing = false;
+  const shutdown = () => {
+    if (closing) return;
+    closing = true;
+    server.close(async () => { await db.close(); process.exit(0); });
+    setTimeout(() => process.exit(0), 1500).unref();
+  };
+  ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'].forEach((s) => process.on(s, shutdown));
 }
 
-start().catch(err => { console.error('BOOT FAILED', err); process.exit(1); });
+if (require.main === module) {
+  start().catch((err) => { console.error('BOOT FAILED:', err.message || err); process.exit(1); });
+}
 
 module.exports = app;

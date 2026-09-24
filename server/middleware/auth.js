@@ -4,7 +4,7 @@
    out. (BACKEND_PLAN.md §5, §6) */
 const jwt = require('jsonwebtoken');
 const config = require('../config');
-const { queryOne, run } = require('../db/connection');
+const { queryAll, queryOne, run } = require('../db/connection');
 
 const COOKIE = 'token';
 
@@ -53,8 +53,14 @@ async function authRequired(req, res, next) {
   try {
     const payload = await readSession(req);
     if (!payload) return res.status(401).json({ error: 'Please sign in' });
+    /* The JWT's roles are a snapshot from sign-in. Read the live account
+       instead, so a role granted (or an account disabled) takes effect on
+       the next request rather than at the next sign-in. */
+    const acct = await queryOne('SELECT id, email, name, active, is_deleted FROM users WHERE id = ?', [payload.id]);
+    if (!acct || !acct.active || acct.is_deleted) return res.status(401).json({ error: 'Please sign in' });
+    const roles = (await queryAll('SELECT role FROM user_roles WHERE user_id = ?', [acct.id])).map((r) => r.role);
     run("UPDATE sessions SET last_seen = datetime('now') WHERE id = ?", [payload.jti]).catch(() => {});
-    req.user = payload;
+    req.user = { ...payload, email: acct.email, name: acct.name || '', roles };
     next();
   } catch (e) {
     next(e);

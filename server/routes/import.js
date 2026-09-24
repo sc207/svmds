@@ -1,0 +1,482 @@
+/* Importing a spreadsheet.
+   ------------------------------------------------------------
+     GET  /api/import/kinds            what can be imported, and the
+                                       columns each kind expects
+     GET  /api/import/template/:kind   a ready-made sheet to fill in
+     POST /api/import/preview?kind=    dry run — changes nothing
+     POST /api/import/commit?kind=     writes, all or nothing
+
+   The file arrives as raw bytes rather than multipart, so there is no
+   upload middleware to add: `express.raw` is already in Express, and
+   `fetch(file)` in the browser sends a File as its body unchanged.
+
+   PREVIEW AND COMMIT ARE THE SAME ANALYSIS. The client sends the file
+   twice rather than the server holding it between the two calls — no
+   temporary files, no session state, nothing to expire, and no way for
+   a client to hand back a verdict the server did not reach itself.
+
+   Guarded at admin. A bulk import is every write an operator can make,
+   at a scale nobody reviews row by row, and it is the one action here
+   that can reshape the register in a single click. Everything an
+   operator does at the counter stays open to them.
+*/
+const express = require('express');
+const db = require('../db');
+const { log } = require('../middleware/audit');
+const { needs } = require('../middleware/roles');
+const { SPECS, analyse, readAnySheet } = require('../util/sheet-import');
+const { upsertDevotee } = require('./devotees');
+const { refreshStatus, resolveGift } = require('./bookings');
+const { insertPaymentRows, actingUser } = require('../util/payment-entries');
+const receipts = require('../util/receipts');
+const { todayLocal } = require('../util/dates');
+
+const router = express.Router();
+
+/* 8MB. A sheet of ten thousand registrations is well under one; the
+   cap is here so a mis-drop of a video does not sit in memory. */
+const raw = express.raw({ type: '*/*', limit: '8mb' });
+
+/* ------------------------------------------------------------------
+   What can be imported
+   ------------------------------------------------------------------ */
+router.get('/kinds', (req, res) => {
+  res.json(Object.entries(SPECS).map(([key, spec]) => ({
+    key, title: spec.title, what: spec.what,
+    columns: spec.columns.map((c) => ({
+      label: c.label, required: !!c.required, type: c.type,
+      lookup: c.lookup || null,
+    })),
+  })));
+});
+
+/* ------------------------------------------------------------------
+   The template
+   ------------------------------------------------------------------
+   A CSV, deliberately: Excel opens it, edits it and saves it back as
+   .xlsx if the operator wants, and writing a real .xlsx would mean
+   shipping a zip writer to solve a problem nobody has. It carries the
+   UTF-8 BOM for the same reason the exports do — without it Excel
+   renders every Gujarati name as mojibake.
+
+   The example rows are real data shaped like the mandir's own, because
+   a template with "string, string, string" in it teaches nothing about
+   what a date or an amount should look like. They are read out of the
+   database rather than written here — see examples() below for why.
+*/
+/* THE EXAMPLE ROWS ARE READ OUT OF THE DATABASE, NEVER HARDCODED, and
+   that is the whole point of the code below. They used to be fixed
+   strings, and both sevarthi rows had rotted where nobody could see it:
+   "Bhagvat Saptah Katha" was a seva that does not exist, and "Mukhya
+   Patlo" is a single seat somebody had already taken. So the template
+   the app handed an operator failed its own check on every row of it —
+   download, upload, two errors, before they had typed anything. That is
+   the first thing a new operator does, and it reads as the importer
+   being broken rather than as the example being stale.
+
+   A name copied into this file is only right until the trust edits a
+   list; a name picked from the list is right by construction. The same
+   goes for the samaj and the category — `create_lookups` is off by
+   default, so a stale one there is an error too, not a silent insert.
+*/
+
+/* The done screen prints this summary above a tally the client has
+   already formatted, so a bare 1551000 sat one line above ₹15,51,000
+   and read as two different figures. Lakhs grouping, as misc.js does
+   it and as UI.money does it on every other screen. */
+const rupees = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
+
+const lookupValues = async (type, n) => (await db.all(
+  `SELECT value FROM lookups WHERE type = ? AND active = 1
+    ORDER BY sort_order, id LIMIT ?`, type, n)).map((r) => r.value);
+
+/** today + n days, local — see util/dates on why never toISOString. */
+const inDays = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString('en-CA');
+};
+
+/* An open seva with room on it. The preferences, in order, each close
+   one way the example could still fail by the time it is uploaded:
+   nobody booked on it yet (or the row comes back "already present"
+   instead of importing), then no seat limit at all (or it can fill up
+   between the download and the upload), then the plainest name — it
+   goes into a CSV cell an operator may retype by hand, and a name like
+   "Yagna Patla — ₹51,000" carries a comma that has to survive quoting.
+   `dated` chooses which lesson the row teaches: naming the day, or
+   leaving it blank. */
+async function exampleSeva(dated, exclude) {
+  const rows = await db.all(`
+    SELECT pe.name, ps.slot_date, ps.capacity, ps.booked_count,
+           (SELECT COUNT(*) FROM pooja_slots x WHERE x.pooja_id = pe.id) AS slot_count
+      FROM pooja_events pe
+      JOIN pooja_slots ps ON ps.pooja_id = pe.id
+     WHERE pe.status <> 'closed'
+       AND (ps.capacity IS NULL OR ps.booked_count < ps.capacity)`);
+
+  const awkward = (n) => /[,"]/.test(n);
+  const usable = rows.filter((r) => Boolean(r.slot_date) === dated
+    /* A blank Seva date only resolves when the seva has one day. */
+    && (r.slot_date || r.slot_count === 1)
+    && r.name !== exclude);
+
+  usable.sort((a, b) =>
+    (a.booked_count ? 1 : 0) - (b.booked_count ? 1 : 0)
+    || (a.capacity === null ? 0 : 1) - (b.capacity === null ? 0 : 1)
+    || (awkward(a.name) ? 1 : 0) - (awkward(b.name) ? 1 : 0)
+    || a.name.length - b.name.length
+    || a.name.localeCompare(b.name));
+
+  return usable[0] || null;
+}
+
+async function examples(kind) {
+  const [samaj0, samaj1] = await lookupValues('samaj', 2);
+  const [cat0, cat1] = await lookupValues('devotee_category', 2);
+  const s0 = samaj0 || '';
+  const s1 = samaj1 || s0;
+  const c0 = cat0 || '';
+  const c1 = cat1 || c0;
+
+  if (kind === 'devotees') {
+    return [
+      ['Rasikbhai Patel', '9825110001', 'Ahmedabad', 'Gujarat', 'Sanand', s0, c0, 'Knows the trustees'],
+      ['ભચીબેન રબારી', '9825110003', 'Sanand', 'Gujarat', '', s1, c1, ''],
+    ];
+  }
+
+  if (kind === 'sevarthi') {
+    /* One row that names its day and carries money, one that does
+       neither — the two shapes an operator's own sheet arrives in. */
+    const dated = (await exampleSeva(true, null)) || (await exampleSeva(false, null));
+    const plain = (await exampleSeva(false, dated && dated.name))
+               || (await exampleSeva(true, dated && dated.name));
+    const out = [];
+    if (dated) {
+      out.push(['Rasikbhai Patel', '9825110001', 'Ahmedabad', 'Gujarat', 'Sanand', s0, c0, '',
+        dated.name, dated.slot_date || '', '2100000', '500000', 'No',
+        '1000000', '500000', todayLocal(), '', 'Paid at the mandir']);
+    }
+    if (plain) {
+      out.push(['Devshi Rabari', '9825110002', 'Viramgam', 'Gujarat', '', s1, c1, '',
+        plain.name, plain.slot_date || '', '21000', '', 'No', '', '', '', '', '']);
+    }
+    /* No seva with room on it means there is no honest example to give.
+       Headings alone beat two rows guaranteed to come back as errors. */
+    return out;
+  }
+
+  if (kind === 'donations') {
+    const [dc0, dc1] = await lookupValues('donation_category', 2);
+    return [
+      [todayLocal(), 'Hansaben Patel', '9825110006', dc0 || '', '11000', '', '', ''],
+      [todayLocal(), 'Ramesh Prajapati', '9825110008', dc1 || dc0 || '', '', '51 kg ghee', '', 'Given at the mandir'],
+    ];
+  }
+
+  if (kind === 'visits') {
+    return [
+      [inDays(9), '17:00', 'Rasikbhai Patel', '9825110001', 'Ahmedabad', '12, Temple Road', 'Griha shanti', 'requested', ''],
+      [inDays(12), '10:30', 'Devshi Rabari', '9825110002', 'Viramgam', '', 'New house', 'confirmed', 'Ring the day before'],
+    ];
+  }
+
+  return [];
+}
+
+const csvCell = (v) => {
+  const s = String(v == null ? '' : v);
+  /* The same guard the exports use: a cell starting with one of these
+     is run as a formula when Excel opens the file. */
+  const safe = /^[=+\-@]/.test(s) ? "'" + s : s;
+  return /[",\n]/.test(safe) ? '"' + safe.replace(/"/g, '""') + '"' : safe;
+};
+
+router.get('/template/:kind', async (req, res) => {
+  const spec = SPECS[req.params.kind];
+  if (!spec) return res.status(404).json({ error: 'No such import type' });
+  const lines = [spec.columns.map((c) => csvCell(c.label)).join(',')];
+  (await examples(req.params.kind)).forEach((r) => lines.push(r.map(csvCell).join(',')));
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition',
+    'attachment; filename="svmds-import-' + req.params.kind + '.csv"');
+  res.send('﻿' + lines.join('\r\n') + '\r\n');
+});
+
+/* The seva names, so the import screen can show exactly what the Seva
+   column will accept instead of leaving the operator to guess at
+   spelling. */
+router.get('/seva-names', async (req, res) => {
+  res.json(await db.all(`
+    SELECT pe.name, pe.category, pe.status,
+           (SELECT COUNT(*) FROM pooja_slots ps WHERE ps.pooja_id = pe.id) AS day_count,
+           (SELECT GROUP_CONCAT(ps.slot_date, ', ') FROM pooja_slots ps
+             WHERE ps.pooja_id = pe.id AND ps.slot_date IS NOT NULL) AS days
+      FROM pooja_events pe ORDER BY pe.category, pe.name
+  `));
+});
+
+/* ------------------------------------------------------------------
+   Preview
+   ------------------------------------------------------------------ */
+function readBody(req) {
+  const buf = req.body;
+  if (!buf || !buf.length) {
+    throw Object.assign(new Error('No file arrived. Pick a file and try again.'), { status: 400 });
+  }
+  return readAnySheet(Buffer.from(buf), req.get('X-File-Name') || '');
+}
+
+const optsOf = (req) => ({
+  createLookups: String(req.query.create_lookups || '') === '1',
+  allowDuplicates: String(req.query.allow_duplicates || '') === '1',
+});
+
+router.post('/preview', needs('admin', 'Importing a spreadsheet'), raw, async (req, res) => {
+  try {
+    const rows = readBody(req);
+    const report = await analyse(req.query.kind, rows, optsOf(req));
+    /* The whole file is analysed — every error the operator has to fix
+       is worth knowing at once — but only the first 200 rows travel
+       back, because a preview table of ten thousand helps nobody and
+       the errors are what they are reading. */
+    res.json({ ...report, rows: report.rows.slice(0, 200), truncated: report.rows.length > 200 });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/* ------------------------------------------------------------------
+   Commit
+   ------------------------------------------------------------------ */
+router.post('/commit', needs('admin', 'Importing a spreadsheet'), raw, async (req, res) => {
+  try {
+    const opts = optsOf(req);
+    const rows = readBody(req);
+    const by = actingUser(req);
+
+    /* The analysis runs AGAIN, INSIDE the one transaction — the client
+       never hands back its own verdict, and nothing written between the
+       check and the writes can slip past it. */
+    const out = await db.tx(async () => {
+      const report = await analyse(req.query.kind, rows, opts);
+      if (report.fatal) return { status: 400, body: { error: report.fatal } };
+      const bad = report.rows.filter((r) => r.errors.length);
+      if (bad.length) {
+        return { status: 400, body: {
+          error: 'Nothing was imported. ' + bad.length + ' row' + (bad.length === 1 ? '' : 's') +
+                 ' still need fixing — the first is line ' + bad[0].line + ': ' + bad[0].errors[0],
+          rows: bad.slice(0, 20),
+        } };
+      }
+      const result = await WRITE[report.kind](req, report, opts, by);
+      await log(req, {
+        action: 'create', entity: 'import', entityId: null,
+        summary: 'Imported ' + report.title.toLowerCase() + ' from a spreadsheet — ' +
+                 result.summary,
+        details: { kind: report.kind, ...result.counts, file: req.get('X-File-Name') || null },
+      });
+      return { status: 200, body: { ok: true, ...result, kind: report.kind, title: report.title } };
+    });
+    res.status(out.status).json(out.body);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/* ------------------------------------------------------------------
+   The writes
+   ------------------------------------------------------------------
+   Each runs inside the one transaction opened above, and each goes
+   through the same function the counter uses. Nothing here re-decides
+   what a devotee is, what a seat costs or how money is recorded.
+*/
+async function lookupId(type, value, cache) {
+  const v = String(value || '').trim();
+  if (!v) return null;
+  const key = type + '|' + v.toLowerCase();
+  if (cache.has(key)) return cache.get(key);
+  const found = await db.get(
+    `SELECT id FROM lookups WHERE type = ? AND LOWER(value) = LOWER(?) AND active = 1`, type, v);
+  const id = found ? found.id
+    : Number((await db.run(`INSERT INTO lookups (type, value) VALUES (?, ?)`, type, v)).lastInsertRowid);
+  cache.set(key, id);
+  return id;
+}
+
+/** Devotee fields out of a row, with the samaj/category resolved (and
+    created when the operator asked for that). */
+async function devoteeBody(rec, cache, opts) {
+  return {
+    full_name: rec.full_name,
+    mobile: rec.mobile,
+    city: rec.city,
+    state: rec.state,
+    mul_vatan: rec.mul_vatan,
+    samaj_id: rec.samaj_id || (opts.createLookups ? await lookupId('samaj', rec.samaj, cache) : null),
+    category_id: rec.category_id ||
+      (opts.createLookups ? await lookupId('devotee_category', rec.category, cache) : null),
+    notes: rec.devotee_notes !== undefined ? rec.devotee_notes : rec.notes,
+  };
+}
+
+const WRITE = {
+  async devotees(req, report, opts, by) {
+    const cache = new Map();
+    let created = 0, updated = 0;
+    for (const row of report.rows) {
+      if (row.action === 'skip') continue;
+      const r = await upsertDevotee(req, await devoteeBody(row.rec, cache, opts), { requireMobile: true });
+      if (r.created) created++; else updated++;
+    }
+    return {
+      counts: { created, updated, skipped: report.counts.skip || 0 },
+      summary: created + ' added, ' + updated + ' updated',
+    };
+  },
+
+  async sevarthi(req, report, opts, by) {
+    const cache = new Map();
+    let devoteesNew = 0, seats = 0, payments = 0, skipped = 0, money = 0;
+
+    for (const row of report.rows) {
+      if (row.action === 'skip') { skipped++; continue; }
+      const rec = row.rec;
+      const d = await upsertDevotee(req, await devoteeBody(rec, cache, opts), { requireMobile: true });
+      if (d.created) devoteesNew++;
+
+      const committed = Number(rec.amount_committed || 0);
+      /* The same gift rule as the counter, from the same function — a
+         second copy of it here is exactly how the two would drift. */
+      const g = await resolveGift(null, rec.is_gift, 0, committed, Number(rec.bhuvaji_planned_amount || 0));
+      if (g.error) throw Object.assign(new Error('Line ' + row.line + ': ' + g.error), { status: 400 });
+
+      /* Re-read the slot INSIDE the transaction and check it here, the
+         way every other path that seats someone does. The preview's
+         count was taken before this ran and is a courtesy, not the
+         mechanism. */
+      const slot = await db.get(`SELECT * FROM pooja_slots WHERE id = ?`, rec.slot_id);
+      if (!slot) throw Object.assign(new Error('Line ' + row.line + ': that seva day no longer exists'), { status: 409 });
+      if (slot.capacity !== null && slot.booked_count >= slot.capacity) {
+        throw Object.assign(new Error('Line ' + row.line + ': ' + (row.poojaName || 'that seva') +
+          ' filled up while the file was being imported. Nothing was saved.'), { status: 409 });
+      }
+
+      const bookingId = Number((await db.run(`
+        INSERT INTO sevarthi_bookings (slot_id, devotee_id, amount_committed,
+                                       bhuvaji_planned_amount, is_gift, notes, status)
+        VALUES (@slot_id, @devotee_id, @amount_committed, @bhuvaji_planned_amount, @is_gift, @notes, 'pending')
+      `, {
+        slot_id: slot.id, devotee_id: d.id,
+        amount_committed: committed,
+        bhuvaji_planned_amount: g.bhuvaji,
+        is_gift: g.gift,
+        notes: (rec.notes || '').trim() || null,
+      })).lastInsertRowid);
+      await db.run(`UPDATE pooja_slots SET booked_count = booked_count + 1 WHERE id = ?`, slot.id);
+      seats++;
+
+      const entries = [];
+      if (Number(rec.paid_devotee || 0) > 0) entries.push({ amount: Number(rec.paid_devotee), payer_type: 'devotee' });
+      if (Number(rec.paid_bapa || 0) > 0) entries.push({ amount: Number(rec.paid_bapa), payer_type: 'bhuvaji' });
+      if (entries.length) {
+        await insertPaymentRows(bookingId, entries, {
+          payment_date: rec.payment_date || todayLocal(),
+          receipt_no: rec.receipt_no || '',
+        }, by);
+        payments += entries.length;
+        money += entries.reduce((a, e) => a + e.amount, 0);
+        await refreshStatus(bookingId);     // never set by hand
+      }
+
+      await log(req, {
+        action: 'create', entity: 'booking', entityId: bookingId,
+        summary: rec.full_name + ' added as sevarthi (imported) — ' + (row.poojaName || '') +
+                 ' on ' + (row.slotLabel || 'date to be announced') + ' (₹' + committed + ')' +
+                 (g.gift ? ' — a gift from Bhuvaji Suresh Bapa' : ''),
+        details: { via: 'import', line: row.line, amount_committed: committed,
+                   bhuvaji_planned: g.bhuvaji, gift_from_bapa: !!g.gift },
+      });
+    }
+    return {
+      counts: { devotees: devoteesNew, seats, payments, skipped, money },
+      summary: seats + ' seva, ' + devoteesNew + ' new devotees, ' + rupees(money) + ' recorded' +
+               (skipped ? ', ' + skipped + ' already present' : ''),
+    };
+  },
+
+  async donations(req, report, opts, by) {
+    const cache = new Map();
+    let n = 0, money = 0;
+    for (const row of report.rows) {
+      if (row.action === 'skip') continue;
+      const r = row.rec;
+      const date = r.donation_date || todayLocal();
+      const id = Number((await db.run(`
+        INSERT INTO donations (devotee_id, donor_name, mobile, category_id, amount, in_kind_item,
+                               donation_date, receipt_no, notes, recorded_by)
+        VALUES (@devotee_id, @donor_name, @mobile, @category_id, @amount, @in_kind_item,
+                @donation_date, @receipt_no, @notes, @recorded_by)
+      `, {
+        devotee_id: r.devotee_id || null,
+        donor_name: r.donor_name,
+        mobile: r.mobile || null,
+        category_id: r.category_id ||
+          (opts.createLookups ? await lookupId('donation_category', r.category, cache) : null),
+        amount: Number(r.amount || 0),
+        in_kind_item: (r.in_kind_item || '').trim() || null,
+        donation_date: date,
+        receipt_no: await receipts.ensure(r.receipt_no, 'D', date),
+        notes: (r.notes || '').trim() || null,
+        recorded_by: by,
+      })).lastInsertRowid);
+      n++; money += Number(r.amount || 0);
+      await log(req, {
+        action: 'create', entity: 'donation', entityId: id,
+        summary: 'Donation from ' + r.donor_name + ' (imported)' +
+                 (Number(r.amount) ? ' — ₹' + Number(r.amount) : ' — ' + (r.in_kind_item || 'in kind')),
+        details: { via: 'import', line: row.line },
+      });
+    }
+    return { counts: { donations: n, money }, summary: n + ' donations, ' + rupees(money) };
+  },
+
+  async visits(req, report, opts, by) {
+    let n = 0;
+    for (const row of report.rows) {
+      if (row.action === 'skip') continue;
+      const r = row.rec;
+      const id = Number((await db.run(`
+        INSERT INTO visits (devotee_id, devotee_name, mobile, city, visit_date, visit_time,
+                            address, purpose, status, notes)
+        VALUES (@devotee_id, @devotee_name, @mobile, @city, @visit_date, @visit_time,
+                @address, @purpose, @status, @notes)
+      `, {
+        devotee_id: r.devotee_id || null,
+        devotee_name: r.devotee_name,
+        /* A visit keeps its OWN mobile and city as an override, and
+           they are normally NULL — a row picked from the register must
+           not silently copy the devotee's details onto the visit. Only
+           what the sheet actually said is stored. */
+        mobile: r.mobile || null,
+        city: (r.city || '').trim() || null,
+        visit_date: r.visit_date,
+        visit_time: (r.visit_time || '').trim() || null,
+        address: (r.address || '').trim() || null,
+        purpose: (r.purpose || '').trim() || null,
+        status: r.status,
+        notes: (r.notes || '').trim() || null,
+      })).lastInsertRowid);
+      n++;
+      await log(req, {
+        action: 'create', entity: 'visit', entityId: id,
+        summary: 'Padhramni for ' + r.devotee_name + ' on ' + r.visit_date + ' (imported)',
+        details: { via: 'import', line: row.line },
+      });
+    }
+    return { counts: { visits: n }, summary: n + ' padhramni' };
+  },
+};
+
+module.exports = router;

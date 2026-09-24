@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 
 const config = require('../config');
 const { COOKIE, signToken, cookieOptions, clearCookieOptions, readSession } = require('../middleware/auth');
-const { pagesForUser, isSuperadmin } = require('../middleware/authz');
+const { pagesForUser, isSuperadmin, rankOf } = require('../middleware/authz');
 const { verifyGoogleToken } = require('../services/google');
 const { getActiveUserByEmail, getUser, linkGoogle } = require('../services/userStore');
 const { logAudit } = require('../services/audit');
@@ -15,7 +15,7 @@ const { run } = require('../db/connection');
 const router = express.Router();
 
 function publicUser(u) {
-  return { id: u.id, email: u.email, name: u.name || '', roles: u.roles || [] };
+  return { id: u.id, email: u.email, name: u.name || '', roles: u.roles || [], rank: rankOf(u) };
 }
 
 /* -------------------- GET /config  (public) -------------------- */
@@ -68,7 +68,7 @@ async function authenticateGoogleCredential(credential, req, res) {
 
   const jti = await createSession(user, req);
   res.cookie(COOKIE, signToken(user, jti), cookieOptions());
-  await logAudit({ userId: user.id, userEmail: user.email, module: 'Auth', action: 'LOGIN' });
+  await logAudit({ userId: user.id, userEmail: user.email, userName: user.name, module: 'Auth', action: 'LOGIN', entityType: 'session' });
 
   return user;
 }
@@ -156,7 +156,7 @@ async function endSession(req, res) {
   const payload = await readSession(req);
   if (payload && payload.jti) {
     await run('UPDATE sessions SET revoked = 1 WHERE id = ?', [payload.jti]);
-    await logAudit({ userId: payload.id, userEmail: payload.email, module: 'Auth', action: 'LOGOUT' });
+    await logAudit({ userId: payload.id, userEmail: payload.email, module: 'Auth', action: 'LOGOUT', entityType: 'session' });
   }
   res.clearCookie(COOKIE, clearCookieOptions());
 }
