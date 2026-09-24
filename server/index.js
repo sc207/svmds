@@ -146,6 +146,15 @@ app.get('/health', async (req, res) => {
 app.use('/api/auth', require('./routes/auth'));             // public: Google sign-in
 
 app.use('/api', authRequired);                              // everything below needs a session
+/* Per signed-in ACCOUNT, not per address: the counter staff share the
+   mandir's one Wi-Fi address, and a limit per IP would be theirs together.
+   300 a minute is far above use (a page makes ~5 calls) and slows anyone
+   scripting against a stolen session. */
+app.use('/api', rateLimit({
+  windowMs: 60 * 1000, max: 300, standardHeaders: 'draft-7', legacyHeaders: false,
+  keyGenerator: (req) => 'user:' + ((req.user && req.user.id) || 'none'),
+  message: { error: 'Too many requests from this account — wait a minute and try again.' },
+}));
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/legacy-backup', require('./routes/legacyBackup'));   // TEMPORARY, super admin only
