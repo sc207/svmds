@@ -52,11 +52,10 @@
       <div class="login-hero">
         <span class="login-corner c-tl"></span><span class="login-corner c-tr"></span>
         <span class="login-corner c-bl"></span><span class="login-corner c-br"></span>
-        <img class="login-hero-wm" src="assets/temple.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
+        <img class="login-hero-wm" src="assets/temple.png" alt="" aria-hidden="true" data-fallback="hide">
         <div class="login-hero-inner">
           <div class="login-emblem">
-            <img src="assets/icon.png" alt="Shri Vihat Meldi Dham"
-                 onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'login-emblem-fb',innerHTML:'🛕'}))">
+            <img src="assets/icon.png" alt="Shri Vihat Meldi Dham" data-fallback="emblem">
           </div>
           <div class="login-ribbon">॥ જય શ્રી વિહત મેલડી ધામ ॥</div>
           <h2 class="login-temple">Shri Vihat Meldi Dham</h2>
@@ -116,7 +115,7 @@
       <!-- Right: Google sign-in -->
       <div class="login-form-pane">
         <div class="login-form-head">
-          <img class="login-form-mark" src="assets/icon.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
+          <img class="login-form-mark" src="assets/icon.png" alt="" aria-hidden="true" data-fallback="hide">
           <div>
             <h3 class="login-form-title">Sign In to Portal</h3>
             <p class="login-form-sub">Authorised temple staff only</p>
@@ -138,6 +137,19 @@
   </div>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+  /* Broken pictures, without inline handlers (the CSP forbids them):
+     "hide" hides the image, "emblem" swaps in the text emblem. Capturing,
+     because an image's error event does not bubble. */
+  document.addEventListener('error', function (e) {
+    var img = e.target;
+    if (!img || img.tagName !== 'IMG' || !img.getAttribute('data-fallback')) return;
+    if (img.getAttribute('data-fallback') === 'emblem') {
+      var fb = document.createElement('div'); fb.className = 'login-emblem-fb'; fb.textContent = '🛕';
+      img.replaceWith(fb);
+    } else { img.style.display = 'none'; }
+  }, true);
+  </script>
   <script>
   /* ---- ONE controlled Google Identity Services flow for this page ----
      - a single google.accounts.id.initialize() (guarded, never repeated)

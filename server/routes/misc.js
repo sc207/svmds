@@ -263,8 +263,15 @@ router.get('/settings', async (req, res) => {
   res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
 });
 
+/* The temple identity the Settings page edits — and nothing else. The
+   table is key/value, so without a list any key at all could be written. */
+const SETTING_KEYS = ['temple_name', 'temple_name_en', 'temple_location', 'trust_head', 'mahotsav_name'];
+
 router.put('/settings', roles.needs('admin', 'Changing the temple settings'), async (req, res) => {
-  const entries = Object.entries(req.body || {});
+  const entries = Object.entries(req.body || {})
+    .filter(([k]) => SETTING_KEYS.includes(k))
+    .map(([k, v]) => [k, String(v ?? '').slice(0, 200)]);
+  if (!entries.length) return res.status(400).json({ error: 'Nothing to save' });
   await db.tx(async () => {
     for (const [k, v] of entries) {
       await db.run(`INSERT INTO settings (key, value) VALUES (?, ?)
@@ -279,9 +286,14 @@ router.put('/settings', roles.needs('admin', 'Changing the temple settings'), as
 /* One record's change history (entity + entity_id — the ledger on every
    sevarthi row) is part of the daily job. The whole trail is the
    Accounts & Access page, which is admin-tier. */
+/* The history a non-admin may read: one record of the daily work (the
+   ledger on a sevarthi row). Account, session and backup entries carry
+   people's email addresses and stay with Accounts & Access. */
+const DAILY_ENTITIES = ['booking', 'payment', 'pooja', 'devotee', 'donation', 'visit', 'lookup', 'annual_event'];
+
 router.get('/audit', async (req, res) => {
   const { entity, entity_id, user, limit } = req.query;
-  if (!(entity && entity_id) && !roles.atLeast(req, 'admin')) {
+  if (!roles.atLeast(req, 'admin') && !(entity && entity_id && DAILY_ENTITIES.includes(String(entity)))) {
     return res.status(403).json({ error: 'The full audit trail is kept for an administrator.' });
   }
   const where = [];
@@ -291,7 +303,7 @@ router.get('/audit', async (req, res) => {
   if (user) { where.push(`user_name LIKE @user`); params.user = `%${user}%`; }
   res.json(await db.all(
     `SELECT * FROM audit_log ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY id DESC LIMIT ${Math.min(Number(limit) || 200, 1000)}`, params));
+     ORDER BY id DESC LIMIT @limit`, { ...params, limit: Math.max(1, Math.min(Math.trunc(Number(limit)) || 200, 1000)) }));
 });
 
 module.exports = router;

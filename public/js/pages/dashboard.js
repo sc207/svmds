@@ -126,8 +126,7 @@
         </div>
 
         <div class="banner-mandir-graphic">
-          <img src="/assets/temple.png" alt="Shri Vihat Meldi Dham"
-               onerror="this.closest('.banner-mandir-graphic').style.display='none'">
+          <img src="/assets/temple.png" alt="Shri Vihat Meldi Dham" data-fallback="hide:.banner-mandir-graphic">
         </div>
       </div>
 

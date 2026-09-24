@@ -7,7 +7,7 @@ const db = require('../db');
 const roles = require('../middleware/roles');
 const { log } = require('../middleware/audit');
 const { occurrence, occurrencesIn, parseOverrides } = require('../util/annual');
-const { todayLocal } = require('../util/dates');
+const { todayLocal, isDay } = require('../util/dates');
 
 const router = express.Router();
 
@@ -23,7 +23,7 @@ router.put('/:id/date', roles.needs('admin', 'Setting the date of an annual even
   const date = req.body && req.body.date ? String(req.body.date) : null;
   if (!(year >= 2000 && year <= 2100)) return res.status(400).json({ error: 'Give the year this date is for' });
   if (date !== null) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00'))) {
+    if (!isDay(date)) {
       return res.status(400).json({ error: 'Give the date as YYYY-MM-DD' });
     }
     if (Number(date.slice(0, 4)) !== year) {

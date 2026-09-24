@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
 
 router.post('/seen', async (req, res) => {
   const today = todayLocal();
-  const keys = [...new Set(((req.body && req.body.keys) || []).map(String).filter((k) => /^annual:[\w-]+:\d{4}$/.test(k)))].slice(0, 50);
+  const keys = [...new Set((Array.isArray(req.body && req.body.keys) ? req.body.keys : []).map(String).filter((k) => /^annual:[\w-]+:\d{4}$/.test(k)))].slice(0, 50);
   let recorded = 0;
   for (const k of keys) {
     const r = await db.run(`INSERT OR IGNORE INTO reminder_seen (user_id, reminder_key, seen_on) VALUES (?, ?, ?)`,

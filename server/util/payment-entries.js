@@ -17,8 +17,9 @@
    the payment inside one, and wrapping again would nest. Callers wrap.
 */
 const db = require('../db');
-const { todayLocal } = require('./dates');
+const { todayLocal, dayOf } = require('./dates');
 const receipts = require('./receipts');
+const { MAX } = require('./money');
 
 /** @returns {{ entries: Array<{amount:number,payer_type:string}> }|{ error: string }} */
 function readPaymentEntries(b) {
@@ -26,15 +27,22 @@ function readPaymentEntries(b) {
   const isSplit = b.devotee_amount !== undefined || b.bhuvaji_amount !== undefined;
 
   if (!isSplit) {
-    const amount = Number(b.amount || 0);
+    if (b.amount !== undefined && b.amount !== null && b.amount !== '' && !Number.isFinite(Number(b.amount))) {
+      return { error: 'Enter the amount as a number' };          // "abc" must not vanish as "nothing offered"
+    }
+    const amount = Math.round(Number(b.amount || 0) * 100) / 100;
     if (!amount) return { entries: [] };          // nothing offered is not an error
     if (!(amount > 0)) return { error: 'Enter an amount greater than zero' };
+    if (amount > MAX) return { error: 'That amount is larger than any seva — check it' };
     return { entries: [{ amount, payer_type: b.payer_type === 'bhuvaji' ? 'bhuvaji' : 'devotee' }] };
   }
 
-  const fromDevotee = Number(b.devotee_amount || 0);
-  const fromBapa = Number(b.bhuvaji_amount || 0);
+  const bad = (v) => v !== undefined && v !== null && v !== '' && !Number.isFinite(Number(v));
+  if (bad(b.devotee_amount) || bad(b.bhuvaji_amount)) return { error: 'Enter the amount as a number' };
+  const fromDevotee = Math.round(Number(b.devotee_amount || 0) * 100) / 100;
+  const fromBapa = Math.round(Number(b.bhuvaji_amount || 0) * 100) / 100;
   if (fromDevotee < 0 || fromBapa < 0) return { error: 'An amount cannot be negative' };
+  if (fromDevotee > MAX || fromBapa > MAX) return { error: 'That amount is larger than any seva — check it' };
   if (!fromDevotee && !fromBapa) return { entries: [] };
 
   // A zero side is simply left out — never written as a ₹0 ledger row.
@@ -50,7 +58,7 @@ const INSERT = `
 
 /** Write the rows. Call inside the caller's db.tx(). Resolves to the new ids. */
 async function insertPaymentRows(bookingId, entries, b, recordedBy) {
-  const date = (b && b.payment_date) || todayLocal();
+  const date = dayOf(b && b.payment_date, 'Payment date', todayLocal());
   const supplied = ((b && b.receipt_no) || '').trim();
   const common = {
     booking_id: bookingId,

@@ -317,7 +317,8 @@ async function reference() {
  * @param opts  { createLookups, allowDuplicates }
  */
 async function analyse(kind, rows, opts = {}) {
-  const spec = SPECS[kind];
+  /* Own keys only: __proto__ / constructor are not import types. */
+  const spec = Object.prototype.hasOwnProperty.call(SPECS, kind) && SPECS[kind];
   if (!spec) throw Object.assign(new Error('Unknown import type'), { status: 400 });
 
   const header = rows.findIndex((r) => r.some((c) => String(c).trim() !== ''));

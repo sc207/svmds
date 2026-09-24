@@ -91,7 +91,7 @@
         ['Devotees', UI.num(rows.length)],
         ['Contributed', money(t.paid)],
         ...(t.noMobile ? [['No mobile on record', UI.num(t.noMobile)]] : []),
-        ['Taken', new Date().toLocaleString()],
+        ['Taken', new Date().toLocaleString('en-IN')],
       ],
       totals: {
         name: 'Total (' + UI.num(rows.length) + ')',
@@ -357,7 +357,7 @@
       title: d.full_name,
       body: `
         <div class="card" style="margin-bottom:.8rem"><div class="card-body">
-          <div class="row-sub">${[d.mobile, d.city, d.state].filter(Boolean).map(esc).join(' · ') || '—'}</div>
+          <div class="row-sub" style="white-space:normal">${[d.mobile, d.city, d.state].filter(Boolean).map(esc).join(' · ') || '—'}</div>
           <div class="row-sub">${d.mul_vatan ? 'Mul vatan: ' + esc(d.mul_vatan) : ''}</div>
           <div style="margin-top:.4rem;display:flex;gap:.35rem;flex-wrap:wrap">
             ${d.samaj ? `<span class="badge badge-maroon">${esc(d.samaj)}</span>` : ''}

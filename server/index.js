@@ -42,7 +42,9 @@ app.use(helmet({
     directives: {
       defaultSrc:     ["'self'"],
       scriptSrc:      ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/client'],
-      scriptSrcAttr:  ["'unsafe-inline'"],
+      /* No inline event handlers anywhere (images use data-fallback —
+         ui.js), so an injected <img onerror=…> cannot run. */
+      scriptSrcAttr:  ["'none'"],
       styleSrc:       ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style'],
       styleSrcAttr:   ["'unsafe-inline'"],
       fontSrc:        ["'self'", 'data:'],
@@ -54,6 +56,9 @@ app.use(helmet({
     },
   },
   crossOriginEmbedderPolicy: false,
+  /* The Google sign-in popup has to be able to report back to this page;
+     'same-origin' (helmet's default) can sever it. */
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
 }));
 
 /* Google Identity Services uses the FedCM credential API from this origin. */
@@ -62,17 +67,50 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors((req, cb) => {
-  /* The iOS redirect sign-in is a real top-level form POST from
-     accounts.google.com — let that one path through the allowlist. */
-  if (req.path === '/api/auth/google/redirect') return cb(null, { origin: true, credentials: true });
+/* Which web pages may call this API with the session cookie:
+     - the app's own origin, always (browsers send Origin on a same-origin
+       POST, so it must never be refused);
+     - anything listed in ALLOWED_ORIGINS;
+     - in development with no list, anything (local tooling).
+   In PRODUCTION with no list, only the app's own origin — an empty setting
+   must not mean "every website", which is what it used to mean.
+   The iOS redirect sign-in is a real top-level form POST from
+   accounts.google.com — that one path is let through. A refusal is a 403
+   with a sentence, not a thrown error (that surfaced as a 500). */
+function originAllowed(req) {
   const origin = req.headers.origin;
-  const allowed = !origin || !config.allowedOrigins.length || config.allowedOrigins.includes(origin);
-  cb(allowed ? null : new Error('Not allowed by CORS'), { origin: allowed, credentials: true });
-}));
+  if (!origin || req.path === '/api/auth/google/redirect') return true;
+  /* Same host = the app itself. Compare the host only: behind Cloudflare +
+     Render the protocol Express sees can be http while the browser's Origin
+     says https, and refusing that would refuse every save on the live site. */
+  try { if (new URL(origin).host === req.get('host')) return true; } catch (_) { return false; }
+  if (config.allowedOrigins.includes(origin)) return true;
+  return !config.isProd && !config.allowedOrigins.length;
+}
+app.use((req, res, next) => {
+  if (originAllowed(req)) return next();
+  res.status(403).json({ error: 'Requests from this website are not allowed.' });
+});
+app.use(cors((req, cb) => cb(null, { origin: !!req.headers.origin, credentials: true })));
+
+/* Writes to the API take JSON (or, for an import, the file's own bytes).
+   A form-encoded or text/plain body is exactly what a cross-site <form>
+   can send without the browser asking first, so it is refused outright —
+   CSRF protection that does not rest on the cookie's SameSite alone. The
+   Google redirect sign-in is the one form POST this app receives. */
+const FORM_OK = new Set(['/api/auth/google/redirect']);
+app.use('/api', (req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (!type && !Number(req.headers['content-length'] || 0)) return next();       // no body
+  if (type === 'application/json') return next();
+  if (type === 'application/octet-stream' && req.path.startsWith('/import/')) return next();
+  if (type === 'application/x-www-form-urlencoded' && FORM_OK.has(req.originalUrl.split('?')[0])) return next();
+  res.status(415).json({ error: 'Send this request as JSON.' });
+});
 
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use('/api/auth/google/redirect', express.urlencoded({ extended: false, limit: '16kb' }));
 app.use(cookieParser());
 app.use('/api/auth/google', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many sign-in attempts' } }));
 

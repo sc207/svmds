@@ -2149,7 +2149,7 @@
               ${devotees.length ? `<div class="section-title">Devotees</div><div class="list">${devotees.slice(0, 8).map((d) => `
                 <button class="row-item" data-dev="${attr(d.id)}">
                   <div class="row-main"><div class="row-title">${esc(d.full_name)}</div>
-                    <div class="row-sub">${[d.mobile, d.city, d.samaj].filter(Boolean).map(esc).join(' · ')}</div></div>
+                    <div class="row-sub" style="white-space:normal">${[d.mobile, d.city, d.samaj].filter(Boolean).map(esc).join(' · ')}</div></div>
                   ${icon('chevron-right','ico-sm')}
                 </button>`).join('')}</div>` : ''}
               ${/* Two ways out of a search hit, because the reason for

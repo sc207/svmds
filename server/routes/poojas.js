@@ -1,9 +1,15 @@
 /* Murti Pran Pratishtha Mahotsav — the three pooja categories, the
    poojas inside them, and the per-day seating (patla) slots. */
 const express = require('express');
+const { amountOf } = require('../util/money');
 const db = require('../db');
 const roles = require('../middleware/roles');
-const { slotWhen } = require('../util/dates');
+const { slotWhen, dayOf } = require('../util/dates');
+
+/* A per-day seva gets one slot per calendar day, so a typo in a year (2027
+   → 2030) would build a thousand-plus days in one save. The Mahotsav runs
+   days, not years. */
+const MAX_DAYS = 60;
 const { log } = require('../middleware/audit');
 
 const router = express.Router();
@@ -247,7 +253,11 @@ router.post('/', roles.needs('admin', 'Adding a seva'), async (req, res) => {
   /* Dates are optional. A pooja with no date still takes sevarthi — it
      gets one undated slot, and real day-slots are built once the trust
      fixes the date (PUT /poojas/:id/dates). */
+  dayOf(b.start_date, 'Start date'); dayOf(b.end_date, 'End date');
   const dated = !!(b.start_date && b.end_date);
+  if (dated && datesBetween(b.start_date, b.end_date).length > MAX_DAYS) {
+    return res.status(400).json({ error: `A seva can run at most ${MAX_DAYS} days — check the years in the dates` });
+  }
   if ((b.start_date && !b.end_date) || (!b.start_date && b.end_date)) {
     return res.status(400).json({ error: 'Give both a start and an end date, or leave both blank' });
   }
@@ -282,8 +292,8 @@ router.post('/', roles.needs('admin', 'Adding a seva'), async (req, res) => {
       fixed_capacity: fixed,
       capacity_mode: capacityMode,
       seating_mode: mode,
-      amount: Number(b.amount || 0),
-      target_amount: Number(b.target_amount || 0),
+      amount: amountOf(b.amount, 'Amount') ?? 0,
+      target_amount: amountOf(b.target_amount, 'Target') ?? 0,
       start_date: dated ? b.start_date : null,
       end_date: dated ? b.end_date : null,
       coordinator_devotee_id: b.coordinator_devotee_id || null,
@@ -325,8 +335,12 @@ router.post('/', roles.needs('admin', 'Adding a seva'), async (req, res) => {
 router.put('/:id/dates', roles.needs('admin', 'Changing a seva\'s dates'), async (req, res) => {
   const { start_date, end_date } = req.body;
   if (!start_date || !end_date) return res.status(400).json({ error: 'Give both a start and an end date' });
+  dayOf(start_date, 'Start date'); dayOf(end_date, 'End date');
   if (end_date < start_date) return res.status(400).json({ error: 'End date cannot be before start date' });
   const dates = datesBetween(start_date, end_date);
+  if (dates.length > MAX_DAYS) {
+    return res.status(400).json({ error: `A seva can run at most ${MAX_DAYS} days — check the years in the dates` });
+  }
 
   const p = await db.tx(async () => {
     const p = await db.get(`SELECT * FROM pooja_events WHERE id = ?`, req.params.id);
@@ -538,8 +552,8 @@ router.put('/:id', roles.needs('admin', 'Editing a seva'), async (req, res) => {
     id: row.id,
     name: String(b.name || row.name).trim(),
     description: (b.description ?? row.description) || null,
-    amount: Number(b.amount ?? row.amount),
-    target_amount: Number(b.target_amount ?? row.target_amount),
+    amount: amountOf(b.amount ?? row.amount, 'Amount') ?? 0,
+    target_amount: amountOf(b.target_amount ?? row.target_amount, 'Target') ?? 0,
     status: b.status || row.status,
     coordinator_devotee_id: b.coordinator_devotee_id ?? row.coordinator_devotee_id,
   });

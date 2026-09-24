@@ -70,7 +70,7 @@
         ...(state.search ? [['Search', state.search]] : []),
         ['Padhramni', UI.num(rows.length)],
         ...(overdue ? [['Past their date, still open', UI.num(overdue)]] : []),
-        ['Taken', new Date().toLocaleString()],
+        ['Taken', new Date().toLocaleString('en-IN')],
       ],
       totals: { date: 'Total (' + UI.num(rows.length) + ')' },
     };

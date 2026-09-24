@@ -7,6 +7,7 @@
    there is no Management module in Phase 1 to hold a team roster. */
 const express = require('express');
 const db = require('../db');
+const { dayOf } = require('../util/dates');
 const { log } = require('../middleware/audit');
 const { upsertDevotee } = require('./devotees');
 
@@ -37,7 +38,11 @@ async function attachEscorts(rows) {
 
 async function setEscorts(visitId, ids) {
   await db.run(`DELETE FROM visit_escorts WHERE visit_id = ?`, visitId);
-  for (const id of [...new Set((ids || []).filter(Boolean))]) {
+  /* Only devotees that exist — an unknown id was a foreign-key failure (500). */
+  for (const id of [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]) {
+    if (!(await db.get(`SELECT 1 AS ok FROM devotees WHERE id = ?`, id))) {
+      throw Object.assign(new Error('One of the escorts is not in the devotee register any more — pick them again'), { status: 400 });
+    }
     await db.run(`INSERT OR IGNORE INTO visit_escorts (visit_id, devotee_id) VALUES (?, ?)`, visitId, id);
   }
 }
@@ -107,6 +112,7 @@ router.post('/', async (req, res) => {
   const b = req.body;
   let name = String(b.devotee_name || '').trim();
   if (!b.visit_date) return res.status(400).json({ error: 'Visit date is required' });
+  dayOf(b.visit_date, 'Visit date');
 
   if (!name && !b.devotee_id) return res.status(400).json({ error: 'Pick or add the devotee being visited' });
 
@@ -180,7 +186,7 @@ router.put('/:id', async (req, res) => {
       purpose: b.purpose ?? row.purpose,
       address: b.address ?? row.address,
       city: b.city ?? row.city,
-      visit_date: b.visit_date ?? row.visit_date,
+      visit_date: dayOf(b.visit_date, 'Visit date', row.visit_date),
       visit_time: b.visit_time ?? row.visit_time,
       status: STATUSES.includes(b.status) ? b.status : row.status,
       notes: b.notes ?? row.notes,

@@ -9,6 +9,7 @@
 const express = require('express');
 const db = require('../db');
 const { slotWhen } = require('../util/dates');
+const { amountOf } = require('../util/money');
 const { log } = require('../middleware/audit');
 const { upsertDevotee } = require('./devotees');
 const { readPaymentEntries, insertPaymentRows, actingUser } = require('../util/payment-entries');
@@ -21,7 +22,10 @@ async function refreshStatus(bookingId) {
   if (!b || b.status === 'cancelled') return b;
   const paid = (await db.get(`SELECT IFNULL(SUM(amount),0) AS n FROM payments WHERE booking_id = ?`,
     bookingId)).n;
-  const status = paid <= 0 ? 'pending' : paid < b.amount_committed ? 'partially_paid' : 'paid';
+  /* In paise: sums of rupee amounts carry float noise (65.83 + 1031.30 is
+     1097.1299…), which left a seva paid in full reading "Partial". */
+  const p100 = Math.round(paid * 100), c100 = Math.round(b.amount_committed * 100);
+  const status = p100 <= 0 ? 'pending' : p100 < c100 ? 'partially_paid' : 'paid';
   if (status !== b.status) {
     await db.run(`UPDATE sevarthi_bookings SET status = ?, updated_at = datetime('now','+330 minutes') WHERE id = ?`,
       status, bookingId);
@@ -142,8 +146,8 @@ router.post('/', async (req, res) => {
     if (!slot) return res.status(404).json({ error: 'Pick a date for the pooja' });
     if (slot.pooja_status === 'closed') return res.status(409).json({ error: 'This pooja is closed for new sevarthi' });
 
-    const amountCommitted = Number(b.amount_committed || 0);
-    let bhuvajiPlanned = Number(b.bhuvaji_planned_amount || 0);
+    const amountCommitted = amountOf(b.amount_committed, 'Contribution') ?? 0;
+    let bhuvajiPlanned = amountOf(b.bhuvaji_planned_amount, "Bapa's share") ?? 0;
     if (bhuvajiPlanned > amountCommitted) {
       return res.status(400).json({ error: "Bapa's share cannot exceed the total contribution" });
     }
@@ -223,7 +227,10 @@ router.post('/', async (req, res) => {
     }
     res.status(201).json(row);
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message });
+    /* A refusal this route raised says what to do; anything else is ours,
+       and goes to the error handler, which never shows it in production. */
+    if (!e.status) throw e;
+    res.status(e.status).json({ error: e.message });
   }
 });
 
@@ -261,8 +268,8 @@ router.post('/:id/cancel', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const booking = await db.get(`SELECT * FROM sevarthi_bookings WHERE id = ?`, req.params.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
-  const amount = Number(req.body.amount_committed ?? booking.amount_committed);
-  let bhuvaji = Number(req.body.bhuvaji_planned_amount ?? booking.bhuvaji_planned_amount);
+  const amount = amountOf(req.body.amount_committed ?? booking.amount_committed, 'Contribution') ?? 0;
+  let bhuvaji = amountOf(req.body.bhuvaji_planned_amount ?? booking.bhuvaji_planned_amount, "Bapa's share") ?? 0;
   if (bhuvaji > amount) return res.status(400).json({ error: "Bapa's share cannot exceed the total contribution" });
   /* Raising the contribution on a gift raises Bapa's share with it —
      the whole point is that the sevarthi is never left a balance. */
@@ -317,8 +324,8 @@ router.post('/:id/reassign', async (req, res) => {
      WHERE ps.id = ?
   `, booking.slot_id);
 
-  const amount = Number(req.body.amount_committed ?? booking.amount_committed);
-  let bhuvaji = Number(req.body.bhuvaji_planned_amount ?? booking.bhuvaji_planned_amount);
+  const amount = amountOf(req.body.amount_committed ?? booking.amount_committed, 'Contribution') ?? 0;
+  let bhuvaji = amountOf(req.body.bhuvaji_planned_amount ?? booking.bhuvaji_planned_amount, "Bapa's share") ?? 0;
   if (bhuvaji > amount) return res.status(400).json({ error: "Bapa's share cannot exceed the total contribution" });
   /* A gift travels with the sevarthi, and re-covers the new
      contribution in full — moving to a dearer seva must not quietly
@@ -355,7 +362,8 @@ router.post('/:id/reassign', async (req, res) => {
       await refreshStatus(booking.id);
     });
   } catch (e) {
-    return res.status(e.status || 500).json({ error: e.message });
+    if (!e.status) throw e;
+    return res.status(e.status).json({ error: e.message });
   }
 
   const row = await db.get(BOOKING_SELECT + ` WHERE b.id = ?`, booking.id);

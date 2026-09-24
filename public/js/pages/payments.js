@@ -216,6 +216,9 @@
     { key: 'committed', label: 'Contribution', type: 'money', value: (b) => UI.coverage(b).committed },
     { key: 'devotee',  label: 'Paid by devotee', type: 'money', value: (b) => UI.coverage(b).devotee_paid },
     { key: 'bappa',    label: "Bapa's support",  type: 'money', value: (b) => UI.coverage(b).bappa_paid },
+    /* Money handed back (refunds). "Paid" columns are already net of it,
+       so without this the sheet could not show that a refund happened. */
+    { key: 'refunded', label: 'Given back', type: 'money', value: (b) => Number(b.refunded || 0) },
     { key: 'covered',  label: 'Covered', print: false, type: 'money', value: (b) => UI.coverage(b).covered },
     { key: 'outstanding', label: 'Outstanding', type: 'money', value: (b) => UI.coverage(b).outstanding },
     { key: 'excess',   label: 'Excess', print: false, type: 'money', value: (b) => UI.coverage(b).excess },
@@ -254,14 +257,18 @@
       const c = UI.coverage(b);
       a.committed += c.committed; a.devotee += c.devotee_paid; a.bappa += c.bappa_paid;
       a.covered += c.covered; a.outstanding += c.outstanding; a.excess += c.excess;
+      a.refunded += Number(b.refunded || 0);
       return a;
-    }, { committed: 0, devotee: 0, bappa: 0, covered: 0, outstanding: 0, excess: 0 });
+    }, { committed: 0, devotee: 0, bappa: 0, covered: 0, outstanding: 0, excess: 0, refunded: 0 });
 
     return {
       filename: 'Payments-' + label + (scopeLabel() ? '-' + scopeLabel() : ''),
       title: 'Payments — ' + label + (scopeLabel() ? ' · ' + scopeLabel() : ''),
       subtitle: 'Shri Vihat Meldi Dham (Sanand) · Murti Pran Pratishtha Mahotsav',
-      columns: EXPORT_COLUMNS,
+      /* "Given back" is always in the spreadsheet, but on paper only when a
+         refund is on the sheet — a column of ₹0 would take width from the
+         names and places for nothing. */
+      columns: t.refunded ? EXPORT_COLUMNS : EXPORT_COLUMNS.map((c) => (c.key === 'refunded' ? { ...c, print: false } : c)),
       rows,
       /* The filters are stamped on so a printed copy still says what it
          was a report OF, a month after it left the printer. */
@@ -275,12 +282,13 @@
         ['Contribution', money(t.committed)],
         ['Covered', money(t.covered)],
         ['Outstanding', money(t.outstanding)],
-        ['Taken', new Date().toLocaleString()],
+        ...(t.refunded ? [['Given back', money(t.refunded)]] : []),
+        ['Taken', new Date().toLocaleString('en-IN')],
       ],
       totals: {
         name: 'Total (' + UI.num(rows.length) + ')',
         committed: t.committed, devotee: t.devotee, bappa: t.bappa,
-        covered: t.covered, outstanding: t.outstanding, excess: t.excess,
+        covered: t.covered, outstanding: t.outstanding, excess: t.excess, refunded: t.refunded,
       },
     };
   }

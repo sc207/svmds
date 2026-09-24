@@ -281,7 +281,7 @@
               <span class="ledger-avatar" aria-hidden="true">${icon('users')}</span>
               <div class="row-main">
                 <div class="row-title">${esc(l.full_name)} ${UI.coverageBadges(l)}</div>
-                <div class="row-sub">${esc(fmtDate(l.slot_date))}
+                <div class="row-sub" style="white-space:normal">${esc(fmtDate(l.slot_date))}
                   ${l.samaj ? ' · ' + esc(l.samaj) : ''}${l.mobile ? ' · ' + esc(l.mobile) : ''}</div>
               </div>
               <div class="row-end ledger-row-end">

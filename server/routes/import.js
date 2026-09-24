@@ -194,7 +194,7 @@ const csvCell = (v) => {
 };
 
 router.get('/template/:kind', async (req, res) => {
-  const spec = SPECS[req.params.kind];
+  const spec = Object.prototype.hasOwnProperty.call(SPECS, req.params.kind) && SPECS[req.params.kind];
   if (!spec) return res.status(404).json({ error: 'No such import type' });
   const lines = [spec.columns.map((c) => csvCell(c.label)).join(',')];
   (await examples(req.params.kind)).forEach((r) => lines.push(r.map(csvCell).join(',')));
@@ -243,7 +243,8 @@ router.post('/preview', needs('admin', 'Importing a spreadsheet'), raw, async (r
        the errors are what they are reading. */
     res.json({ ...report, rows: report.rows.slice(0, 200), truncated: report.rows.length > 200 });
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message });
+    if (!e.status) throw e;              // a parse/validation refusal has a status; anything else is masked
+    res.status(e.status).json({ error: e.message });
   }
 });
 
@@ -281,7 +282,8 @@ router.post('/commit', needs('admin', 'Importing a spreadsheet'), raw, async (re
     });
     res.status(out.status).json(out.body);
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message });
+    if (!e.status) throw e;              // a parse/validation refusal has a status; anything else is masked
+    res.status(e.status).json({ error: e.message });
   }
 });
 

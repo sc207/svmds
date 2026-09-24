@@ -9,9 +9,10 @@ const db = require('../db');
 const roles = require('../middleware/roles');
 const { log } = require('../middleware/audit');
 const { refreshStatus } = require('./bookings');
-const { todayLocal, monthLocal, slotWhen } = require('../util/dates');
+const { todayLocal, monthLocal, slotWhen, dayOf } = require('../util/dates');
 const { readPaymentEntries, insertPaymentRows, actingUser } = require('../util/payment-entries');
 const receipts = require('../util/receipts');
+const { amountOf } = require('../util/money');
 const { refundable, assertNotOverRefunded } = require('../util/refunds');
 
 const router = express.Router();
@@ -199,11 +200,10 @@ router.post('/', async (req, res) => {
  *  removing a payment. */
 router.post('/refund', async (req, res) => {
   const b = req.body || {};
-  const amount = Math.round(Number(b.amount || 0) * 100) / 100;
+  const amount = amountOf(b.amount, 'Refund amount') ?? 0;
   const to = b.refund_to === 'bhuvaji' ? 'bhuvaji' : 'devotee';
-  const date = b.refund_date || todayLocal();
+  const date = dayOf(b.refund_date, 'Refund date', todayLocal());
   if (!(amount > 0)) return res.status(400).json({ error: 'Enter the amount being given back' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Give the refund date as YYYY-MM-DD' });
 
   let out;
   try {
@@ -254,7 +254,8 @@ router.put('/:id', roles.needs('accountant', 'Correcting a payment'), async (req
   }
   const b = req.body;
 
-  const amount = Number(b.amount ?? p.amount);
+  const amount = amountOf(b.amount ?? p.amount, 'Amount') ?? 0;
+  const paymentDate = dayOf(b.payment_date, 'Payment date', p.payment_date);
   if (!(amount > 0)) return res.status(400).json({ error: 'Enter an amount greater than zero' });
 
   /* The same gift rule as a new payment, and it has to be here too: a
@@ -279,7 +280,7 @@ router.put('/:id', roles.needs('accountant', 'Correcting a payment'), async (req
         id: p.id,
         amount,
         payer_type: payerNow,
-        payment_date: b.payment_date || p.payment_date,
+        payment_date: paymentDate,
         receipt_no: ((b.receipt_no ?? p.receipt_no) || '').trim() || null,
         notes: ((b.notes ?? p.notes) || '').trim() || null,
       });

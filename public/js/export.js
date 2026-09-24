@@ -96,6 +96,10 @@
     const v = c.value(r);
     if (c.type === 'money') return esc(money(Number(v) || 0));
     if (c.type === 'num') return esc(num(Number(v) || 0));
+    /* The spreadsheet keeps 2027-02-04 (it sorts); the printed sheet says
+       "4 Feb 2027", the way every screen does. Anything that is not an
+       ISO date ("Date to be announced") prints as it is. */
+    if (c.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))) return esc(fmtDate(String(v)));
     return esc(v == null ? '' : String(v));
   }
 
@@ -149,7 +153,9 @@
      the next column's heading. */
   table.ex td.n { font-variant-numeric: tabular-nums; white-space: nowrap; overflow-wrap: normal; }
   table.ex td.w { white-space: nowrap; overflow-wrap: normal; }
-  table.ex th { overflow-wrap: anywhere; word-break: normal; hyphens: none; }
+  /* Headings break between words, never inside one ("Contributio / n"):
+     the colgroup reserves each column at least its longest heading word. */
+  table.ex th { overflow-wrap: normal; word-break: normal; hyphens: none; }
   table.ex tbody tr:nth-child(even) td { background: #FCF8F0; }
   .ex-foot { margin-top: .8rem; font-size: .72rem; color: var(--muted-brown);
              display: flex; justify-content: space-between; gap: 1rem; }
@@ -193,22 +199,57 @@
        were always one dataset away from being a pixel too narrow;
        measuring the content is self-correcting. */
     const WEIGHT = { num: 0.6, money: 0.95, date: 0.85 };
-    const atomOf = (c) => {
+    /* The totals row is part of the column too — "₹1,28,07,334" in a
+       column sized for "₹3,66,667" ran into its neighbour. */
+    const totalText = (c) => {
+      const t = opt.totals && opt.totals[c.key];
+      if (t === undefined || t === null) return '';
+      return typeof t === 'number' ? (c.type === 'money' ? money(t) : num(t)) : String(t);
+    };
+    const measure = (c) => {
       const unbreakable = numeric(c) || c.type === 'date' || c.nowrap;
-      let longest = String(c.label || '').split(/\s+/)
-        .reduce((a, w) => Math.max(a, w.length), 0);
-      for (const r of rows) {
-        const v = String(cell(c, r)).replace(/<[^>]*>/g, '');
-        const n = unbreakable ? v.length
-          : v.split(/\s+/).reduce((a, w) => Math.max(a, w.length), 0);
+      /* Headings are bold and never break inside a word, so they count
+         a little wider than body text. */
+      const head = String(c.label || '').split(/\s+/)
+        .reduce((a, w) => Math.max(a, Math.ceil(w.length * 1.15)), 0);
+      let longest = 0, total = 0, filled = 0, maxLen = 0;
+      const values = rows.map((r) => String(cell(c, r)).replace(/<[^>]*>/g, ''));
+      const tt = totalText(c);
+      if (tt) values.push(tt);
+      for (const v of values) {
+        /* Digits are the widest glyphs at print size: a mobile number
+           counts ~15% wider than its length, or it kisses the next column. */
+        const wide = /^[+\d][\d\s,.₹-]*$/.test(v.trim()) ? 1.15 : 1;
+        const n = Math.ceil(wide * (unbreakable ? v.length
+          : v.split(/\s+/).reduce((a, w) => Math.max(a, w.length), 0)));
         if (n > longest) longest = n;
+        if (v.trim()) { total += v.length; filled++; if (v.length > maxLen) maxLen = v.length; }
       }
-      return longest;
+      return { head, longest, maxLen, avg: filled ? total / filled : 0, empty: !filled };
     };
     const weightOf = (c) => {
+      const m = measure(c);
+      /* ~8 characters per unit of weight (digits and bold headings are
+         wide at print size), plus the cell's own padding. */
+      const wraps = !(numeric(c) || c.type === 'date' || c.nowrap);
+      /* A text cell may break inside a word (overflow-wrap: anywhere), so
+         one freak 28-letter word must not size the whole column and
+         squeeze every neighbour onto two lines — cap what it can claim. */
+      const fit = Math.max(m.head / 8, wraps ? Math.min(m.longest / 8, 2.2) : m.longest / 8) + 0.2;
+      /* A column with nothing in it on this sheet takes only its heading's
+         width — Time / Samaj / Escort left blank were each holding a full
+         share while the address beside them wrapped into seven lines. */
+      if (m.empty) return Math.max(0.55, m.head / 8 + 0.2);
       const base = c.weight || WEIGHT[c.type] || (c.nowrap ? 1 : 1.35);
-      // ~10 characters per unit of weight, plus the cell's own padding.
-      return Math.max(base, atomOf(c) / 10 + 0.15);
+      /* Free text that wraps also earns width for how much of it there
+         is, so a long address is a few lines, not a column of words. */
+      /* Short phrases (a samaj, a category, a city) read best on one line —
+         "Marvadi / Samaj" on two doubled every row's height and the page
+         count with it — so they get room for the whole phrase. */
+      const bulk = !wraps ? 0
+        : m.avg <= 16 ? Math.min(m.maxLen, 18) / 8.5 + 0.2
+        : Math.min(m.avg / 14, 3.2);
+      return Math.max(base, fit, bulk);
     };
     const totalWeight = cols.reduce((a, c) => a + weightOf(c), 0);
     const colgroup = `<colgroup>${cols.map((c) =>

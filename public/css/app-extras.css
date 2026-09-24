@@ -1272,7 +1272,9 @@ dialog#sheet::backdrop { background: transparent; }
   }
   .stats-grid > .stat:has(.stat-ico),
   .stats-grid > .stat-card { gap: .45rem; }
-  .stat-card-value { font-size: 1.05rem; }
+  /* Never split a figure mid-number ("₹48,43,99 / 8" at 320px): here it
+     shrinks to fit its half-width tile instead of wrapping anywhere. */
+  .stat-card-value { font-size: 1.05rem; overflow-wrap: normal; white-space: nowrap; }
   .stat-card-title { font-size: .72rem; margin-bottom: .05rem; }
   .mg-muted-xs { font-size: .68rem; }
 }
@@ -1542,6 +1544,15 @@ table.dt td.dt-act, table.dt th.dt-act { width: 1%; white-space: nowrap; text-al
   .sort-row, .filter-row { margin-bottom: .7rem; }
   .search-bar { margin-top: .6rem !important; }
   .mg-page-actions { margin-top: .4rem; }
+  /* A row of filter chips (Payments has eight, with Gift from Bapa) wrapped
+     onto three lines — 143px — and put the first Payments row back under
+     the bottom bar. One line that swipes sideways, edge to edge. */
+  .btn-row:has(> [data-filter]) {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    margin-inline: -1rem; padding-inline: 1rem; scroll-padding-inline: 1rem;
+  }
+  .btn-row:has(> [data-filter])::-webkit-scrollbar { display: none; }
+  .btn-row:has(> [data-filter]) > .btn { flex: 0 0 auto; }
 }
 
 /* On a tablet the strip's auto-fit lands on three columns and leaves
@@ -2003,3 +2014,57 @@ body.drawer-open { overflow: hidden; }
   table.dt.imp-rows tbody tr.imp-bad { background: var(--danger-bg); padding-inline: .5rem; }
   table.dt.imp-rows tbody tr.imp-bad > td { background: transparent; }
 }
+
+/* ============================================================
+   MOBILE AUDIT (2026-09) — measured at 320/360/390/430/768/1024
+   ------------------------------------------------------------ */
+
+/* The drawer squeezed instead of scrolling. .sidebar-nav is a flex column,
+   so on a short phone (320x568) its links shrank to 19px tall — too small to
+   tap — and "Accounts & Access" was pushed out of view. They keep their
+   height; the list scrolls, as overflow-y already allows. */
+.sidebar-nav > * { flex-shrink: 0; }
+/* The diya footer is decoration; on a short screen it is room the menu needs. */
+@media (max-width: 1200px) and (max-height: 700px) { .sidebar-footer { display: none; } }
+/* The open drawer and its scrim belong above the bottom bar (z-index 99),
+   which otherwise sat across the bottom of the menu. */
+.sidebar-scrim { z-index: 100; }
+.sidebar.open { z-index: 101; }
+
+/* iOS Safari zooms the page into any field under 16px when it is focused,
+   and does not zoom back out. The sheet's fields were already 16px; the
+   page-level ones (search boxes, filter selects, Settings) were 13–14px. */
+@media (max-width: 860px) {
+  #main .form-input, #main .form-select, #main .form-textarea,
+  #main input[type="search"], #main input[type="text"], #main select { font-size: 16px; }
+}
+
+/* Thumb-sized controls that the coarse-pointer rules above did not reach. */
+@media (pointer: coarse) {
+  #toggleSidebar { min-width: 44px; min-height: 44px; }
+  /* The EN/ગુ pill keeps its look; only its tap area grows to 44px. */
+  .lang-toggle { position: relative; }
+  .lang-toggle::after { content: ''; position: absolute; inset: -8px -2px; }
+  #main .form-select, #main select { min-height: 44px; }
+  /* The sheet's close ✕ was 17x26 — the one control every sheet has. */
+  .modal-close-btn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  /* Native boxes are 13px; bigger, and the label around them is the target. */
+  input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
+  .btn-add-devotee { min-height: 44px; }
+  .step, .crumbs a, .crumbs button, .crumbs [data-crumb] { min-height: 44px; display: inline-flex; align-items: center; }
+  .step { min-width: 44px; justify-content: center; }
+  /* Radio / checkbox rows carry inline sizes on the box itself, so the
+     label around it is what has to be thumb-high. */
+  label:has(> input[type="radio"]), label:has(> input[type="checkbox"]) { min-height: 44px; }
+  /* iOS zooms the page into any field under 16px on focus. The sheet and
+     phone widths already use 16px; a touch tablet in landscape (iPad at
+     1024px) still got the desktop 14px search boxes, filters and page forms. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea,
+  #main .form-select, #main .form-input, #main .form-textarea, #main select { font-size: 16px; }
+}
+
+/* PRINT (pdf fork) ------------------------------------------------------
+   The invitation card's emblem has no inline onerror (the CSP forbids
+   inline handlers); ui.js hides a broken <img data-fallback="hide">, and
+   this shows the mandala fallback beside it in its place. */
+.pj-invite-emblem[style*="none"] + .pj-invite-emblem-fallback { display: flex !important; }

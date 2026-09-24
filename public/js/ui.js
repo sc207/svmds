@@ -85,13 +85,18 @@
     const bappa = Number(row.bappa_paid || 0);
     const paid = Number(row.amount_paid || 0);
     const devotee = row.devotee_paid === undefined ? Math.max(0, paid - bappa) : Number(row.devotee_paid || 0);
+    /* A cancelled seat owes nothing and holds no "excess" — the seat is
+       released. Its money is still shown as paid; whether it is kept or
+       given back is the refund question, not an outstanding figure. The
+       server's totals already leave cancelled bookings out. */
+    const live = row.status !== 'cancelled';
     return {
       committed,
       devotee_paid: devotee,
       bappa_paid: bappa,
       covered: paid,
-      outstanding: Math.max(0, committed - paid),
-      excess: Math.max(0, paid - committed),
+      outstanding: live ? Math.max(0, committed - paid) : 0,
+      excess: live ? Math.max(0, paid - committed) : 0,
       bappa_supported: bappa > 0,
       /* What Bapa agreed to cover but has not been recorded against yet —
          the planned figure on the booking, not money in hand. */
@@ -407,6 +412,28 @@
       },
     });
   }
+
+  /* A broken picture tidies itself away without inline JavaScript: the CSP
+     forbids inline event handlers (script-src-attr 'none'), which is what
+     turns an injected <img onerror=…> into nothing. Mark the image
+     data-fallback="hide" (hide the image), "hide:<selector>" (hide the
+     nearest such container) or "swap:<class>" (replace the image with an
+     empty <div class="<class>"> the stylesheet draws). One capturing
+     listener covers every page, since an image's error event does not bubble. */
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG' || !img.dataset || !img.dataset.fallback) return;
+    const [mode, sel] = img.dataset.fallback.split(':');
+    if (mode === 'swap' && sel) {
+      const fb = document.createElement('div');
+      fb.className = sel;
+      img.replaceWith(fb);
+      return;
+    }
+    if (mode !== 'hide') return;
+    const box = sel ? img.closest(sel) : img;
+    if (box) box.style.display = 'none';
+  }, true);
 
   /* Trap focus + ESC to close. Bound once. */
   document.addEventListener('keydown', (e) => {

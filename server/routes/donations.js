@@ -1,12 +1,13 @@
 /* Donations — separate from sevarthi contributions. Categories come
    from the same lookup table, so "add new category" works inline. */
 const express = require('express');
+const { amountOf } = require('../util/money');
 const db = require('../db');
 const roles = require('../middleware/roles');
 const receipts = require('../util/receipts');
 const { log, userOf } = require('../middleware/audit');
 const { upsertDevotee } = require('./devotees');
-const { todayLocal, monthLocal } = require('../util/dates');
+const { todayLocal, monthLocal, dayOf } = require('../util/dates');
 
 const router = express.Router();
 
@@ -40,7 +41,7 @@ router.post('/', async (req, res) => {
   const b = req.body;
   const donorName = String(b.donor_name || '').trim();
   if (!donorName) return res.status(400).json({ error: 'Donor name is required' });
-  const amount = Number(b.amount || 0);
+  const amount = amountOf(b.amount, 'Amount') ?? 0;
   if (!amount && !String(b.in_kind_item || '').trim()) {
     return res.status(400).json({ error: 'Enter an amount, or describe the in-kind item' });
   }
@@ -57,7 +58,7 @@ router.post('/', async (req, res) => {
       })).id;
     }
 
-    const donationDate = b.donation_date || todayLocal();
+    const donationDate = dayOf(b.donation_date, 'Date', todayLocal());
     /* Issued, not typed — the same rule as a payment. A number the
        operator does type is still honoured, for a trust carrying a
        paper book across. */
@@ -101,7 +102,7 @@ router.put('/:id', roles.needs('accountant', 'Correcting a donation'), async (re
 
   const donorName = String(b.donor_name ?? row.donor_name).trim();
   if (!donorName) return res.status(400).json({ error: 'Donor name is required' });
-  const amount = Number(b.amount ?? row.amount);
+  const amount = amountOf(b.amount ?? row.amount, 'Amount') ?? 0;
   const inKind = ((b.in_kind_item ?? row.in_kind_item) || '').trim() || null;
   if (!amount && !inKind) {
     return res.status(400).json({ error: 'Enter an amount, or describe the in-kind item' });
@@ -119,7 +120,7 @@ router.put('/:id', roles.needs('accountant', 'Correcting a donation'), async (re
     category_id: b.category_id ?? row.category_id,
     amount,
     in_kind_item: inKind,
-    donation_date: b.donation_date || row.donation_date,
+    donation_date: dayOf(b.donation_date, 'Date', row.donation_date),
     receipt_no: ((b.receipt_no ?? row.receipt_no) || '').trim() || null,
     notes: ((b.notes ?? row.notes) || '').trim() || null,
   });

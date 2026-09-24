@@ -38,7 +38,7 @@
         ...(state.search ? [['Search', state.search]] : []),
         ['Entries', UI.num(state.rows.length)],
         ['Total', money(state.totals.total || 0)],
-        ['Taken', new Date().toLocaleString()],
+        ['Taken', new Date().toLocaleString('en-IN')],
       ],
       totals: {
         date: 'Total (' + UI.num(state.rows.length) + ')',

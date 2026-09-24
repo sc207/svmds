@@ -93,10 +93,12 @@
       <polygon points="60,4 76,40 116,60 76,80 60,116 44,80 4,60 44,40"/>
       <polygon points="60,16 92,60 60,104 28,60"/></g></svg>`;
   }
+  /* No inline onerror: the CSP forbids inline handlers. A broken emblem is
+     hidden by ui.js's data-fallback listener, and the CSS in app-extras.css
+     (PRINT block) shows the mandala in its place. */
   function emblemImg() {
     return `<span class="pj-invite-emblem-wrap">
-      <img class="pj-invite-emblem" src="/assets/icon.png" alt=""
-           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <img class="pj-invite-emblem" src="/assets/icon.png" alt="" data-fallback="hide">
       <span class="pj-invite-emblem-fallback" style="display:none">${mandalaSVG()}</span>
     </span>`;
   }
@@ -128,7 +130,7 @@
     <div class="pj-invite pj-invite--${attr(o.template)} pj-invite--civ" style="--c:${attr(o.accent)}" data-lang="${attr(L)}">
       <span class="pj-invite-corner c-tl"></span><span class="pj-invite-corner c-tr"></span>
       <span class="pj-invite-corner c-bl"></span><span class="pj-invite-corner c-br"></span>
-      <img class="pj-invite-hero" src="/assets/temple.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
+      <img class="pj-invite-hero" src="/assets/temple.png" alt="" aria-hidden="true" data-fallback="hide">
       <div class="pj-invite-watermark">${mandalaSVG()}</div>
       <div class="pj-invite-frame">
         ${emblemImg()}
@@ -270,14 +272,16 @@
           '@page{size:A5 portrait;margin:0}' +
           'html,body{background:#fff !important;margin:0 !important;padding:0 !important}' +
           '.pj-invite-print{display:block !important;margin:0 !important;padding:0 !important;background:#fff !important}' +
+          /* max-width must be reset too: the screen rule's 92vw is 92% of the
+             PAGE in print, which clipped every card ~12mm short on the right. */
           '.inv-page{display:block !important;position:relative !important;' +
-            'width:148mm !important;height:210mm !important;min-height:0 !important;max-height:210mm !important;' +
+            'width:148mm !important;max-width:none !important;height:210mm !important;min-height:0 !important;max-height:210mm !important;' +
             'margin:0 !important;padding:0 !important;box-sizing:border-box !important;overflow:hidden !important;' +
             'break-inside:avoid !important;page-break-inside:avoid !important;' +
             'break-after:page !important;page-break-after:always !important}' +
           '.inv-page:last-child{break-after:auto !important;page-break-after:auto !important}' +
           '.inv-page-n{display:none !important}' +
-          '.pj-invite{width:148mm !important;height:210mm !important;min-height:0 !important;max-height:210mm !important;' +
+          '.pj-invite{width:148mm !important;max-width:none !important;height:210mm !important;min-height:0 !important;max-height:210mm !important;' +
             'margin:0 !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;overflow:hidden !important;' +
             'break-inside:avoid !important;page-break-inside:avoid !important;' +
             '-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}' +

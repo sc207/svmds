@@ -240,7 +240,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <img src="/assets/icon.png" class="temple-emblem-img" alt="Shri Vihat Meldi Dham"
-           onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'temple-emblem-fallback'}))">
+           data-fallback="swap:temple-emblem-fallback">
       <div class="sidebar-brand-text">
         <div class="sidebar-logo-title" id="brandName">શ્રી વિહત મેલડી ધામ</div>
         <div class="sidebar-logo-subtitle" id="brandSub">Sanand, Gujarat</div>
@@ -346,7 +346,7 @@
         </button>
 
         <div class="header-logo-title">
-          <img src="/assets/icon.png" class="header-emblem-img" alt="" aria-hidden="true" onerror="this.style.display='none'">
+          <img src="/assets/icon.png" class="header-emblem-img" alt="" aria-hidden="true" data-fallback="hide">
           <span>શ્રી વિહત મેલડી ધામ</span>
         </div>
 
@@ -421,7 +421,7 @@
 <div id="openingAnnounce" class="annc-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="anncTitle">
   <div class="annc-card" role="document">
     <div class="annc-head">
-      <div class="annc-emblem" aria-hidden="true"><img src="/assets/icon.png" alt="" onerror="this.style.display='none'"></div>
+      <div class="annc-emblem" aria-hidden="true"><img src="/assets/icon.png" alt="" data-fallback="hide"></div>
       <div>
         <div class="annc-kicker" id="anncKicker" data-i18n="Today's Temple Updates">Today's Temple Updates</div>
         <h2 class="annc-title" id="anncTitle">જય શ્રી વિહત મેલડી ધામ</h2>

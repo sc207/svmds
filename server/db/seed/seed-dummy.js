@@ -21,6 +21,7 @@
 */
 const db = require('../index');
 const { runMigrations, bootRepairs } = require('../migrate');
+const receipts = require('../../util/receipts');
 
 const CITIES = ['Sanand', 'Ahmedabad', 'Viramgam', 'Gandhinagar', 'Surat', 'Rajkot', 'Vadodara', 'Mehsana'];
 const SAMAJ = { Rabari: 8, Marvadi: 9, Patel: 10, Thakor: 11, Prajapati: 12 };
@@ -96,7 +97,10 @@ async function pay(bookingId, amount, payerType = 'devotee', date = '2026-09-21'
   (await db.run(`
     INSERT INTO payments (booking_id, amount, payer_type, payment_date, receipt_no, recorded_by)
     VALUES (?, ?, ?, ?, ?, 'Administrator')
-  `, bookingId, amount, payerType, date, receiptNo));
+  `, bookingId, amount, payerType, date,
+     /* Issued like every real payment: a ledger row without a number is
+        exactly what receipts.js exists to prevent. */
+     receiptNo || await receipts.next('P', date)));
   await refreshStatus(bookingId);
 }
 
@@ -160,9 +164,12 @@ async function cancel(bookingId, reason) {
   });
 }
 
-async function main() {
-  await runMigrations();
-  await bootRepairs();
+/* Everything the script writes. main() runs it as ONE transaction: the
+   script is not idempotent and its scenarios assume a freshly seeded
+   database, so if any step fails (a seat already taken, say) nothing it
+   wrote is kept — the db.tx() calls in book() / reassign() / cancel()
+   join the outer one. */
+async function load() {
   for (const [full_name, mobile, city, samaj_id, category_id, mul_vatan] of DEVOTEES) {
     devoteeIds.push(Number((await db.run(`
       INSERT INTO devotees (full_name, mobile, city, state, mul_vatan, samaj_id, category_id)
@@ -341,6 +348,14 @@ async function main() {
     devotee: '(none)',
     pooja: 'Four Chowki Kalash Pooja, Garbha Gruh Na Ubra Ni Pooja, Sukhanath Pooja, Dharma Dhaja Pooja, Ubra Ni Pooja, Mataji First Shringar, Four Directions Deities Pooja, Six Elephants Pooja (Airavat), Dhwaja Stambha Pooja, Main Dhwaja Pooja 108, Stambh Murti Pooja',
   });
+
+  return scenarios;
+}
+
+async function main() {
+  await runMigrations();
+  await bootRepairs();
+  const scenarios = await db.tx(load);
 
   console.log('\nDummy data loaded. Checklist of what to look at:\n');
   scenarios.forEach((s, i) => console.log(`${i + 1}. ${s.label}\n   ${s.devotee} — ${s.pooja}\n`));

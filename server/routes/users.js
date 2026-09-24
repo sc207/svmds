@@ -14,6 +14,8 @@ const { mapUser } = require('../utils/mappers');
 
 const router = express.Router();
 const VALID_ROLES = Object.keys(ROLE_PAGES);
+/* "abc" as an id is simply no such account (NaN reached the driver as a 500). */
+const idOf = (v) => (/^\d+$/.test(String(v)) ? Number(v) : -1);
 const adminTier = requireRole('superadmin', 'admin');
 
 const who = (req) => ({ userId: req.user.id, userEmail: req.user.email, userName: req.user.name });
@@ -46,7 +48,7 @@ router.get('/directory', async (req, res, next) => {
 
 router.get('/:id', adminTier, async (req, res, next) => {
   try {
-    const u = await getUser(parseInt(req.params.id, 10));
+    const u = await getUser(idOf(req.params.id));
     if (!u) return res.status(404).json({ error: 'User not found' });
     res.json(dto(u));
   } catch (e) { next(e); }
@@ -99,7 +101,7 @@ router.post('/', adminTier, async (req, res, next) => {
 /* PATCH /:id  { name?, mobile?, city?, active? } — not roles. */
 router.patch('/:id', adminTier, async (req, res, next) => {
   try {
-    const u = await getUser(parseInt(req.params.id, 10));
+    const u = await getUser(idOf(req.params.id));
     if (!u) return res.status(404).json({ error: 'User not found' });
     assertCanTouchUser(req.user, u);
     if (req.body.active === false) {
@@ -133,7 +135,7 @@ router.post('/:id/roles', adminTier, async (req, res, next) => {
     const role = String(req.body.role || '');
     if (!VALID_ROLES.includes(role)) return res.status(400).json({ error: 'Unknown role' });
     assertCanGrant(req.user, role);
-    const u = await getUser(parseInt(req.params.id, 10));
+    const u = await getUser(idOf(req.params.id));
     if (!u) return res.status(404).json({ error: 'User not found' });
     assertCanTouchUser(req.user, u);
     await assertSingleSuperadmin(role, u.id);
@@ -152,7 +154,7 @@ router.delete('/:id/roles/:role', adminTier, async (req, res, next) => {
     const role = req.params.role;
     if (!VALID_ROLES.includes(role)) return res.status(400).json({ error: 'Unknown role' });
     assertCanGrant(req.user, role);
-    const u = await getUser(parseInt(req.params.id, 10));
+    const u = await getUser(idOf(req.params.id));
     if (!u) return res.status(404).json({ error: 'User not found' });
     assertCanTouchUser(req.user, u);
     if (role === 'superadmin') assertRootOwnerSafe(u, 'revoke-superadmin');
@@ -167,7 +169,7 @@ router.delete('/:id/roles/:role', adminTier, async (req, res, next) => {
 /* DELETE /:id — soft-delete the account + kill its sessions. */
 router.delete('/:id', adminTier, async (req, res, next) => {
   try {
-    const u = await getUser(parseInt(req.params.id, 10));
+    const u = await getUser(idOf(req.params.id));
     if (!u) return res.status(404).json({ error: 'User not found' });
     assertCanTouchUser(req.user, u);
     assertRootOwnerSafe(u, 'delete');

@@ -186,7 +186,8 @@ router.post('/', async (req, res) => {
     const row = await db.get(SELECT + ` WHERE d.id = ?`, id);
     res.status(created ? 201 : 200).json(row);
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message });
+    if (!e.status) throw e;              // ours, not the operator's — the error handler masks it
+    res.status(e.status).json({ error: e.message });
   }
 });
 

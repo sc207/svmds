@@ -82,8 +82,8 @@
                   ${u.rootOwner ? '<span class="badge badge-gold">Owner</span>' : ''}
                   ${u.active ? '' : '<span class="badge badge-cancelled">Disabled</span>'}
                   ${u.id === me().id ? '<span class="badge badge-ok">You</span>' : ''}</div>
-                <div class="row-sub">${esc(u.email)}${u.mobile ? ' · ' + esc(u.mobile) : ''}</div>
-                <div class="row-sub">${u.roles.length
+                <div class="row-sub" style="white-space:normal">${esc(u.email)}${u.mobile ? ' · ' + esc(u.mobile) : ''}</div>
+                <div class="row-sub" style="white-space:normal">${u.roles.length
                   ? u.roles.map((r) => `<span class="badge">${esc(LABEL[r] || r)}</span>`).join(' ')
                   : '<span class="badge badge-warn">No role — cannot open anything</span>'}
                   ${u.googleLinked ? '' : '<span class="small muted"> · has not signed in yet</span>'}
@@ -196,7 +196,7 @@
           <div class="row-title" style="font-weight:500">${esc(s.userEmail || email(s.userId))}
             ${s.current ? '<span class="badge badge-ok">This device</span>' : ''}
             ${s.impersonatedBy ? '<span class="badge badge-warn">Viewing as</span>' : ''}</div>
-          <div class="row-sub">${esc(device(s.userAgent))} · last seen
+          <div class="row-sub" style="white-space:normal">${esc(device(s.userAgent))} · last seen
             <span title="${attr(s.lastSeen)} UTC">${esc(UI.ago(utcToLocal(s.lastSeen)))}</span></div>
         </div>
         ${s.current ? '' : `<button class="btn btn-outline mg-btn-xs" data-end="${attr(s.id)}">End</button>`}
@@ -237,7 +237,7 @@
         <span class="badge ${ACTION[a.action] || ''}">${esc(a.action)}</span>
         <div class="row-main">
           <div class="row-title" style="font-weight:500;white-space:normal">${esc(a.summary)}</div>
-          <div class="row-sub">${esc(a.user_name)}${a.user_email && a.user_email !== a.user_name ? ' · ' + esc(a.user_email) : ''} ·
+          <div class="row-sub" style="white-space:normal">${esc(a.user_name)}${a.user_email && a.user_email !== a.user_name ? ' · ' + esc(a.user_email) : ''} ·
             <span title="${attr(a.created_at)}">${esc(UI.ago(a.created_at))}</span></div>
         </div>
       </div>`).join('')}</div>${UI.pager(pg, 'entries')}`
