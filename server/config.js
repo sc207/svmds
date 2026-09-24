@@ -29,6 +29,9 @@ const config = {
     .split(',').map(s => s.trim()).filter(Boolean),
 
   sessionDays: parseInt(process.env.SESSION_DAYS || '7', 10),
+
+  // The commit being run — Render provides it; shown by /health.
+  gitCommit: process.env.RENDER_GIT_COMMIT || '',
 };
 
 module.exports = config;

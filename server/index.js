@@ -116,7 +116,11 @@ app.use('/api/auth/google', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, messa
 
 /* Health + DB diagnostic. No auth, no PII — infra status and counts only. */
 app.get('/health', async (req, res) => {
-  const info = { status: 'ok', env: config.nodeEnv, tursoConfigured: !!(config.turso.url && config.turso.token),
+  /* `version` is the commit this process was started from (Render sets
+     RENDER_GIT_COMMIT), so "is the new deploy the one answering?" is a
+     single request — not an inference from how the site behaves. */
+  const info = { status: 'ok', env: config.nodeEnv, version: (config.gitCommit || 'local').slice(0, 7),
+    tursoConfigured: !!(config.turso.url && config.turso.token),
     adminEmailSet: !!config.adminEmail, db: null, counts: null };
   try {
     await db.init();
