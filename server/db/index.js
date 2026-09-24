@@ -154,5 +154,7 @@ async function close() {
 module.exports = {
   init, get, all, run, exec, tx, inTx, close,
   isTurso: () => turso,
-  where: () => (turso ? 'turso' : localPath()),
+  /* Where the data lives — decided by config, so it is right before init() too. */
+  where: () => (turso || (config.turso.url && config.turso.token && !process.env.TEMPLE_DB)
+    ? 'turso ' + config.turso.url.replace(/^libsql:\/\//, '') : localPath()),
 };
