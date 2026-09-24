@@ -67,6 +67,8 @@
         ${fig('No role yet', active.filter((u) => !u.roles.length).length, 'cannot open anything', 'alert')}
       </div>
 
+      <div id="legacyCard"></div>
+
       <div class="card">
         <div class="card-header"><h2>Accounts</h2>
           <span class="small muted">Sign-in is by Google account — add the person's Gmail / Google address</span></div>
@@ -110,6 +112,7 @@
 
     paintSessions(sessions, users);
     paintAudit(audit);
+    if (isSuper()) paintLegacy().catch(() => {});
 
     host.querySelector('[data-add]').addEventListener('click', () => accountForm());
     host.querySelectorAll('[data-user]').forEach((b) =>
@@ -135,6 +138,45 @@
       </div>
       <div class="stat-card-icon-wrapper">${icon(ic)}</div>
     </div>`;
+
+  /* TEMPORARY — the old portal's data, kept at the Phase 1 cutover. Download
+     it, then delete it so the database holds Phase 1 data alone. Delete stays
+     disabled until the file has been downloaded on this page. */
+  async function paintLegacy() {
+    const box = document.getElementById('legacyCard');
+    if (!box) return;
+    const st = await API.get('/legacy-backup/status');
+    if (!st.exists) { box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <div class="card">
+        <div class="card-header"><h2>Old portal backup</h2>
+          <span class="small muted">Super admin only</span></div>
+        <div class="card-body">
+          <p class="small" style="margin-top:0">The previous portal's data — ${esc(st.tables)} tables, ${esc(st.rows)} rows —
+            was kept in the database when this app replaced it. Download it and keep the file safe, then delete it
+            here so the database holds only the Mahotsav data. Deleting cannot be undone.</p>
+          <div class="form-actions">
+            <a class="btn btn-outline" id="legacyDl" href="/api/legacy-backup/download" download>Download backup (.json)</a>
+            <button class="btn btn-danger" id="legacyDel" disabled title="Download the backup first">Delete from database</button>
+          </div>
+        </div>
+      </div>`;
+    const del = box.querySelector('#legacyDel');
+    box.querySelector('#legacyDl').addEventListener('click', () => {
+      setTimeout(() => { del.disabled = false; del.title = ''; }, 1500);
+    });
+    del.addEventListener('click', () => UI.confirmSheet({
+      title: 'Delete the old portal backup',
+      message: `This permanently removes ${st.rows} rows of the old portal's data from the database. ` +
+               'Only continue if the downloaded file has opened and is saved somewhere safe.',
+      confirmLabel: 'Delete permanently', danger: true,
+      onConfirm: async () => {
+        await API.del('/legacy-backup', { confirm: 'DELETE' });
+        toast('Old portal backup deleted', 'ok');
+        box.innerHTML = '';
+      },
+    }));
+  }
 
   function device(ua) {
     const s = String(ua || '');

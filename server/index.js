@@ -103,6 +103,7 @@ app.use('/api/auth', require('./routes/auth'));             // public: Google si
 app.use('/api', authRequired);                              // everything below needs a session
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/legacy-backup', require('./routes/legacyBackup'));   // TEMPORARY, super admin only
 app.use('/api', requireAnyRole);                            // …and an account with a role
 
 app.use('/api/lookups', require('./routes/lookups'));

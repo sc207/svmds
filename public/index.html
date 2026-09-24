@@ -142,12 +142,22 @@
   var NAME_HOLD = 800;                                  // ms each name is shown
   var MIN_SHOW = names.length * NAME_HOLD + 400;        // floor, even on a fast load
 
+  /* The full invocation plays on the FIRST open of the day on this device.
+     After that the splash lifts as soon as the page is ready — at ~5s a
+     time it was the largest part of every reload. Storage can be blocked
+     (private mode); then it simply plays every time, as before. */
+  var today = new Date().toLocaleDateString('en-CA');
+  var seenToday = false;
+  try { seenToday = localStorage.getItem('svmds_splash_day') === today; } catch (e) { /* blocked */ }
+  if (seenToday) MIN_SHOW = 0;
+  else { try { localStorage.setItem('svmds_splash_day', today); } catch (e) { /* blocked */ } }
+
   /* Three gates, not the portal's two. This app is a single page whose
      first screen is fetched after the scripts run, so `load` fires while
      the dashboard is still showing skeletons — lifting the splash there
      would reveal a half-drawn page. app.js calls window.__appReady()
      once its first render has actually painted. */
-  var pageDone = false, cycleDone = false, appDone = false;
+  var pageDone = false, cycleDone = seenToday, appDone = false;
 
   function paint() { if (bar) bar.style.width = pct.toFixed(1) + '%'; }
   function tick() {

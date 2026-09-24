@@ -122,7 +122,7 @@
     post: (p, b) => request('POST', p, b),
     put: (p, b) => request('PUT', p, b),
     patch: (p, b) => request('PATCH', p, b),
-    del: (p) => request('DELETE', p),
+    del: (p, b) => request('DELETE', p, b),
 
     // Domain shortcuts — keeps page code readable.
     lookups: (type) => request('GET', '/lookups', undefined, { type }),
