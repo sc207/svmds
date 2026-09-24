@@ -316,8 +316,8 @@
        button is never a bare icon to a screen reader or a long press. */
     return `<div class="ex-bar" id="${attr(id || 'exportBar')}">
       <button type="button" class="btn btn-outline mg-btn-xs" data-export="pdf"
-              title="Print / PDF" aria-label="Print / PDF">
-        ${icon('print', 'ico-sm')}<span class="ex-label">Print / PDF</span></button>
+              title="PDF — password protected" aria-label="PDF, password protected">
+        ${icon('print', 'ico-sm')}<span class="ex-label">PDF 🔒</span></button>
       <button type="button" class="btn btn-outline mg-btn-xs" data-export="xlsx"
               title="Excel — password protected" aria-label="Excel, password protected">
         ${icon('sheet', 'ico-sm')}<span class="ex-label">Excel 🔒</span></button>
@@ -354,12 +354,13 @@
      stored — so a copy forwarded on WhatsApp is useless without it. The
      CSV download is gone from the toolbar for the same reason: an
      unprotected copy would defeat the point. */
-  function askPassword(spec) {
+  function askPassword(spec, kind) {
+    const what = kind === 'pdf' ? 'PDF' : 'Excel';
     return new Promise((resolve) => {
       let done = false;
       const finish = (v) => { if (!done) { done = true; resolve(v); } };
       UI.openSheet({
-        title: 'Password for this Excel file',
+        title: `Password for this ${what} file`,
         body: `${UI.contextCard({ title: spec.title || 'Export', sub: `${num((spec.rows || []).length)} rows` })}
           <form id="xpwForm" novalidate style="margin-top:.9rem" autocomplete="off">
             <div class="form-group"><label class="form-label req" for="f_xpw">Password</label>
@@ -368,12 +369,12 @@
               <input class="form-input" id="f_xpw2" name="pw2" type="password" autocomplete="new-password"></div>
             <label class="small" style="display:flex;gap:.45rem;align-items:center;font-weight:500">
               <input type="checkbox" id="f_xpwShow" style="width:auto;min-height:0"> Show password</label>
-            <p class="form-hint" style="margin-top:.7rem">At least 6 characters. Excel asks for it before opening the file.
+            <p class="form-hint" style="margin-top:.7rem">At least 6 characters — 8 or more mixing letters and numbers is much harder to guess. ${what === 'PDF' ? 'Any PDF reader' : 'Excel'} asks for it before opening the file.
               Share it separately from the file — a phone call, not the same WhatsApp message. It is not stored
               anywhere: if it is forgotten, export the file again.</p>
           </form>`,
         footer: `<button class="btn btn-outline" data-sheet-close>Cancel</button>
-                 <button class="btn btn-primary" id="xpwGo">Download Excel</button>`,
+                 <button class="btn btn-primary" id="xpwGo">Download ${what}</button>`,
         onMount(sheet) {
           sheet.addEventListener('close', () => finish(null), { once: true });
           const f = document.getElementById('xpwForm');
@@ -395,15 +396,19 @@
     });
   }
 
-  async function xlsx(spec, password) {
+  /* Both protected formats are built on the server from the same values the
+     page shows (routes/exports.js); the page sends its filtered, sorted rows
+     and the password for this one file. */
+  async function protectedExport(kind, spec, password) {
     const cols = spec.columns;
     const body = {
-      list: spec.list, title: spec.title, filename: spec.filename, password,
+      list: spec.list, title: spec.title, subtitle: spec.subtitle, filename: spec.filename, password,
       meta: (spec.meta || []).filter(([k]) => k !== 'Taken'),
-      columns: cols.map((c) => ({ label: c.label, type: c.type || '' })),
+      columns: cols.map((c) => ({ label: c.label, type: c.type || '', print: c.print !== false })),
       rows: spec.rows.map((r) => cols.map((c) => { const v = c.value(r); return v === undefined ? null : v; })),
+      totals: spec.totals ? cols.map((c) => (spec.totals[c.key] === undefined ? null : spec.totals[c.key])) : null,
     };
-    const res = await fetch('/api/exports/xlsx', {
+    const res = await fetch('/api/exports/' + kind, {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', Accept: '*/*' }, body: JSON.stringify(body),
     });
@@ -419,8 +424,9 @@
     a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    UI.toast(`${num(spec.rows.length)} rows saved as a password-protected Excel file`, 'ok');
+    UI.toast(`${num(spec.rows.length)} rows saved as a password-protected ${kind === 'pdf' ? 'PDF' : 'Excel file'}`, 'ok');
   }
+  const xlsx = (spec, password) => protectedExport('xlsx', spec, password);
 
   function bindToolbar(root, build) {
     if (!root) return;
@@ -429,13 +435,14 @@
         const spec = build();
         if (!spec) return;
         if (!(spec.rows || []).length) { UI.toast('Nothing to export in this view.', 'err'); return; }
-        if (b.getAttribute('data-export') === 'xlsx') {
+        const kind = b.getAttribute('data-export');
+        if (kind === 'xlsx' || kind === 'pdf') {
           /* Recorded on the server in the same request that builds the file. */
-          const password = await askPassword(spec);
+          const password = await askPassword(spec, kind);
           if (!password) return;
           b.disabled = true;
-          try { await xlsx(spec, password); }
-          catch (err) { UI.toast('The Excel file was not made — ' + err.message, 'err'); }
+          try { await protectedExport(kind, spec, password); }
+          catch (err) { UI.toast(`The ${kind === 'pdf' ? 'PDF' : 'Excel file'} was not made — ` + err.message, 'err'); }
           finally { b.disabled = false; }
           return;
         }

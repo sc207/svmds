@@ -112,7 +112,7 @@ app.use('/api', (req, res, next) => {
 /* 1 MB covers every form; a password-protected Excel export carries the
    whole register and brings its own (larger) parser. */
 const jsonBody = express.json({ limit: '1mb' });
-app.use((req, res, next) => (req.path === '/api/exports/xlsx' ? next() : jsonBody(req, res, next)));
+app.use((req, res, next) => (/^\/api\/exports\/(xlsx|pdf)$/.test(req.path) ? next() : jsonBody(req, res, next)));
 app.use('/api/auth/google/redirect', express.urlencoded({ extended: false, limit: '16kb' }));
 app.use(cookieParser());
 app.use('/api/auth/google', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many sign-in attempts' } }));
@@ -161,7 +161,7 @@ app.use('/api/visits', require('./routes/visits'));
 app.use('/api/import', require('./routes/import'));         // mounts its own express.raw
 app.use('/api/annual-events', require('./routes/annualEvents'));
 app.use('/api/reminders', require('./routes/reminders'));   // opening announcements
-app.use('/api/exports', require('./routes/exports'));      // password-protected Excel
+app.use('/api/exports', require('./routes/exports'));      // password-protected Excel / PDF
 app.use('/api', require('./routes/misc'));                  // /dashboard /calendar /settings /audit
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));
 
