@@ -126,7 +126,7 @@ router.get('/dashboard', async (req, res) => {
     db.all(
     /* The daily work only — sign-ins and account changes carry people's
        email addresses and belong to Accounts & Access (admin-tier). */
-    `SELECT * FROM audit_log WHERE entity NOT IN ('session', 'account', 'auth', 'access')
+    `SELECT * FROM audit_log WHERE entity NOT IN ('session', 'account', 'auth', 'access', 'export')
       ORDER BY id DESC LIMIT 12`),
   ]);
 
@@ -304,6 +304,40 @@ router.get('/audit', async (req, res) => {
   res.json(await db.all(
     `SELECT * FROM audit_log ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
      ORDER BY id DESC LIMIT @limit`, { ...params, limit: Math.max(1, Math.min(Math.trunc(Number(limit)) || 200, 1000)) }));
+});
+
+/* ---------- Exports ----------
+   Every download of a register (Print / PDF, Excel) is recorded here BEFORE
+   the file is made, and the browser will not make it if this fails — a
+   sheet of devotees' names and mobiles leaving the building is exactly
+   what the trail has to be able to answer for. The stamp printed on the
+   file ("Exported by … · date") comes back from here, so it names the
+   signed-in account, not whatever the page says. */
+const EXPORT_LISTS = ['payments', 'devotees', 'visits', 'donations'];
+const EXPORT_FORMATS = ['pdf', 'csv', 'xlsx'];
+
+router.post('/exports', async (req, res) => {
+  const b = req.body || {};
+  const list = String(b.list || '');
+  const format = String(b.format || '');
+  if (!EXPORT_LISTS.includes(list) || !EXPORT_FORMATS.includes(format)) {
+    return res.status(400).json({ error: 'Unknown export' });
+  }
+  const rows = Math.max(0, Math.min(Number(b.rows) || 0, 1e6));
+  const filters = (Array.isArray(b.filters) ? b.filters : []).slice(0, 12)
+    .map((f) => (Array.isArray(f) ? [String(f[0]).slice(0, 40), String(f[1]).slice(0, 120)] : null)).filter(Boolean);
+  const title = String(b.title || list).slice(0, 120);
+  const who = (req.user && (req.user.name || req.user.email)) || 'Unknown';
+  const at = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short',
+    year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  await log(req, {
+    action: 'export', entity: 'export', entityId: null,
+    summary: `${title} — ${rows} row${rows === 1 ? '' : 's'} exported as ${format === 'pdf' ? 'PDF' : format === 'xlsx' ? 'Excel' : 'CSV'}`,
+    details: { list, format, rows, filters },
+  });
+  res.status(201).json({
+    stamp: `Exported by ${who}${req.user && req.user.email && req.user.email !== who ? ' (' + req.user.email + ')' : ''} · ${at}`,
+  });
 });
 
 module.exports = router;

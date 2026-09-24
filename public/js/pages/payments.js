@@ -262,6 +262,7 @@
     }, { committed: 0, devotee: 0, bappa: 0, covered: 0, outstanding: 0, excess: 0, refunded: 0 });
 
     return {
+      list: 'payments',   // which register — recorded with every export
       filename: 'Payments-' + label + (scopeLabel() ? '-' + scopeLabel() : ''),
       title: 'Payments — ' + label + (scopeLabel() ? ' · ' + scopeLabel() : ''),
       subtitle: 'Shri Vihat Meldi Dham (Sanand) · Murti Pran Pratishtha Mahotsav',

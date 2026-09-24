@@ -60,6 +60,7 @@
     const overdue = rows.filter((v) => v.status !== 'completed' && v.status !== 'cancelled'
       && UI.whenDay(v.visit_date).days < 0).length;
     return {
+      list: 'visits',   // which register — recorded with every export
       filename: 'Padhramni-' + label,
       title: 'Bappa / Bhuvaji Padhramni — ' + label,
       subtitle: "Shri Vihat Meldi Dham (Sanand) · visits to devotees' homes and shops",

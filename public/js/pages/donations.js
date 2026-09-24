@@ -28,6 +28,7 @@
     const [y, m] = state.month.split('-').map(Number);
     const monthName = `${MONTHS[m - 1]} ${y}`;
     return {
+      list: 'donations',   // which register — recorded with every export
       filename: 'Donations-' + state.month,
       title: 'Donations — ' + monthName,
       subtitle: 'Shri Vihat Meldi Dham (Sanand) · offerings recorded outside the Mahotsav seva',

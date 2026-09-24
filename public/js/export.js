@@ -302,7 +302,7 @@
         </div>
       </div>`;
 
-    global.openPrintDoc({ title: opt.title || 'Report', wrapClass: 'ex-wrap', inner, css: PRINT_CSS });
+    global.openPrintDoc({ title: opt.title || 'Report', wrapClass: 'ex-wrap', inner, css: PRINT_CSS, win: opt.win });
   }
 
   /* ---------- the toolbar ----------
@@ -326,13 +326,49 @@
 
   /** Wire the toolbar. `build()` is called at click time, not at render
       time, so the export always reflects the filters as they are now. */
+  /* Every export is recorded on the server BEFORE the file is made — who,
+     which register, how many rows, under which filters — and if it cannot
+     be recorded, no file is made. The stamp the server returns ("Exported
+     by <account> · <date>") goes on the file itself: a meta row in the
+     spreadsheet, the header and footer of the printed sheet — so a copy
+     that leaks says whose it was. */
+  async function record(spec, format) {
+    const r = await API.post('/exports', {
+      list: spec.list, format, rows: (spec.rows || []).length, title: spec.title,
+      filters: (spec.meta || []).filter(([k]) => k !== 'Taken'),
+    });
+    return r.stamp;
+  }
+
+  function stamped(spec, stamp) {
+    return { ...spec,
+      meta: (spec.meta || []).filter(([k]) => k !== 'Taken')
+        .concat([['Exported by', stamp.replace(/^Exported by /, '')]]),
+      footer: (spec.footer || 'Shri Vihat Meldi Dham — Sanand') + ' · ' + stamp };
+  }
+
   function bindToolbar(root, build) {
     if (!root) return;
     root.querySelectorAll('[data-export]').forEach((b) =>
-      b.addEventListener('click', () => {
+      b.addEventListener('click', async () => {
         const spec = build();
         if (!spec) return;
-        (b.getAttribute('data-export') === 'csv' ? csv : pdf)(spec);
+        if (!(spec.rows || []).length) { UI.toast('Nothing to export in this view.', 'err'); return; }
+        const format = b.getAttribute('data-export') === 'csv' ? 'csv' : 'pdf';
+        /* Opened now, inside the tap, or Safari blocks it (see print.js). */
+        const win = format === 'pdf' ? global.openPrintHolder() : null;
+        if (format === 'pdf' && !win) return;
+        b.disabled = true;
+        try {
+          const stamp = await record(spec, format);
+          if (format === 'csv') csv(stamped(spec, stamp));
+          else pdf({ ...stamped(spec, stamp), win });
+        } catch (err) {
+          if (win) try { win.close(); } catch (e) { /* already gone */ }
+          UI.toast('The export could not be recorded, so it was not made — ' + err.message, 'err');
+        } finally {
+          b.disabled = false;
+        }
       }));
   }
 

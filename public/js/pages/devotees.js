@@ -78,6 +78,7 @@
     const samaj = named('devSamaj', state.samajId);
     const category = named('devCategory', state.categoryId);
     return {
+      list: 'devotees',   // which register — recorded with every export
       filename: 'Devotee-Register' + (samaj ? '-' + samaj : ''),
       title: 'Devotee Register' + (samaj ? ' — ' + samaj : ''),
       subtitle: "Shri Vihat Meldi Dham (Sanand) · the temple's permanent register",

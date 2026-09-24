@@ -9,9 +9,24 @@
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  /* A window opened inside the click, before any await. Safari (and
+     iOS) only let a page open a window as the direct result of a tap — a
+     window.open after waiting on the server is a blocked pop-up. So the
+     window is opened first, shows a line while the export is recorded,
+     and openPrintDoc({ win }) fills it. */
+  global.openPrintHolder = function () {
+    const w = window.open('', '_blank');
+    if (!w) { UI.toast('Please allow pop-ups to print / save as PDF.', 'err'); return null; }
+    try {
+      w.document.write('<!DOCTYPE html><title>Preparing…</title>' +
+        '<p style="font:16px system-ui,sans-serif;color:#6B1F2A;padding:2rem">Preparing the report…</p>');
+    } catch (e) { /* written properly in a moment */ }
+    return w;
+  };
+
   global.openPrintDoc = function (opt) {
     opt = opt || {};
-    const w = window.open('', '_blank');
+    const w = opt.win || window.open('', '_blank');
     if (!w) { UI.toast('Please allow pop-ups to print / save as PDF.', 'err'); return null; }
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${xesc(opt.title || 'Temple Document')}</title>
