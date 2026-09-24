@@ -7,6 +7,7 @@ const express = require('express');
 const db = require('../db');
 const { requireSuperadmin } = require('../middleware/authz');
 const { logAudit } = require('../services/audit');
+const { needsFreshAuth } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(requireSuperadmin);
@@ -21,7 +22,7 @@ router.get('/status', async (req, res) => {
   res.json({ exists: true, ...s });
 });
 
-router.get('/download', async (req, res) => {
+router.get('/download', needsFreshAuth('Downloading the old portal data'), async (req, res) => {
   if (!(await exists())) return res.status(404).json({ error: 'The old portal backup has already been deleted.' });
   const rows = await db.all(`SELECT table_name, row_count, rows_json, taken_at FROM p1_legacy_backup ORDER BY table_name`);
   const out = { source: 'Shri Vihat Meldi Dham — old portal data, kept at the Phase 1 cutover',
@@ -35,7 +36,7 @@ router.get('/download', async (req, res) => {
 });
 
 /* Deliberate: the body must say DELETE, so a stray request cannot drop it. */
-router.delete('/', async (req, res) => {
+router.delete('/', needsFreshAuth('Deleting the old portal backup'), async (req, res) => {
   if (!req.body || req.body.confirm !== 'DELETE') {
     return res.status(400).json({ error: 'Type DELETE to confirm — download the backup first.' });
   }

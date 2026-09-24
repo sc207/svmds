@@ -5,6 +5,8 @@ const { queryAll, queryOne, run } = require('../db/connection');
 const { requireRole, isAdminTier } = require('../middleware/authz');
 const { logAudit } = require('../services/audit');
 const { mapSession } = require('../utils/mappers');
+const { needsFreshAuth } = require('../middleware/auth');
+const fresh = needsFreshAuth('Signing other devices out');
 
 const router = express.Router();
 
@@ -30,7 +32,7 @@ router.delete('/others', async (req, res, next) => {
 });
 
 /* DELETE /all  — admin tier: revoke every session except the caller's. */
-router.delete('/all', requireRole('superadmin', 'admin'), async (req, res, next) => {
+router.delete('/all', requireRole('superadmin', 'admin'), fresh, async (req, res, next) => {
   try {
     await run('UPDATE sessions SET revoked = 1 WHERE revoked = 0 AND id != ?', [req.user.jti || '']);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, userName: req.user.name, module: 'Auth',
@@ -46,6 +48,9 @@ router.delete('/:id', async (req, res, next) => {
     if (!s) return res.status(404).json({ error: 'Session not found' });
     if (s.user_id !== req.user.id && !isAdminTier(req.user)) {
       return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (s.user_id !== req.user.id && !req.authFresh) {
+      return res.status(403).json({ error: 'Signing someone else out needs you to confirm it is you with Google first.', reauth: true });
     }
     await run('UPDATE sessions SET revoked = 1 WHERE id = ?', [req.params.id]);
     await logAudit({ userId: req.user.id, userEmail: req.user.email, userName: req.user.name, module: 'Auth',

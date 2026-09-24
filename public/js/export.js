@@ -399,7 +399,7 @@
   /* Both protected formats are built on the server from the same values the
      page shows (routes/exports.js); the page sends its filtered, sorted rows
      and the password for this one file. */
-  async function protectedExport(kind, spec, password) {
+  async function protectedExport(kind, spec, password, retried) {
     const cols = spec.columns;
     const body = {
       list: spec.list, title: spec.title, subtitle: spec.subtitle, filename: spec.filename, password,
@@ -413,6 +413,11 @@
       headers: { 'Content-Type': 'application/json', Accept: '*/*' }, body: JSON.stringify(body),
     });
     if (res.status === 401) { location.replace('/login'); return; }
+    /* A protected export is a risky action: confirm with Google, then once more. */
+    if (res.status === 403 && !retried) {
+      const e = await res.clone().json().catch(() => ({}));
+      if (e.reauth && global.Reauth && await global.Reauth.confirm(e.error)) return protectedExport(kind, spec, password, true);
+    }
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       throw new Error(e.error || `Export failed (${res.status})`);

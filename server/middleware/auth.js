@@ -63,6 +63,7 @@ const SESSION_ACCOUNT = `
   SELECT s.revoked, s.user_id,
          (s.last_seen < datetime('now', '-5 minutes')) AS stale,
          (s.last_seen < datetime('now', ?)) AS idle,
+         (COALESCE(s.auth_at, s.created_at) >= datetime('now', '-15 minutes')) AS fresh,
          u.id, u.email, u.name, u.active, u.is_deleted,
          (SELECT group_concat(role) FROM user_roles WHERE user_id = u.id) AS roles
     FROM sessions s JOIN users u ON u.id = s.user_id
@@ -98,10 +99,28 @@ async function authRequired(req, res, next) {
     }
     const roles = row.roles ? String(row.roles).split(',') : [];
     req.user = { ...payload, email: row.email, name: row.name || '', roles };
+    req.authFresh = !!row.fresh;          // proved it with Google in the last 15 minutes
     next();
   } catch (e) {
     next(e);
   }
 }
 
-module.exports = { COOKIE, signToken, cookieOptions, clearCookieOptions, readSession, authRequired };
+/* Risky actions — removing money, changing who has access, the old backup,
+   the password-protected exports, "view as" — need the person to have proved
+   it is them with Google in the last 15 minutes, not just to hold a session.
+   A laptop left signed in, or a stolen cookie, can still read and do the
+   daily work, but not these. The page answers `reauth: true` by asking for
+   Google again (public/js/reauth.js) and retrying; signing out and in again
+   does the same. */
+function needsFreshAuth(what) {
+  return (req, res, next) => {
+    if (req.authFresh) return next();
+    res.status(403).json({
+      error: `${what} needs you to confirm it is you with Google first.`,
+      reauth: true,
+    });
+  };
+}
+
+module.exports = { COOKIE, signToken, cookieOptions, clearCookieOptions, readSession, authRequired, needsFreshAuth };

@@ -11,6 +11,11 @@ const { assertCanGrant, assertCanTouchUser, assertSingleSuperadmin, assertRootOw
 const { getUser, listUsers } = require('../services/userStore');
 const { logAudit } = require('../services/audit');
 const { mapUser } = require('../utils/mappers');
+const { needsFreshAuth } = require('../middleware/auth');
+/* Changing who has access is one of the risky actions (middleware/auth.js). */
+const fresh = needsFreshAuth('Changing accounts and access');
+/* Editing a name or mobile is not; disabling an account is. */
+const freshIfDisabling = (req, res, next) => (req.body && req.body.active === false ? fresh(req, res, next) : next());
 
 const router = express.Router();
 const VALID_ROLES = Object.keys(ROLE_PAGES);
@@ -55,7 +60,7 @@ router.get('/:id', adminTier, async (req, res, next) => {
 });
 
 /* POST /  { email, name?, mobile?, city?, roles?[] } */
-router.post('/', adminTier, async (req, res, next) => {
+router.post('/', adminTier, fresh, async (req, res, next) => {
   try {
     const email = String(req.body.email || '').toLowerCase().trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -99,7 +104,7 @@ router.post('/', adminTier, async (req, res, next) => {
 });
 
 /* PATCH /:id  { name?, mobile?, city?, active? } — not roles. */
-router.patch('/:id', adminTier, async (req, res, next) => {
+router.patch('/:id', adminTier, freshIfDisabling, async (req, res, next) => {
   try {
     const u = await getUser(idOf(req.params.id));
     if (!u) return res.status(404).json({ error: 'User not found' });
@@ -130,7 +135,7 @@ router.patch('/:id', adminTier, async (req, res, next) => {
 });
 
 /* POST /:id/roles  { role } — grant */
-router.post('/:id/roles', adminTier, async (req, res, next) => {
+router.post('/:id/roles', adminTier, fresh, async (req, res, next) => {
   try {
     const role = String(req.body.role || '');
     if (!VALID_ROLES.includes(role)) return res.status(400).json({ error: 'Unknown role' });
@@ -149,7 +154,7 @@ router.post('/:id/roles', adminTier, async (req, res, next) => {
 });
 
 /* DELETE /:id/roles/:role — revoke */
-router.delete('/:id/roles/:role', adminTier, async (req, res, next) => {
+router.delete('/:id/roles/:role', adminTier, fresh, async (req, res, next) => {
   try {
     const role = req.params.role;
     if (!VALID_ROLES.includes(role)) return res.status(400).json({ error: 'Unknown role' });
@@ -167,7 +172,7 @@ router.delete('/:id/roles/:role', adminTier, async (req, res, next) => {
 });
 
 /* DELETE /:id — soft-delete the account + kill its sessions. */
-router.delete('/:id', adminTier, async (req, res, next) => {
+router.delete('/:id', adminTier, fresh, async (req, res, next) => {
   try {
     const u = await getUser(idOf(req.params.id));
     if (!u) return res.status(404).json({ error: 'User not found' });

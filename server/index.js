@@ -115,7 +115,9 @@ const jsonBody = express.json({ limit: '1mb' });
 app.use((req, res, next) => (/^\/api\/exports\/(xlsx|pdf)$/.test(req.path) ? next() : jsonBody(req, res, next)));
 app.use('/api/auth/google/redirect', express.urlencoded({ extended: false, limit: '16kb' }));
 app.use(cookieParser());
-app.use('/api/auth/google', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many sign-in attempts' } }));
+const signInLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many sign-in attempts' } });
+app.use('/api/auth/google', signInLimit);
+app.use('/api/auth/reconfirm', signInLimit);
 
 /* Health + DB diagnostic. No auth, no PII — infra status and counts only. */
 app.get('/health', async (req, res) => {

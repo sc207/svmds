@@ -32,7 +32,7 @@
     location.replace('/login');
   }
 
-  async function request(method, path, body, query) {
+  async function request(method, path, body, query, retried) {
     let url = BASE + path;
     if (query) {
       const qs = new URLSearchParams(
@@ -63,6 +63,11 @@
     if (text) { try { data = JSON.parse(text); } catch (e) { data = { raw: text }; } }
 
     if (res.status === 401 && !path.startsWith('/auth/')) toLogin();
+    /* A risky action on a session that has not confirmed with Google lately:
+       ask (reauth.js), then try the same request once more. */
+    if (res.status === 403 && data && data.reauth && !retried && global.Reauth) {
+      if (await global.Reauth.confirm(data.error)) return request(method, path, body, query, true);
+    }
     if (!res.ok) {
       const err = new Error((data && data.error) || `Request failed (${res.status})`);
       err.status = res.status;

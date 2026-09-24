@@ -15,6 +15,8 @@ const express = require('express');
 const XlsxPopulate = require('xlsx-populate');
 const { log } = require('../middleware/audit');
 const registerPdf = require('../util/register-pdf');
+const { needsFreshAuth } = require('../middleware/auth');
+const fresh = needsFreshAuth('A password-protected export');
 
 const router = express.Router();
 const LISTS = ['payments', 'devotees', 'visits', 'donations'];
@@ -60,7 +62,7 @@ const recordExport = (req, x, label) => log(req, {
   details: { list: x.list, format: label, rows: x.rows.length, filters: x.meta },
 });
 
-router.post('/xlsx', express.json({ limit: '8mb' }), async (req, res) => {
+router.post('/xlsx', fresh, express.json({ limit: '8mb' }), async (req, res) => {
   let x;
   try { x = readExport(req); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
   const { columns, rows, meta, title, password, stamp } = x;
@@ -113,7 +115,7 @@ router.post('/xlsx', express.json({ limit: '8mb' }), async (req, res) => {
 /* The printable register as an AES-256 password-protected PDF
    (util/register-pdf.js). Columns marked print:false stay in the Excel file
    and the sheet's footer names them, as the browser print always did. */
-router.post('/pdf', express.json({ limit: '8mb' }), async (req, res) => {
+router.post('/pdf', fresh, express.json({ limit: '8mb' }), async (req, res) => {
   let x;
   try { x = readExport(req); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
   const keep = x.columns.map((c, i) => (c.print ? i : -1)).filter((i) => i >= 0);

@@ -8,6 +8,7 @@ const express = require('express');
 const db = require('../db');
 const roles = require('../middleware/roles');
 const { log } = require('../middleware/audit');
+const { needsFreshAuth } = require('../middleware/auth');
 const { refreshStatus } = require('./bookings');
 const { todayLocal, monthLocal, slotWhen, dayOf } = require('../util/dates');
 const { readPaymentEntries, insertPaymentRows, actingUser } = require('../util/payment-entries');
@@ -303,7 +304,7 @@ router.put('/:id', roles.needs('accountant', 'Correcting a payment'), async (req
   res.json({ payment: row, booking_status: updated ? updated.status : null });
 });
 
-router.delete('/:id', roles.needs('accountant', 'Removing a payment'), async (req, res) => {
+router.delete('/:id', roles.needs('accountant', 'Removing a payment'), needsFreshAuth('Removing a payment or refund'), async (req, res) => {
   const p = await db.get(`SELECT * FROM payments WHERE id = ?`, req.params.id);
   if (!p) return res.status(404).json({ error: 'Payment not found' });
   const isRefund = p.kind === 'refund';

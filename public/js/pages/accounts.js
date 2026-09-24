@@ -156,14 +156,33 @@
             was kept in the database when this app replaced it. Download it and keep the file safe, then delete it
             here so the database holds only the Mahotsav data. Deleting cannot be undone.</p>
           <div class="form-actions">
-            <a class="btn btn-outline" id="legacyDl" href="/api/legacy-backup/download" download>Download backup (.json)</a>
+            <button class="btn btn-outline" id="legacyDl">Download backup (.json)</button>
             <button class="btn btn-danger" id="legacyDel" disabled title="Download the backup first">Delete from database</button>
           </div>
         </div>
       </div>`;
     const del = box.querySelector('#legacyDel');
-    box.querySelector('#legacyDl').addEventListener('click', () => {
-      setTimeout(() => { del.disabled = false; del.title = ''; }, 1500);
+    /* A fetch, not a plain link: the download is a risky action and may
+       first need "confirm it is you" (reauth.js), which a link cannot ask. */
+    const dl = box.querySelector('#legacyDl');
+    dl.addEventListener('click', async () => {
+      dl.disabled = true;
+      try {
+        let res = await fetch('/api/legacy-backup/download', { credentials: 'same-origin' });
+        if (res.status === 403) {
+          const e = await res.clone().json().catch(() => ({}));
+          if (e.reauth && await Reauth.confirm(e.error)) res = await fetch('/api/legacy-backup/download', { credentials: 'same-origin' });
+        }
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Download failed');
+        const url = URL.createObjectURL(await res.blob());
+        const a = document.createElement('a');
+        a.href = url; a.download = 'old-portal-backup-2026-09-24.json';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        del.disabled = false; del.title = '';
+        toast('Old portal backup downloaded — keep it safe', 'ok');
+      } catch (err) { toast(err.message, 'err'); }
+      dl.disabled = false;
     });
     del.addEventListener('click', () => UI.confirmSheet({
       title: 'Delete the old portal backup',

@@ -27,8 +27,8 @@ router.get('/config', (req, res) => {
 async function createSession(user, req, extra = {}) {
   const jti = crypto.randomUUID();
   await run(
-    `INSERT INTO sessions (id, user_id, user_email, user_agent, ip, impersonated_by)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sessions (id, user_id, user_email, user_agent, ip, impersonated_by, auth_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
     [
       jti, user.id, user.email,
       String(req.headers['user-agent'] || '').slice(0, 300),
@@ -136,6 +136,28 @@ router.post('/google/redirect', async (req, res) => {
   }
 });
 
+/* -------------------- POST /reconfirm -------------------- */
+/* "Confirm it is you" before a risky action: a fresh Google credential for
+   the SAME account as this session. Moves the session's auth_at to now, so
+   needsFreshAuth lets the action through for the next 15 minutes. */
+router.post('/reconfirm', async (req, res, next) => {
+  try {
+    const payload = await readSession(req);
+    if (!payload) return res.status(401).json({ error: 'Please sign in' });
+    let profile;
+    try { profile = await verifyGoogleToken(req.body && req.body.credential); }
+    catch (e) { return res.status(401).json({ error: 'Google could not confirm it — try again' }); }
+    const user = await getUser(payload.id);
+    if (!user || !user.active || String(user.email).toLowerCase() !== profile.email) {
+      return res.status(403).json({ error: 'That is a different Google account from the one signed in here.' });
+    }
+    await run(`UPDATE sessions SET auth_at = datetime('now') WHERE id = ?`, [payload.jti]);
+    await logAudit({ userId: user.id, userEmail: user.email, userName: user.name, module: 'Auth',
+      action: 'RECONFIRM', entityType: 'session' });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 /* -------------------- GET /me -------------------- */
 router.get('/me', async (req, res, next) => {
   try {
@@ -184,6 +206,13 @@ router.post('/impersonate', async (req, res, next) => {
     }
     if (payload.impersonating) {
       return res.status(400).json({ error: 'Already impersonating — stop first' });
+    }
+    /* "View as" is a risky action: it needs a Google confirmation in the
+       last 15 minutes, like the ones behind needsFreshAuth. */
+    const f = await require('../db/connection').queryOne(
+      `SELECT (COALESCE(auth_at, created_at) >= datetime('now', '-15 minutes')) AS fresh FROM sessions WHERE id = ?`, [payload.jti]);
+    if (!f || !f.fresh) {
+      return res.status(403).json({ error: 'Viewing as another account needs you to confirm it is you with Google first.', reauth: true });
     }
 
     const targetId = parseInt(req.body && req.body.userId, 10);
