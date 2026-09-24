@@ -70,15 +70,16 @@
       </div>`;
 
     host.querySelector('#setSave').addEventListener('click', async (e) => {
+      const trigger = e.currentTarget;   // null after an await — take it now
       const data = readForm(document.getElementById('setForm'));
-      e.currentTarget.disabled = true;
+      trigger.disabled = true;
       try {
         await API.put('/settings', data);
         toast('Settings saved', 'ok');
         if (data.temple_name) document.getElementById('brandName').textContent = data.temple_name;
         if (data.temple_location) document.getElementById('brandSub').textContent = data.temple_location;
       } catch (err) { toast(err.message, 'err'); }
-      e.currentTarget.disabled = false;
+      trigger.disabled = false;
     });
 
     host.querySelectorAll('[data-list]').forEach((b) =>

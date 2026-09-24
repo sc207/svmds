@@ -117,14 +117,14 @@ router.get('/', async (req, res) => {
     params.q = `%${String(search).trim()}%`;
   }
   const sql = BOOKING_SELECT + (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
-    ` ORDER BY b.created_at DESC LIMIT 500`;
+    ` ORDER BY b.created_at DESC, b.id DESC LIMIT 500`;
   res.json(await db.all(sql, params));
 });
 
 router.get('/:id', async (req, res) => {
   const row = await db.get(BOOKING_SELECT + ` WHERE b.id = ?`, req.params.id);
   if (!row) return res.status(404).json({ error: 'Booking not found' });
-  row.payments = await db.all(`SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at`, row.id);
+  row.payments = await db.all(`SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at, id`, row.id);
   res.json(row);
 });
 

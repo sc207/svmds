@@ -360,6 +360,7 @@
           });
         });
         sheet.querySelector('#visSave').addEventListener('click', async (e) => {
+          const trigger = e.currentTarget;   // null after an await — take it now
           const form = document.getElementById('visForm');
           clearFieldErrors(form);
           const data = readForm(form);
@@ -372,13 +373,13 @@
           if (!devoteeId && !data.devotee_name) return showFieldError(form, 'visitor_id', 'Search or add the devotee');
           if (!data.visit_date) return showFieldError(form, 'visit_date', 'Pick a date');
 
-          e.currentTarget.disabled = true;
+          trigger.disabled = true;
           try {
             if (v.id) await API.put('/visits/' + v.id, data);
             else await API.post('/visits', data);
             closeSheet(); toast(v.id ? 'Updated' : 'Padhramni added', 'ok'); refreshPage();
           } catch (err) {
-            e.currentTarget.disabled = false;
+            trigger.disabled = false;
             toast(err.message, 'err');
           }
         });

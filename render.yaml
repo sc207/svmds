@@ -3,11 +3,10 @@
 #
 # DATA-SAFETY POLICY — build and start must ONLY install deps and start the
 # server. Never put any of these in buildCommand / startCommand:
-#   node server/db/wipe.js · npm run reset · npm run seed:demo · seed-dummy.js
+#   npm run reset · npm run seed:demo · node server/db/seed/seed-dummy.js
 # The server's own boot runs forward-only migrations (p1_migrations) and
-# idempotent invariant repairs that never delete rows. It REFUSES to start on
-# the old portal schema — the one-time move to Phase 1 is a manual, backed-up
-# `node server/db/wipe.js --legacy --yes --turso` run from a trusted machine.
+# idempotent invariant repairs that never delete rows. (Production was moved
+# from the old portal to Phase 1 on 2026-09-24 by a one-time cutover.)
 services:
   - type: web
     name: svmds

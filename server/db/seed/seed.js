@@ -127,7 +127,7 @@ async function main() {
 }
 
 /** The seva + samaj lists alone, on an already-migrated database. Idempotent.
-    Used by main() and by the one-time Phase 1 cutover (db/cutover.js). */
+    Used by main(). */
 async function seedLists() {
 
   for (let i = 0; i < SAMAJ.length; i++) {

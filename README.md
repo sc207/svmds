@@ -27,9 +27,8 @@ never deletes anything. Production needs `JWT_SECRET`, `ADMIN_EMAIL`,
 `ALLOWED_ORIGINS` and `TZ=Asia/Kolkata`. `/health` shows the database and
 row counts.
 
-Moving the live database from the old portal to Phase 1 is a one-time,
-manual step. See the header of `server/db/wipe.js`: it backs up every table,
-keeps the accounts, drops the rest, and creates the Phase 1 schema.
+Production moved from the old portal to Phase 1 on 2026-09-24 in a
+one-time cutover that kept the Google accounts (see git history).
 
 ## What's in Phase 1
 
@@ -190,5 +189,5 @@ SVG from `public/assets/icons.svg`, not emoji.
 ## Backup
 
 Production data lives in Turso: `turso db shell <db> .dump > backup.sql`.
-`npm run reset` and the one-time wipe also write a JSON dump of every table
+`npm run reset` also writes a JSON dump of every table
 to `data/` before they change anything.

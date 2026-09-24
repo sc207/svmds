@@ -26,16 +26,18 @@ function splitStatements(sql) {
 
 /** The portal's old schema (sk before Phase 1) has a `devotees` table with
     no `full_name`. Booting Phase 1 on it would half-work and corrupt both,
-    so refuse and say what to do instead. */
+    so refuse and say why. Production was moved to Phase 1 on 2026-09-24 by
+    a one-time cutover (git history: server/db/cutover.js, server/db/wipe.js),
+    so a database in this state is a stale copy. */
 async function assertNotLegacySchema() {
   const t = await db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='devotees'`);
   if (!t) return;
   const cols = (await db.all(`PRAGMA table_info(devotees)`)).map((c) => c.name);
   if (!cols.includes('full_name')) {
     const e = new Error(
-      'This database still holds the OLD portal schema (devotees has no full_name).\n' +
-      'Phase 1 cannot run on it. Back it up, then run the one-time reset:\n' +
-      '  node server/db/wipe.js --legacy --yes   (see the header of that file)');
+      'This database still holds the OLD portal schema (devotees has no full_name), so\n' +
+      'Phase 1 will not run on it. It is a stale copy — point TEMPLE_DB / TURSO_* at the\n' +
+      'Phase 1 database. (The one-time cutover tool is in git history: server/db/wipe.js.)');
     e.legacy = true;
     throw e;
   }

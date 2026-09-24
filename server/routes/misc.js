@@ -15,15 +15,20 @@ router.get('/dashboard', async (req, res) => {
   const month = today.slice(0, 7);
 
   const one = (sql, ...p) => db.get(sql, ...p);
+  const n = (sql, ...p) => one(sql, ...p).then((r) => r.n);
 
-  const devotees = (await one(`SELECT COUNT(*) AS n FROM devotees`)).n;
-  const sevarthi = (await one(`SELECT COUNT(*) AS n FROM sevarthi_bookings WHERE status <> 'cancelled'`)).n;
-  const received = (await one(`SELECT IFNULL(SUM(amount),0) AS n FROM payments`)).n;
-
-  /* Per booking, then summed — never committed-minus-received across the
-     whole Mahotsav. Netting globally lets one sevarthi's excess cancel
-     another's shortfall, which under-reports what is still to collect. */
-  const coverage = await one(`
+  /* Every figure below is independent, so they are read in parallel: on
+     Turso each query is a network hop, and one after another the dashboard
+     was ~30 hops (~1.5s) before it could draw. The SQL is unchanged. */
+  const [devotees, sevarthi, received, coverage, receivedToday, receivedMonth, bhuvajiCovered,
+         pending, pendingOnly, partial, registeredToday, donationsTotal, upcomingVisits] = await Promise.all([
+    n(`SELECT COUNT(*) AS n FROM devotees`),
+    n(`SELECT COUNT(*) AS n FROM sevarthi_bookings WHERE status <> 'cancelled'`),
+    n(`SELECT IFNULL(SUM(amount),0) AS n FROM payments`),
+    /* Per booking, then summed — never committed-minus-received across the
+       whole Mahotsav. Netting globally lets one sevarthi's excess cancel
+       another's shortfall, which under-reports what is still to collect. */
+    one(`
     SELECT IFNULL(SUM(b.amount_committed), 0)                        AS committed,
            IFNULL(SUM(IFNULL(pd.paid, 0)), 0)                        AS covered,
            IFNULL(SUM(IFNULL(pd.devotee, 0)), 0)                     AS devotee_paid,
@@ -40,46 +45,42 @@ router.get('/dashboard', async (req, res) => {
                         SUM(CASE WHEN payer_type = 'bhuvaji' THEN 0 ELSE amount END) AS devotee
                    FROM payments GROUP BY booking_id) pd ON pd.booking_id = b.id
      WHERE b.status <> 'cancelled'
-  `);
+  `),
+    n(`SELECT IFNULL(SUM(amount),0) AS n FROM payments WHERE payment_date = ?`, today),
+    n(`SELECT IFNULL(SUM(amount),0) AS n FROM payments WHERE substr(payment_date,1,7) = ?`, month),
+    n(`SELECT IFNULL(SUM(amount),0) AS n FROM payments WHERE payer_type='bhuvaji'`),
+    n(`SELECT COUNT(*) AS n FROM sevarthi_bookings WHERE status IN ('pending','partially_paid')`),
+    n(`SELECT COUNT(*) AS n FROM sevarthi_bookings WHERE status = 'pending'`),
+    n(`SELECT COUNT(*) AS n FROM sevarthi_bookings WHERE status = 'partially_paid'`),
+    n(`SELECT COUNT(*) AS n FROM sevarthi_bookings
+      WHERE substr(created_at, 1, 10) = ? AND status <> 'cancelled'`, today),
+    n(`SELECT IFNULL(SUM(amount),0) AS n FROM donations`),
+    n(`SELECT COUNT(*) AS n FROM visits WHERE visit_date >= ? AND status <> 'cancelled'`, today),
+  ]);
   const committed = coverage.committed;
-  const receivedToday = (await one(`SELECT IFNULL(SUM(amount),0) AS n FROM payments WHERE payment_date = ?`, today)).n;
-  const receivedMonth = (await one(`SELECT IFNULL(SUM(amount),0) AS n FROM payments WHERE substr(payment_date,1,7) = ?`, month)).n;
-  const bhuvajiCovered = (await one(`SELECT IFNULL(SUM(amount),0) AS n FROM payments WHERE payer_type='bhuvaji'`)).n;
-  const pending = (await one(`SELECT COUNT(*) AS n FROM sevarthi_bookings WHERE status IN ('pending','partially_paid')`)).n;
-  const pendingOnly = (await one(`SELECT COUNT(*) AS n FROM sevarthi_bookings WHERE status = 'pending'`)).n;
-  const partial = (await one(`SELECT COUNT(*) AS n FROM sevarthi_bookings WHERE status = 'partially_paid'`)).n;
-  const registeredToday = (await one(
-    `SELECT COUNT(*) AS n FROM sevarthi_bookings
-      WHERE substr(created_at, 1, 10) = ? AND status <> 'cancelled'`, today)).n;
-  const donationsTotal = (await one(`SELECT IFNULL(SUM(amount),0) AS n FROM donations`)).n;
-  const upcomingVisits = (await one(
-    `SELECT COUNT(*) AS n FROM visits WHERE visit_date >= ? AND status <> 'cancelled'`, today)).n;
 
-  const categories = [];
-  for (const c of Object.values(CATEGORIES)) {
-    const r = await db.get(`
+  const categoryRow = async (c) => {
+    const [r, money, got, cov] = await Promise.all([db.get(`
       SELECT IFNULL(SUM(ps.capacity),0) AS seats,
              IFNULL(SUM(ps.booked_count),0) AS booked,
              SUM(CASE WHEN ps.capacity IS NULL THEN 1 ELSE 0 END) AS open_days
         FROM pooja_slots ps JOIN pooja_events pe ON pe.id = ps.pooja_id
        WHERE pe.category = ?
-    `, c.key);
-    const money = await db.get(`
+    `, c.key), db.get(`
       SELECT IFNULL(SUM(pe.target_amount),0) AS target,
              SUM(CASE WHEN pe.capacity_mode = 'not_decided' THEN 1 ELSE 0 END) AS not_decided
         FROM pooja_events pe WHERE pe.category = ?
-    `, c.key);
-    const got = (await db.get(`
+    `, c.key), db.get(`
       SELECT IFNULL(SUM(p.amount),0) AS n FROM payments p
         JOIN sevarthi_bookings b ON b.id = p.booking_id
         JOIN pooja_slots ps ON ps.id = b.slot_id
         JOIN pooja_events pe ON pe.id = ps.pooja_id
        WHERE pe.category = ?
-    `, c.key)).n;
+    `, c.key).then((x) => x.n),
     /* Same per-booking coverage shape as the headline figures — the
        category rows must add up to them, so they are computed the
        same way rather than re-derived from the payments total. */
-    const cov = await db.get(`
+    db.get(`
       SELECT COUNT(*)                                                  AS registered,
              IFNULL(SUM(b.amount_committed), 0)                        AS committed,
              IFNULL(SUM(IFNULL(pd.paid, 0)), 0)                        AS covered,
@@ -96,8 +97,8 @@ router.get('/dashboard', async (req, res) => {
                           SUM(CASE WHEN payer_type = 'bhuvaji' THEN amount ELSE 0 END) AS bappa
                      FROM payments GROUP BY booking_id) pd ON pd.booking_id = b.id
        WHERE pe.category = ? AND b.status <> 'cancelled'
-    `, c.key);
-    categories.push({
+    `, c.key)]);
+    return {
       ...c,
       seats: r.open_days > 0 ? null : r.seats,
       booked: r.booked,
@@ -111,20 +112,22 @@ router.get('/dashboard', async (req, res) => {
       bappa_paid: cov.bappa_paid,
       outstanding: cov.outstanding,
       excess: cov.excess,
-    });
-  }
+    };
+  };
 
-  const todaySlots = await db.all(`
+  const [categories, todaySlots, recentActivity] = await Promise.all([
+    Promise.all(Object.values(CATEGORIES).map(categoryRow)),
+    db.all(`
     SELECT pe.name AS pooja_name, pe.category, ps.slot_date, ps.capacity, ps.booked_count
       FROM pooja_slots ps JOIN pooja_events pe ON pe.id = ps.pooja_id
      WHERE ps.slot_date = ? ORDER BY pe.name
-  `, today);
-
-  const recentActivity = await db.all(
+  `, today),
+    db.all(
     /* The daily work only — sign-ins and account changes carry people's
        email addresses and belong to Accounts & Access (admin-tier). */
     `SELECT * FROM audit_log WHERE entity NOT IN ('session', 'account', 'auth', 'access')
-      ORDER BY id DESC LIMIT 12`);
+      ORDER BY id DESC LIMIT 12`),
+  ]);
 
   res.json({
     today,
@@ -152,12 +155,37 @@ router.get('/calendar', async (req, res) => {
   const month = req.query.month || monthLocal();
   const entries = [];
 
-  /* per_day poojas put one entry on each day that has a slot. */
-  (await db.all(`
+  /* The five reads are independent — fetched in parallel, then turned into
+     entries in the same order as before (the final sort is stable). */
+  const [perDay, whole, visits, donations, payments] = await Promise.all([
+    db.all(`
     SELECT ps.slot_date, ps.capacity, ps.booked_count, pe.name, pe.category, pe.id AS pooja_id
       FROM pooja_slots ps JOIN pooja_events pe ON pe.id = ps.pooja_id
      WHERE substr(ps.slot_date,1,7) = ? AND pe.seating_mode = 'per_day'
-  `, month)).forEach((r) => {
+  `, month),
+    db.all(`
+    SELECT pe.id, pe.name, pe.category, pe.start_date, pe.end_date,
+           (SELECT IFNULL(SUM(capacity),0) FROM pooja_slots WHERE pooja_id = pe.id)     AS capacity,
+           (SELECT IFNULL(SUM(booked_count),0) FROM pooja_slots WHERE pooja_id = pe.id) AS booked,
+           (SELECT COUNT(*) FROM pooja_slots WHERE pooja_id = pe.id AND capacity IS NULL) AS open_seat
+      FROM pooja_events pe
+     WHERE pe.seating_mode = 'whole' AND pe.start_date IS NOT NULL
+       AND substr(pe.start_date,1,7) <= ? AND substr(pe.end_date,1,7) >= ?
+  `, month, month),
+    db.all(`SELECT * FROM visits WHERE substr(visit_date,1,7) = ?`, month),
+    db.all(`
+    SELECT dn.*, l.value AS category FROM donations dn
+      LEFT JOIN lookups l ON l.id = dn.category_id
+     WHERE substr(dn.donation_date,1,7) = ?
+  `, month),
+    db.all(`
+    SELECT p.payment_date, COUNT(*) AS n, SUM(p.amount) AS total
+      FROM payments p WHERE substr(p.payment_date,1,7) = ? GROUP BY p.payment_date
+  `, month),
+  ]);
+
+  /* per_day poojas put one entry on each day that has a slot. */
+  perDay.forEach((r) => {
     entries.push({
       date: r.slot_date, type: 'pooja', category: r.category, ref_id: r.pooja_id,
       title: r.name,
@@ -169,15 +197,7 @@ router.get('/calendar', async (req, res) => {
 
   /* A 'whole' pooja has a single pooled slot but runs across its whole
      date range, so it is drawn from the event's own dates. */
-  (await db.all(`
-    SELECT pe.id, pe.name, pe.category, pe.start_date, pe.end_date,
-           (SELECT IFNULL(SUM(capacity),0) FROM pooja_slots WHERE pooja_id = pe.id)     AS capacity,
-           (SELECT IFNULL(SUM(booked_count),0) FROM pooja_slots WHERE pooja_id = pe.id) AS booked,
-           (SELECT COUNT(*) FROM pooja_slots WHERE pooja_id = pe.id AND capacity IS NULL) AS open_seat
-      FROM pooja_events pe
-     WHERE pe.seating_mode = 'whole' AND pe.start_date IS NOT NULL
-       AND substr(pe.start_date,1,7) <= ? AND substr(pe.end_date,1,7) >= ?
-  `, month, month)).forEach((p) => {
+  whole.forEach((p) => {
     const d = new Date(p.start_date + 'T00:00:00');
     const last = new Date(p.end_date + 'T00:00:00');
     while (d <= last) {
@@ -193,7 +213,7 @@ router.get('/calendar', async (req, res) => {
     }
   });
 
-  (await db.all(`SELECT * FROM visits WHERE substr(visit_date,1,7) = ?`, month)).forEach((v) => {
+  visits.forEach((v) => {
     entries.push({
       date: v.visit_date, type: 'visit', ref_id: v.id,
       title: `Padhramni — ${v.devotee_name}`,
@@ -201,11 +221,7 @@ router.get('/calendar', async (req, res) => {
     });
   });
 
-  (await db.all(`
-    SELECT dn.*, l.value AS category FROM donations dn
-      LEFT JOIN lookups l ON l.id = dn.category_id
-     WHERE substr(dn.donation_date,1,7) = ?
-  `, month)).forEach((d) => {
+  donations.forEach((d) => {
     entries.push({
       date: d.donation_date, type: 'donation', ref_id: d.id,
       title: `Donation — ${d.donor_name}`,
@@ -214,10 +230,7 @@ router.get('/calendar', async (req, res) => {
     });
   });
 
-  (await db.all(`
-    SELECT p.payment_date, COUNT(*) AS n, SUM(p.amount) AS total
-      FROM payments p WHERE substr(p.payment_date,1,7) = ? GROUP BY p.payment_date
-  `, month)).forEach((p) => {
+  payments.forEach((p) => {
     entries.push({
       date: p.payment_date, type: 'payment',
       title: `${p.n} payment${p.n > 1 ? 's' : ''} received`,

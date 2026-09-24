@@ -33,80 +33,117 @@ function readCapacityMode(b, fallback) {
   return (b.fixed_capacity === false || b.fixed_capacity === 0) ? 'not_decided' : 'limited';
 }
 
-/** Live totals for one pooja: seats, bookings and money. */
-async function poojaStats(poojaId) {
-  const s = await db.get(`
-    SELECT IFNULL(SUM(capacity), 0)     AS total_seats,
-           IFNULL(SUM(booked_count), 0) AS booked_seats,
-           SUM(CASE WHEN capacity IS NULL THEN 1 ELSE 0 END) AS open_days,
-           COUNT(*) AS day_count
-      FROM pooja_slots WHERE pooja_id = ?
-  `, poojaId);
+/* Live totals for poojas: seats, bookings and money — for MANY poojas in
+   three grouped queries (run side by side), not two queries per pooja. On
+   Turso every query is a network hop, and the seva list is ~35 poojas, so
+   per-pooja stats were ~70 requests for one screen. A single pooja goes
+   through the same code, so there is one way these figures are computed.
 
-  /* Outstanding and excess are summed PER BOOKING, never netted across
-     the pooja: one sevarthi giving extra does not settle another's
-     shortfall, and a global subtraction would quietly hide both.
-     `received` stays every rupee actually taken in (cancelled bookings
-     included — that cash is in hand and its refund is settled by hand),
-     while `covered` counts only what sits against a live booking. */
-  const money = await db.get(`
-    SELECT IFNULL(SUM(b.amount_committed), 0)                        AS committed,
-           IFNULL(SUM(IFNULL(pd.paid, 0)), 0)                        AS covered,
-           IFNULL(SUM(IFNULL(pd.devotee, 0)), 0)                     AS devotee_paid,
-           IFNULL(SUM(IFNULL(pd.bappa, 0)), 0)                       AS bappa_paid,
-           IFNULL(SUM(CASE WHEN b.amount_committed > IFNULL(pd.paid, 0)
-                           THEN b.amount_committed - IFNULL(pd.paid, 0) ELSE 0 END), 0) AS outstanding,
-           IFNULL(SUM(CASE WHEN IFNULL(pd.paid, 0) > b.amount_committed
-                           THEN IFNULL(pd.paid, 0) - b.amount_committed ELSE 0 END), 0) AS excess,
-           IFNULL((SELECT SUM(p.amount) FROM payments p
-                     JOIN sevarthi_bookings b2 ON b2.id = p.booking_id
-                     JOIN pooja_slots ps2 ON ps2.id = b2.slot_id
-                    WHERE ps2.pooja_id = ?), 0) AS received
-      FROM sevarthi_bookings b
-      JOIN pooja_slots ps ON ps.id = b.slot_id
-      LEFT JOIN (SELECT booking_id,
-                        SUM(amount)                                                  AS paid,
-                        SUM(CASE WHEN payer_type = 'bhuvaji' THEN amount ELSE 0 END) AS bappa,
-                        SUM(CASE WHEN payer_type = 'bhuvaji' THEN 0 ELSE amount END) AS devotee
-                   FROM payments GROUP BY booking_id) pd ON pd.booking_id = b.id
-     WHERE ps.pooja_id = ? AND b.status <> 'cancelled'
-  `, poojaId, poojaId);
-
-  const unlimited = s.open_days > 0;
-  return {
-    total_seats: unlimited ? null : s.total_seats,
-    booked_seats: s.booked_seats,
-    seats_left: unlimited ? null : Math.max(0, s.total_seats - s.booked_seats),
-    day_count: s.day_count,
-    is_full: !unlimited && s.total_seats > 0 && s.booked_seats >= s.total_seats,
-    committed: money.committed,
-    received: money.received,
-    covered: money.covered,
-    devotee_paid: money.devotee_paid,
-    bappa_paid: money.bappa_paid,
-    outstanding: money.outstanding,
-    excess: money.excess,
-  };
+   Outstanding and excess are summed PER BOOKING, never netted across the
+   pooja: one sevarthi giving extra does not settle another's shortfall,
+   and a global subtraction would quietly hide both. `received` stays
+   every rupee actually taken in (cancelled bookings included — that cash
+   is in hand and its refund is settled by hand), while `covered` counts
+   only what sits against a live booking. */
+async function statsFor(poojaIds) {
+  const ids = [...new Set(poojaIds.map(Number))];
+  const out = new Map();
+  if (!ids.length) return out;
+  const IN = ids.map(() => '?').join(',');
+  const [seats, money, received] = await Promise.all([
+    db.all(`
+      SELECT pooja_id,
+             IFNULL(SUM(capacity), 0)     AS total_seats,
+             IFNULL(SUM(booked_count), 0) AS booked_seats,
+             SUM(CASE WHEN capacity IS NULL THEN 1 ELSE 0 END) AS open_days,
+             COUNT(*) AS day_count
+        FROM pooja_slots WHERE pooja_id IN (${IN}) GROUP BY pooja_id
+    `, ...ids),
+    db.all(`
+      SELECT ps.pooja_id,
+             IFNULL(SUM(b.amount_committed), 0)                        AS committed,
+             IFNULL(SUM(IFNULL(pd.paid, 0)), 0)                        AS covered,
+             IFNULL(SUM(IFNULL(pd.devotee, 0)), 0)                     AS devotee_paid,
+             IFNULL(SUM(IFNULL(pd.bappa, 0)), 0)                       AS bappa_paid,
+             IFNULL(SUM(CASE WHEN b.amount_committed > IFNULL(pd.paid, 0)
+                             THEN b.amount_committed - IFNULL(pd.paid, 0) ELSE 0 END), 0) AS outstanding,
+             IFNULL(SUM(CASE WHEN IFNULL(pd.paid, 0) > b.amount_committed
+                             THEN IFNULL(pd.paid, 0) - b.amount_committed ELSE 0 END), 0) AS excess
+        FROM sevarthi_bookings b
+        JOIN pooja_slots ps ON ps.id = b.slot_id
+        LEFT JOIN (SELECT booking_id,
+                          SUM(amount)                                                  AS paid,
+                          SUM(CASE WHEN payer_type = 'bhuvaji' THEN amount ELSE 0 END) AS bappa,
+                          SUM(CASE WHEN payer_type = 'bhuvaji' THEN 0 ELSE amount END) AS devotee
+                     FROM payments GROUP BY booking_id) pd ON pd.booking_id = b.id
+       WHERE ps.pooja_id IN (${IN}) AND b.status <> 'cancelled'
+       GROUP BY ps.pooja_id
+    `, ...ids),
+    db.all(`
+      SELECT ps2.pooja_id, IFNULL(SUM(p.amount), 0) AS received
+        FROM payments p
+        JOIN sevarthi_bookings b2 ON b2.id = p.booking_id
+        JOIN pooja_slots ps2 ON ps2.id = b2.slot_id
+       WHERE ps2.pooja_id IN (${IN}) GROUP BY ps2.pooja_id
+    `, ...ids),
+  ]);
+  const by = (rows) => new Map(rows.map((r) => [r.pooja_id, r]));
+  const S = by(seats), M = by(money), R = by(received);
+  const ZERO = { committed: 0, covered: 0, devotee_paid: 0, bappa_paid: 0, outstanding: 0, excess: 0 };
+  for (const id of ids) {
+    /* A pooja with no rows gets exactly what the ungrouped aggregates
+       returned for it: SUM → 0 via IFNULL, the CASE sum → NULL, COUNT → 0. */
+    const st = S.get(id) || { total_seats: 0, booked_seats: 0, open_days: null, day_count: 0 };
+    const mo = M.get(id) || ZERO;
+    const unlimited = st.open_days > 0;
+    out.set(id, {
+      total_seats: unlimited ? null : st.total_seats,
+      booked_seats: st.booked_seats,
+      seats_left: unlimited ? null : Math.max(0, st.total_seats - st.booked_seats),
+      day_count: st.day_count,
+      is_full: !unlimited && st.total_seats > 0 && st.booked_seats >= st.total_seats,
+      committed: mo.committed,
+      received: (R.get(id) || { received: 0 }).received,
+      covered: mo.covered,
+      devotee_paid: mo.devotee_paid,
+      bappa_paid: mo.bappa_paid,
+      outstanding: mo.outstanding,
+      excess: mo.excess,
+    });
+  }
+  return out;
 }
 
-async function withStats(row) {
-  const stats = await poojaStats(row.id);
+/** Live totals for one pooja. */
+async function poojaStats(poojaId) {
+  return (await statsFor([poojaId])).get(Number(poojaId));
+}
+
+function decorate(row, stats) {
+  const st = { ...stats };
   /* A 'whole' pooja has one pooled slot, so the slot count is not the
      number of days it runs — that comes from its own date range. */
   if (row.seating_mode === 'whole' && row.start_date && row.end_date) {
-    stats.day_count = datesBetween(row.start_date, row.end_date).length;
+    st.day_count = datesBetween(row.start_date, row.end_date).length;
   }
-  return { ...row, ...stats, category_label: (CATEGORIES[row.category] || {}).label };
+  return { ...row, ...st, category_label: (CATEGORIES[row.category] || {}).label };
 }
 
-/* Reads do not queue behind writes, so a list's stats run side by side
-   rather than one network round trip after another. */
-const allWithStats = (rows) => Promise.all(rows.map(withStats));
+async function withStats(row) {
+  return decorate(row, await poojaStats(row.id));
+}
+
+/** Many rows, one batched stats read. Order is kept. */
+async function allWithStats(rows) {
+  const stats = await statsFor(rows.map((r) => r.id));
+  return rows.map((r) => decorate(r, stats.get(Number(r.id))));
+}
 
 /** Category-level progress bars for the Mahotsav landing screen. */
 router.get('/categories', async (req, res) => {
-  const out = await Promise.all(Object.values(CATEGORIES).map(async (c) => {
-    const poojas = await allWithStats(await db.all(`SELECT * FROM pooja_events WHERE category = ?`, c.key));
+  const everyPooja = await allWithStats(await db.all(`SELECT * FROM pooja_events ORDER BY id`));
+  const out = Object.values(CATEGORIES).map((c) => {
+    const poojas = everyPooja.filter((p) => p.category === c.key);
     const agg = poojas.reduce((a, p) => ({
       total_seats: p.total_seats === null ? a.total_seats : a.total_seats + p.total_seats,
       booked_seats: a.booked_seats + p.booked_seats,
@@ -143,7 +180,7 @@ router.get('/categories', async (req, res) => {
          implying the whole category is deliberately uncapped. */
       not_decided_count: poojas.filter((p) => p.capacity_mode === 'not_decided').length,
     };
-  }));
+  });
   res.json(out);
 });
 
@@ -159,16 +196,11 @@ router.get('/:id', async (req, res) => {
   const row = await db.get(`SELECT * FROM pooja_events WHERE id = ?`, req.params.id);
   if (!row) return res.status(404).json({ error: 'Pooja not found' });
 
-  const slots = (await db.all(`
-    SELECT * FROM pooja_slots WHERE pooja_id = ? ORDER BY slot_date
-  `, row.id)).map((s) => ({
-    ...s,
-    seats_left: s.capacity === null ? null : Math.max(0, s.capacity - s.booked_count),
-    is_full: s.capacity !== null && s.booked_count >= s.capacity,
-  }));
-
-  // FIFO ledger for this pooja — entries in the order they arrived.
-  const ledger = await db.all(`
+  /* Slots, ledger and stats are independent reads — fetched side by side. */
+  const [slotRows, ledger, full] = await Promise.all([
+    db.all(`SELECT * FROM pooja_slots WHERE pooja_id = ? ORDER BY slot_date`, row.id),
+    // FIFO ledger for this pooja — entries in the order they arrived.
+    db.all(`
     SELECT b.id AS booking_id, b.status, b.amount_committed, b.bhuvaji_planned_amount,
            b.created_at, ps.slot_date, d.full_name, d.mobile, d.city,
            s.value AS samaj,
@@ -183,9 +215,16 @@ router.get('/:id', async (req, res) => {
       LEFT JOIN lookups s ON s.id = d.samaj_id
      WHERE ps.pooja_id = ?
      ORDER BY b.created_at ASC, b.id ASC
-  `, row.id);
+  `, row.id),
+    withStats(row),
+  ]);
+  const slots = slotRows.map((s) => ({
+    ...s,
+    seats_left: s.capacity === null ? null : Math.max(0, s.capacity - s.booked_count),
+    is_full: s.capacity !== null && s.booked_count >= s.capacity,
+  }));
 
-  res.json({ ...(await withStats(row)), slots, ledger });
+  res.json({ ...full, slots, ledger });
 });
 
 function datesBetween(start, end) {

@@ -75,7 +75,8 @@ router.get('/:id', async (req, res) => {
   const row = await db.get(SELECT + ` WHERE d.id = ?`, req.params.id);
   if (!row) return res.status(404).json({ error: 'Devotee not found' });
 
-  row.bookings = await db.all(`
+  /* Bookings and donations are independent — read side by side. */
+  [row.bookings, row.donations] = await Promise.all([db.all(`
     SELECT b.*, pe.name AS pooja_name, pe.category, ps.slot_date,
            (SELECT IFNULL(SUM(amount),0) FROM payments WHERE booking_id = b.id) AS amount_paid,
            (SELECT IFNULL(SUM(amount),0) FROM payments
@@ -87,13 +88,11 @@ router.get('/:id', async (req, res) => {
       JOIN pooja_events pe ON pe.id = ps.pooja_id
      WHERE b.devotee_id = ?
      ORDER BY ps.slot_date
-  `, row.id);
-
-  row.donations = await db.all(`
+  `, row.id), db.all(`
     SELECT dn.*, l.value AS category
       FROM donations dn LEFT JOIN lookups l ON l.id = dn.category_id
-     WHERE dn.devotee_id = ? ORDER BY dn.donation_date DESC
-  `, row.id);
+     WHERE dn.devotee_id = ? ORDER BY dn.donation_date DESC, dn.id DESC
+  `, row.id)]);
 
   res.json(row);
 });

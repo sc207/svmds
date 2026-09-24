@@ -1165,11 +1165,12 @@
       onMount(sheet) {
         sheet.querySelector('[data-sheet-close]').addEventListener('click', closeSheet);
         sheet.querySelector('#payEditSave').addEventListener('click', async (e) => {
+          const trigger = e.currentTarget;   // null after an await — take it now
           const form = document.getElementById('payEditForm');
           clearFieldErrors(form);
           const data = readForm(form);
           if (!(Number(data.amount) > 0)) return showFieldError(form, 'amount', 'Enter an amount');
-          e.currentTarget.disabled = true;
+          trigger.disabled = true;
           try {
             const res = await API.put('/payments/' + p.id, data);
             closeSheet();
@@ -1177,7 +1178,7 @@
             if (typeof onSaved === 'function') onSaved();
             else if (typeof refreshPage === 'function') refreshPage();
           } catch (err) {
-            e.currentTarget.disabled = false;
+            trigger.disabled = false;
             toast(err.message, 'err');
           }
         });
@@ -1327,6 +1328,7 @@
         applyMode();
 
         sheet.querySelector('#paySave').addEventListener('click', async (e) => {
+          const trigger = e.currentTarget;   // null after an await — take it now
           clearFieldErrors(form);
           const data = readForm(form);
           const both = data.payer_type === 'both';
@@ -1355,8 +1357,8 @@
             recorded = Number(data.amount);
           }
 
-          e.currentTarget.disabled = true;
-          e.currentTarget.textContent = 'Saving…';
+          trigger.disabled = true;
+          trigger.textContent = 'Saving…';
           try {
             const res = await API.post('/payments', body);
             const rows = res.payments || [res.payment];
@@ -1370,8 +1372,8 @@
                   ` — ${res.booking_status.replace('_', ' ')}`, 'ok');
             afterBookingChange(opts);
           } catch (err) {
-            e.currentTarget.disabled = false;
-            e.currentTarget.textContent = 'Save Payment';
+            trigger.disabled = false;
+            trigger.textContent = 'Save Payment';
             toast(err.message, 'err');
           }
         });
@@ -1443,6 +1445,7 @@
             overpaidHint(b.amount_paid, document.getElementById('f_amount_committed').value);
         });
         saveBtn.addEventListener('click', async (e) => {
+          const trigger = e.currentTarget;   // null after an await — take it now
           const form = document.getElementById('editForm');
           clearFieldErrors(form);
           const data = readForm(form);
@@ -1453,8 +1456,8 @@
           const paid = readPaidNow(data);
           if (paid.error) return showFieldError(form, paid.field, paid.error);
 
-          e.currentTarget.disabled = true;
-          e.currentTarget.textContent = 'Saving…';
+          trigger.disabled = true;
+          trigger.textContent = 'Saving…';
           try {
             await API.put(`/bookings/${bookingId}`, {
               amount_committed: total, bhuvaji_planned_amount: bapa,
@@ -1466,8 +1469,8 @@
             toast('Sevarthi updated' + (paid.payment ? ` — ${money(paid.total)} received` : ''), 'ok');
             afterBookingChange(opts);
           } catch (err) {
-            e.currentTarget.disabled = false;
-            e.currentTarget.textContent = 'Save Changes';
+            trigger.disabled = false;
+            trigger.textContent = 'Save Changes';
             toast(err.message, 'err');
           }
         });
@@ -1679,6 +1682,7 @@
       const confirmBtn = document.getElementById('rsnConfirm');
       if (confirmBtn.disabled) return;
       confirmBtn.addEventListener('click', async (e) => {
+        const trigger = e.currentTarget;   // null after an await — take it now
         const form = document.getElementById('rsnConfirmForm');
         clearFieldErrors(form);
         const data = readForm(form);
@@ -1687,8 +1691,8 @@
         const gift = isGiftMode(data);
         if (bapa > total) return showFieldError(form, 'bhuvaji_planned_amount', "Bapa's share cannot exceed the total");
 
-        e.currentTarget.disabled = true;
-        e.currentTarget.textContent = 'Moving…';
+        trigger.disabled = true;
+        trigger.textContent = 'Moving…';
         try {
           await API.post(`/bookings/${bookingId}/reassign`, {
             slot_id: state.slotId, amount_committed: total, bhuvaji_planned_amount: bapa,
@@ -1697,8 +1701,8 @@
           toast('Sevarthi moved', 'ok');
           afterBookingChange(opts);
         } catch (err) {
-          e.currentTarget.disabled = false;
-          e.currentTarget.textContent = 'Move Sevarthi';
+          trigger.disabled = false;
+          trigger.textContent = 'Move Sevarthi';
           toast(err.message, 'err');
         }
       });

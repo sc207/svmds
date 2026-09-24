@@ -291,19 +291,20 @@
         bindLookupAdders(form); UI.bindTranslate(form);
         UI.bindEnterFlow(form, () => sheet.querySelector('#donSave').click());
         sheet.querySelector('#donSave').addEventListener('click', async (e) => {
+          const trigger = e.currentTarget;   // null after an await — take it now
           clearFieldErrors(form);
           const data = readForm(form);
           if (!data.donor_name) return showFieldError(form, 'donor_name', 'Please enter the donor name');
           if (!data.amount && !data.in_kind_item) {
             return showFieldError(form, 'amount', 'Enter an amount or an in-kind item');
           }
-          e.currentTarget.disabled = true;
+          trigger.disabled = true;
           try {
             if (editing) await API.put('/donations/' + d.id, data);
             else await API.post('/donations', data);
             closeSheet(); toast(editing ? 'Donation updated' : 'Donation recorded', 'ok'); refreshPage();
           } catch (err) {
-            e.currentTarget.disabled = false;
+            trigger.disabled = false;
             toast(err.message, 'err');
           }
         });

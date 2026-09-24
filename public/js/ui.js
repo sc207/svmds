@@ -587,19 +587,20 @@
       box.hidden = false;
       box.querySelector('[data-dv-cancel-new]').addEventListener('click', () => { box.hidden = true; box.innerHTML = ''; });
       box.querySelector('[data-dv-save-new]').addEventListener('click', async (e) => {
+        const trigger = e.currentTarget;   // null after an await — take it now
         const fname = box.querySelector('[data-dv-new-name]').value.trim();
         const mobile = box.querySelector('[data-dv-new-mobile]').value.trim();
         if (!fname) { toast('Enter a name', 'err'); return; }
         const mobileMsg = mobileError(mobile);
         if (mobileMsg) { toast(mobileMsg, 'err'); return; }
-        e.currentTarget.disabled = true;
+        trigger.disabled = true;
         try {
           const d = await API.post('/devotees', { full_name: fname, mobile });
           box.hidden = true; box.innerHTML = '';
           onSaved(d);
           toast('Devotee added', 'ok');
         } catch (err) {
-          e.currentTarget.disabled = false;
+          trigger.disabled = false;
           toast(err.message, 'err');
         }
       });

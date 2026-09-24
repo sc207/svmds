@@ -30,7 +30,7 @@ router.get('/', async (req, res) => {
   }
   const rows = await db.all(
     SELECT + (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
-    ` ORDER BY dn.donation_date DESC, dn.created_at DESC LIMIT 500`,
+    ` ORDER BY dn.donation_date DESC, dn.created_at DESC, dn.id DESC LIMIT 500`,
     params);
   const total = rows.reduce((a, r) => a + (r.amount || 0), 0);
   res.json({ donations: rows, totals: { total, count: rows.length } });

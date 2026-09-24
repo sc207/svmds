@@ -386,18 +386,19 @@
         });
 
         sheet.querySelector('#datesSave').addEventListener('click', async (e) => {
+          const trigger = e.currentTarget;   // null after an await — take it now
           const form = document.getElementById('datesForm');
           clearFieldErrors(form);
           const data = readForm(form);
           if (!data.start_date) return showFieldError(form, 'start_date', 'Pick a start date');
           if (!data.end_date) return showFieldError(form, 'end_date', 'Pick an end date');
           if (data.end_date < data.start_date) return showFieldError(form, 'end_date', 'End must be after start');
-          e.currentTarget.disabled = true;
+          trigger.disabled = true;
           try {
             await API.put(`/poojas/${p.id}/dates`, data);
             closeSheet(); toast(dated ? 'Dates updated' : 'Dates set', 'ok'); refreshPage();
           } catch (err) {
-            e.currentTarget.disabled = false;
+            trigger.disabled = false;
             toast(err.message, 'err');
           }
         });
@@ -457,13 +458,14 @@
         if (hint) { paintHint(); form.capacity.addEventListener('input', paintHint); }
 
         sheet.querySelector('#slotSave').addEventListener('click', async (e) => {
+          const trigger = e.currentTarget;   // null after an await — take it now
           const raw = form.capacity.value.trim();
-          e.currentTarget.disabled = true;
+          trigger.disabled = true;
           try {
             await API.put(`/poojas/slots/${s.id}`, { capacity: raw === '' ? null : Number(raw) });
             closeSheet(); toast('Seats updated', 'ok'); refreshPage();
           } catch (err) {
-            e.currentTarget.disabled = false;
+            trigger.disabled = false;
             showFieldError(form, 'capacity', err.message);
           }
         });
@@ -675,6 +677,7 @@
         paintTargetHint();
 
         sheet.querySelector('#poojaSave').addEventListener('click', async (e) => {
+          const trigger = e.currentTarget;   // null after an await — take it now
           clearFieldErrors(form);
           const data = readForm(form);
           if (!data.name) return showFieldError(form, 'name', 'Please enter a name');
@@ -691,15 +694,15 @@
           if (data.capacity_mode === 'limited' && !(Number(data.seats_per_day) > 0)) {
             return showFieldError(form, 'seats_per_day', 'Enter the maximum number of registrations');
           }
-          e.currentTarget.disabled = true;
-          e.currentTarget.textContent = editing ? 'Saving…' : 'Creating…';
+          trigger.disabled = true;
+          trigger.textContent = editing ? 'Saving…' : 'Creating…';
           try {
             if (editing) await API.put('/poojas/' + p.id, data);
             else await API.post('/poojas', { ...data, category });
             closeSheet(); toast(editing ? 'Pooja updated' : 'Pooja created', 'ok'); refreshPage();
           } catch (err) {
-            e.currentTarget.disabled = false;
-            e.currentTarget.textContent = editing ? 'Save' : 'Create';
+            trigger.disabled = false;
+            trigger.textContent = editing ? 'Save' : 'Create';
             toast(err.message, 'err');
           }
         });

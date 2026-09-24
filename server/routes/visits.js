@@ -82,7 +82,7 @@ router.get('/', async (req, res) => {
             a record, so they read newest first. */''}
       ORDER BY v.visit_date ${
         upcoming === '1' || status === 'requested' || status === 'confirmed' ? 'ASC' : 'DESC'
-      }, v.visit_time
+      }, v.visit_time, v.id
       LIMIT 500`,
     params);
   await attachEscorts(rows);

@@ -41,7 +41,7 @@ router.get('/', async (req, res) => {
     params.q = `%${String(search).trim()}%`;
   }
   const sql = PAYMENT_SELECT + (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
-    ` ORDER BY p.payment_date DESC, p.created_at DESC LIMIT 1000`;
+    ` ORDER BY p.payment_date DESC, p.created_at DESC, p.id DESC LIMIT 1000`;
   const rows = await db.all(sql, params);
 
   const totals = rows.reduce((a, r) => {
@@ -95,7 +95,7 @@ router.get('/outstanding', async (req, res) => {
       LEFT JOIN lookups s ON s.id = d.samaj_id
       LEFT JOIN lookups c ON c.id = d.category_id
      WHERE b.status IN ('pending','partially_paid') ${filter}
-     ORDER BY b.created_at ASC
+     ORDER BY b.created_at ASC, b.id ASC
      LIMIT 200
   `, params));
 });
