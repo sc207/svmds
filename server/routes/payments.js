@@ -1,7 +1,9 @@
 /* Payment Received — the money ledger.
 
    Payments are append-only. A booking's paid total is always the sum of
-   its payment rows, so "pending → paid" is derived, never hand-set. */
+   its payment rows, so "pending → paid" is derived, never hand-set.
+   Money given back is a row of its own (kind 'refund', negative amount,
+   R- receipt — see util/refunds.js), so that sum is always the net. */
 const express = require('express');
 const db = require('../db');
 const roles = require('../middleware/roles');
@@ -9,6 +11,8 @@ const { log } = require('../middleware/audit');
 const { refreshStatus } = require('./bookings');
 const { todayLocal, monthLocal, slotWhen } = require('../util/dates');
 const { readPaymentEntries, insertPaymentRows, actingUser } = require('../util/payment-entries');
+const receipts = require('../util/receipts');
+const { refundable, assertNotOverRefunded } = require('../util/refunds');
 
 const router = express.Router();
 
@@ -60,6 +64,7 @@ router.get('/by-day', async (req, res) => {
     SELECT payment_date,
            COUNT(*) AS entries,
            IFNULL(SUM(amount), 0) AS total,
+           IFNULL(-SUM(CASE WHEN kind = 'refund' THEN amount ELSE 0 END), 0) AS refunded,
            IFNULL(SUM(CASE WHEN payer_type='bhuvaji' THEN amount ELSE 0 END), 0) AS bhuvaji_total
       FROM payments
      WHERE substr(payment_date, 1, 7) = ?
@@ -182,9 +187,71 @@ router.post('/', async (req, res) => {
     mistake, has to be able to fix it. Every change is audited with the
     before/after, and the booking status is recomputed from the ledger
     afterwards exactly as it is for a new payment. */
+/** Give money back from a booking.
+ *  { booking_id, amount, refund_to: 'devotee' | 'bhuvaji', refund_date?, reason? }
+ *
+ *  Offered wherever money received ends up above what is owed — Change
+ *  Seva to a cheaper one, a lowered contribution, a cancellation — as the
+ *  other answer to "keep it as excess". Capped (inside the transaction) at
+ *  the excess on a live booking, everything held on a cancelled one, and
+ *  what that payer has put in. Recording one is part of the counter job,
+ *  like taking a payment; removing one is kept for the accountant, like
+ *  removing a payment. */
+router.post('/refund', async (req, res) => {
+  const b = req.body || {};
+  const amount = Math.round(Number(b.amount || 0) * 100) / 100;
+  const to = b.refund_to === 'bhuvaji' ? 'bhuvaji' : 'devotee';
+  const date = b.refund_date || todayLocal();
+  if (!(amount > 0)) return res.status(400).json({ error: 'Enter the amount being given back' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Give the refund date as YYYY-MM-DD' });
+
+  let out;
+  try {
+    out = await db.tx(async () => {
+      const bk = await db.get(`SELECT * FROM sevarthi_bookings WHERE id = ?`, b.booking_id);
+      if (!bk) throw Object.assign(new Error('Booking not found'), { status: 404 });
+      const r = await refundable(bk);
+      const cap = to === 'bhuvaji' ? r.bhuvaji : r.devotee;
+      if (r.total <= 0) {
+        throw Object.assign(new Error(bk.status === 'cancelled'
+          ? 'Nothing is held on this booking to give back.'
+          : 'Nothing has been received above the contribution, so there is nothing to give back. ' +
+            'Lower the contribution or change the seva first if that is what changed.'), { status: 400 });
+      }
+      if (amount > cap) {
+        throw Object.assign(new Error(`At most ₹${cap.toLocaleString('en-IN')} can be given back to ` +
+          `${to === 'bhuvaji' ? 'Bapa' : 'the sevarthi'} — ` +
+          (bk.status === 'cancelled' ? 'that is what they have paid in.' : 'that is the excess over the contribution.')),
+          { status: 400 });
+      }
+      const receipt = await receipts.next('R', date);
+      const info = await db.run(`
+        INSERT INTO payments (booking_id, amount, payer_type, payment_date, receipt_no, notes, recorded_by, kind)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'refund')`,
+        bk.id, -amount, to, date, receipt, String(b.reason || '').trim() || null, actingUser(req));
+      const updated = await refreshStatus(bk.id);
+      return { id: Number(info.lastInsertRowid), receipt, updated };
+    });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+  const row = await db.get(PAYMENT_SELECT + ` WHERE p.id = ?`, out.id);
+  await log(req, {
+    action: 'refund', entity: 'booking', entityId: row.booking_id,
+    summary: `₹${amount} given back to ${to === 'bhuvaji' ? 'Bapa' : row.full_name} — ${row.pooja_name} ` +
+             `(${out.receipt})` + (row.notes ? ` — ${row.notes}` : ''),
+    details: { payment_id: out.id, amount, refund_to: to, refund_date: date, receipt_no: out.receipt },
+  });
+  res.status(201).json({ refund: row, booking_status: out.updated ? out.updated.status : null });
+});
+
 router.put('/:id', roles.needs('accountant', 'Correcting a payment'), async (req, res) => {
   const p = await db.get(`SELECT * FROM payments WHERE id = ?`, req.params.id);
   if (!p) return res.status(404).json({ error: 'Payment not found' });
+  if (p.kind === 'refund') {
+    return res.status(400).json({ error: 'A refund is not corrected in place — remove it and record the right one.' });
+  }
   const b = req.body;
 
   const amount = Number(b.amount ?? p.amount);
@@ -216,6 +283,7 @@ router.put('/:id', roles.needs('accountant', 'Correcting a payment'), async (req
         receipt_no: ((b.receipt_no ?? p.receipt_no) || '').trim() || null,
         notes: ((b.notes ?? p.notes) || '').trim() || null,
       });
+      await assertNotOverRefunded(p.booking_id);
       return refreshStatus(p.booking_id);
     });
   } catch (e) {
@@ -237,13 +305,23 @@ router.put('/:id', roles.needs('accountant', 'Correcting a payment'), async (req
 router.delete('/:id', roles.needs('accountant', 'Removing a payment'), async (req, res) => {
   const p = await db.get(`SELECT * FROM payments WHERE id = ?`, req.params.id);
   if (!p) return res.status(404).json({ error: 'Payment not found' });
-  const updated = await db.tx(async () => {
-    await db.run(`DELETE FROM payments WHERE id = ?`, p.id);
-    return refreshStatus(p.booking_id);
-  });
+  const isRefund = p.kind === 'refund';
+  let updated;
+  try {
+    updated = await db.tx(async () => {
+      await db.run(`DELETE FROM payments WHERE id = ?`, p.id);
+      await assertNotOverRefunded(p.booking_id);
+      return refreshStatus(p.booking_id);
+    });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
   await log(req, {
     action: 'delete', entity: 'payment', entityId: p.id,
-    summary: `Removed payment entry of ₹${p.amount} (booking #${p.booking_id}) — now ${updated.status}`,
+    summary: isRefund
+      ? `Removed refund entry of ₹${-p.amount} (${p.receipt_no || 'no receipt'}, booking #${p.booking_id}) — now ${updated.status}`
+      : `Removed payment entry of ₹${p.amount} (booking #${p.booking_id}) — now ${updated.status}`,
     details: p,
   });
   res.json({ ok: true, booking_status: updated.status });

@@ -180,8 +180,8 @@ router.get('/calendar', async (req, res) => {
      WHERE substr(dn.donation_date,1,7) = ?
   `, month),
     db.all(`
-    SELECT p.payment_date, COUNT(*) AS n, SUM(p.amount) AS total
-      FROM payments p WHERE substr(p.payment_date,1,7) = ? GROUP BY p.payment_date
+    SELECT p.payment_date, p.kind, COUNT(*) AS n, SUM(p.amount) AS total
+      FROM payments p WHERE substr(p.payment_date,1,7) = ? GROUP BY p.payment_date, p.kind
   `, month),
     occurrencesIn([Number(month.slice(0, 4))]),
   ]);
@@ -232,11 +232,14 @@ router.get('/calendar', async (req, res) => {
     });
   });
 
+  /* A day's refunds are their own line — "1 refund given ₹20,000" — rather
+     than silently shrinking that day's takings. */
   payments.forEach((p) => {
+    const refund = p.kind === 'refund';
     entries.push({
       date: p.payment_date, type: 'payment',
-      title: `${p.n} payment${p.n > 1 ? 's' : ''} received`,
-      sub: `₹${Number(p.total).toLocaleString('en-IN')}`,
+      title: refund ? `${p.n} refund${p.n > 1 ? 's' : ''} given` : `${p.n} payment${p.n > 1 ? 's' : ''} received`,
+      sub: `₹${Math.abs(Number(p.total)).toLocaleString('en-IN')}`,
     });
   });
 

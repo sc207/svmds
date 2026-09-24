@@ -19,6 +19,7 @@
    put the books out of step with the receipts.
 
      P-2026-0001   payments
+     R-2026-0001   refunds (payments rows with kind 'refund')
      D-2026-0001   donations
 
    `next()` must run inside the caller's db.tx() — the booking route
@@ -72,8 +73,9 @@ async function ensure(supplied, prefix, dateISO) {
    ------------------------------------------------------------ */
 async function backfillMissing() {
   let filled = 0;
-  for (const [table, prefix, dateCol] of
-       [['payments', 'P', 'payment_date'], ['donations', 'D', 'donation_date']]) {
+  for (const [table, prefix, dateCol, where] of
+       [['payments', 'P', 'payment_date', `kind <> 'refund'`], ['payments', 'R', 'payment_date', `kind = 'refund'`],
+        ['donations', 'D', 'donation_date', '1']]) {
     /* Start each series above whatever is already there. Only numbers
        this module's own format produced can be read back as a count;
        anything else is left alone and simply kept. */
@@ -81,7 +83,7 @@ async function backfillMissing() {
       `SELECT receipt_no FROM ${table} WHERE receipt_no IS NOT NULL AND TRIM(receipt_no) <> ''`);
     const high = new Map();
     for (const { receipt_no } of seen) {
-      const m = /^([PD]-\d{4})-(\d+)$/.exec(String(receipt_no).trim());
+      const m = /^([PRD]-\d{4})-(\d+)$/.exec(String(receipt_no).trim());
       if (!m) continue;
       const n = Number(m[2]);
       if (!high.has(m[1]) || high.get(m[1]) < n) high.set(m[1], n);
@@ -93,7 +95,7 @@ async function backfillMissing() {
       }
       const rows = await db.all(
         `SELECT id, ${dateCol} AS d FROM ${table}
-          WHERE receipt_no IS NULL OR TRIM(receipt_no) = ''
+          WHERE (receipt_no IS NULL OR TRIM(receipt_no) = '') AND ${where}
           ORDER BY created_at, id`);
       for (const r of rows) {
         await db.run(`UPDATE ${table} SET receipt_no = ? WHERE id = ?`, await next(prefix, r.d), r.id);

@@ -87,8 +87,9 @@ const BOOKING_SELECT = `
          /* When money last actually arrived, as distinct from the seva's
             own date — a collections list has to show when the entry
             happened, not only which day the pooja falls on. */
-         (SELECT MAX(payment_date) FROM payments WHERE booking_id = b.id) AS last_payment_date,
-         (SELECT COUNT(*) FROM payments WHERE booking_id = b.id)          AS payment_count,
+         (SELECT MAX(payment_date) FROM payments WHERE booking_id = b.id AND kind = 'payment') AS last_payment_date,
+         (SELECT IFNULL(-SUM(amount), 0) FROM payments WHERE booking_id = b.id AND kind = 'refund') AS refunded,
+         (SELECT COUNT(*) FROM payments WHERE booking_id = b.id AND kind = 'payment') AS payment_count,
          /* Every receipt this seat has been given, oldest first. The
             export carries them so a printed sheet can be checked
             against the receipt book without opening each row; the

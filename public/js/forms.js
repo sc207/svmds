@@ -63,9 +63,118 @@
     const excess = Number(paid || 0) - Number(total || 0);
     if (excess <= 0) return '';
     return `<div class="form-hint" style="color:var(--warning)">
-      ${esc(money(paid))} already received is more than this ${esc(money(total))} commitment —
-      the ${esc(money(excess))} difference stays on record as received, not tracked as a refund
-      by this app. Settle it with the sevarthi directly.</div>`;
+      ${esc(money(paid))} already received is more than this ${esc(money(total))} commitment.
+      After saving you choose what happens to the ${esc(money(excess))}: keep it as an extra
+      contribution, or give it back as a refund.</div>`;
+  }
+
+  /* ============================================================
+     KEEP IT, OR GIVE IT BACK?
+     ------------------------------------------------------------
+     Asked whenever money received ends up above what the sevarthi now
+     owes — Change Seva to a cheaper one, a lowered contribution, a
+     cancellation — and from the ledger any time later. Two answers:
+       Keep as excess   nothing is written; it stays as extra
+                        contribution (the Excess figure).
+       Give it back     a refund row: negative amount, R- receipt, to
+                        whoever paid it in. The original payment and its
+                        receipt are never rewritten.
+     Resolves once the operator has chosen (or closed the sheet, which
+     means "keep" — nothing is lost, the ledger can refund it later).
+     ============================================================ */
+  async function settleExcess(bookingId, { reason, onDone } = {}) {
+    let settled = false;
+    const done = () => { settled = true; if (typeof onDone === 'function') onDone(); };
+    let b;
+    try { b = await API.get('/bookings/' + bookingId); } catch (e) { toast(e.message, 'err'); return done(); }
+    const cancelled = b.status === 'cancelled';
+    const held = Number(b.amount_paid || 0);
+    const cap = cancelled ? held : Math.max(0, held - Number(b.amount_committed || 0));
+    if (cap <= 0) return done();
+    const dev = Math.max(0, Math.min(cap, Number(b.devotee_paid || 0)));
+    const bapa = Math.max(0, Math.min(cap, Number(b.bappa_paid || 0)));
+    const both = dev > 0 && bapa > 0;
+    const firstTo = dev > 0 ? 'devotee' : 'bhuvaji';
+
+    openSheet({
+      title: cancelled ? 'Money already received' : 'More received than the seva now needs',
+      body: `
+        ${UI.contextCard({ title: b.full_name, sub: `${b.pooja_name}${cancelled ? ' — cancelled' : ''}`,
+          rows: [['Received', money(held)]]
+            .concat(cancelled ? [] : [['Contribution now', money(b.amount_committed)]])
+            .concat([[cancelled ? 'Held on this seva' : 'Excess', money(cap), 'is-due']]) })}
+        <form id="settleForm" novalidate style="margin-top:.9rem">
+          <div class="form-group"><label class="form-label">What should happen to ${esc(money(cap))}?</label>
+            <label class="small" style="display:flex;gap:.5rem;align-items:flex-start;font-weight:500;margin:.4rem 0">
+              <input type="radio" name="choice" value="keep" style="width:auto;min-height:0;margin-top:.2rem">
+              <span>Keep it as ${cancelled ? 'a contribution to the mandir' : 'an extra contribution (Excess)'}<br>
+              <span class="muted" style="font-weight:400">Nothing is given back. It can still be refunded later from the ledger.</span></span></label>
+            <label class="small" style="display:flex;gap:.5rem;align-items:flex-start;font-weight:500;margin:.4rem 0">
+              <input type="radio" name="choice" value="refund" style="width:auto;min-height:0;margin-top:.2rem">
+              <span>Give it back — record a refund<br>
+              <span class="muted" style="font-weight:400">A refund entry with its own receipt (R-…). The original payment and its receipt stay as they are.</span></span></label>
+          </div>
+          <div id="refundFields" hidden>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label req" for="f_ramount">Amount given back</label>
+                <input class="form-input" id="f_ramount" name="amount" inputmode="decimal" value="${attr(both ? dev : cap)}">
+                <div class="form-hint" id="rcapHint"></div></div>
+              <div class="form-group"><label class="form-label" for="f_rdate">Date</label>
+                <input class="form-input" id="f_rdate" name="refund_date" type="date" value="${attr(todayISO())}"></div>
+            </div>
+            ${both ? `<div class="form-group"><label class="form-label">Given back to</label>
+              <label class="small" style="display:inline-flex;gap:.4rem;align-items:center;margin-right:1rem">
+                <input type="radio" name="refund_to" value="devotee" checked style="width:auto;min-height:0"> The sevarthi (paid ${esc(money(dev))})</label>
+              <label class="small" style="display:inline-flex;gap:.4rem;align-items:center">
+                <input type="radio" name="refund_to" value="bhuvaji" style="width:auto;min-height:0"> Bapa (paid ${esc(money(bapa))})</label></div>`
+              : `<input type="hidden" name="refund_to" value="${attr(firstTo)}">`}
+            <div class="form-group"><label class="form-label" for="f_rreason">Reason</label>
+              <input class="form-input" id="f_rreason" name="reason" value="${attr(reason || '')}"></div>
+          </div>
+        </form>`,
+      footer: `<button class="btn btn-primary" id="settleSave" disabled>Choose an option</button>`,
+      onMount(sheet) {
+        /* Closed with ✕ / Esc = "keep it": nothing is lost, and the page
+           behind still has to show the change that led here. */
+        sheet.addEventListener('close', () => {
+          if (!settled && typeof refreshPage === 'function') refreshPage();
+        }, { once: true });
+        const form = document.getElementById('settleForm');
+        const save = sheet.querySelector('#settleSave');
+        const fields = document.getElementById('refundFields');
+        const capFor = () => {
+          const to = (form.querySelector('[name="refund_to"]:checked') || form.querySelector('[name="refund_to"]')).value;
+          return to === 'bhuvaji' ? bapa : dev;
+        };
+        const paint = () => {
+          const choice = (form.querySelector('[name="choice"]:checked') || {}).value;
+          fields.hidden = choice !== 'refund';
+          save.disabled = !choice;
+          save.textContent = !choice ? 'Choose an option' : choice === 'keep' ? 'Keep it' : 'Record refund';
+          document.getElementById('rcapHint').textContent = `At most ${money(capFor())}.`;
+        };
+        form.addEventListener('change', (e) => {
+          if (e.target.name === 'refund_to') document.getElementById('f_ramount').value = capFor();
+          paint();
+        });
+        paint();
+        save.addEventListener('click', async () => {
+          const data = readForm(form);
+          if (data.choice === 'keep') { toast(`${money(cap)} kept as ${cancelled ? 'a contribution' : 'excess'}`, 'ok'); return done(); }
+          const amount = Number(String(data.amount || '').replace(/[₹,\s]/g, ''));
+          if (!(amount > 0)) return showFieldError(form, 'amount', 'Enter the amount being given back');
+          if (amount > capFor()) return showFieldError(form, 'amount', `At most ${money(capFor())} can be given back`);
+          save.disabled = true;
+          try {
+            const r = await API.post('/payments/refund', { booking_id: bookingId, amount,
+              refund_to: data.refund_to, refund_date: data.refund_date, reason: data.reason });
+            toast(`Refund of ${money(amount)} recorded — ${r.refund.receipt_no}`, 'ok');
+            done();
+          } catch (err) { save.disabled = false; toast(err.message, 'err'); }
+        });
+      },
+    });
+    return undefined;
   }
 
   /** "Covered by Bapa" as an explicit toggle rather than a bare number
@@ -1467,7 +1576,11 @@
                a commitment the save then failed to raise. */
             if (paid.payment) await API.post('/payments', { booking_id: bookingId, ...paid.payment });
             toast('Sevarthi updated' + (paid.payment ? ` — ${money(paid.total)} received` : ''), 'ok');
-            afterBookingChange(opts);
+            /* Contribution lowered below what was paid? Ask. */
+            await settleExcess(bookingId, {
+              reason: `Contribution changed to ${money(total)}`,
+              onDone: () => afterBookingChange(opts),
+            });
           } catch (err) {
             trigger.disabled = false;
             trigger.textContent = 'Save Changes';
@@ -1482,15 +1595,30 @@
       'cancelled') rather than deleting it, so payments already taken
       still show and can be settled/refunded outside the app. */
   function cancelBooking(bookingId, name) {
-    UI.confirmSheet({
+    /* Its own sheet rather than UI.confirmSheet: that one closes itself
+       once its action resolves, and the dialog's close (and teardown) is
+       an event that lands a moment later — so "keep it or give it
+       back?", opened from here, could be wiped by it. Staying in one
+       sheet and replacing its content cannot race. */
+    openSheet({
       title: 'Cancel this sevarthi?',
-      message: `${name}'s seat will be released back to the pool. Any payment already received stays on record — settle a refund outside the app if one is owed. This is recorded in the audit trail.`,
-      confirmLabel: 'Cancel Sevarthi',
-      danger: true,
-      onConfirm: async () => {
-        await API.post(`/bookings/${bookingId}/cancel`, {});
-        toast('Sevarthi cancelled', 'ok');
-        if (typeof refreshPage === 'function') refreshPage();
+      body: `<p class="muted">${esc(name)}'s seat will be released back to the pool. If money has already been ` +
+            'received, you choose next whether the mandir keeps it or it is given back. This is recorded in the audit trail.</p>',
+      footer: `<button class="btn btn-outline" data-sheet-close>Keep the seva</button>
+               <button class="btn btn-danger" id="cancelYes">Cancel Sevarthi</button>`,
+      onMount(sheet) {
+        const yes = sheet.querySelector('#cancelYes');
+        yes.addEventListener('click', async () => {
+          yes.disabled = true;
+          try {
+            await API.post(`/bookings/${bookingId}/cancel`, {});
+            toast('Sevarthi cancelled', 'ok');
+            await settleExcess(bookingId, {
+              reason: 'Seva cancelled',
+              onDone: () => { closeSheet(); if (typeof refreshPage === 'function') refreshPage(); },
+            });
+          } catch (err) { yes.disabled = false; toast(err.message, 'err'); }
+        });
       },
     });
   }
@@ -1699,7 +1827,11 @@
             is_gift: gift ? 1 : 0,
           });
           toast('Sevarthi moved', 'ok');
-          afterBookingChange(opts);
+          /* Moved to a cheaper seva with more already paid? Ask. */
+          await settleExcess(bookingId, {
+            reason: `Moved from ${b.pooja_name} to ${(state.pooja && state.pooja.name) || 'another seva'}`,
+            onDone: () => afterBookingChange(opts),
+          });
         } catch (err) {
           trigger.disabled = false;
           trigger.textContent = 'Move Sevarthi';
@@ -1746,16 +1878,28 @@
                 sub: `${b.pooja_name} · ${fmtDate(b.slot_date)}`,
                 rows: [['Contribution', money(c.committed)], ['Devotee paid', money(c.devotee_paid)]]
                   .concat(c.bappa_paid ? [["Bapa's support", money(c.bappa_paid)]] : [])
+                  .concat(b.refunded > 0 ? [['Given back', money(b.refunded)]] : [])
                   .concat(c.outstanding > 0 ? [['Outstanding', money(c.outstanding), 'is-due']]
                         : c.excess > 0 ? [['Excess', money(c.excess)]] : []) })}
+
+              ${(b.status === 'cancelled' ? b.amount_paid > 0 : c.excess > 0) ? `
+              <div class="form-actions" style="margin:0 0 .8rem">
+                <button class="btn btn-outline mg-btn-xs" data-refund>Give money back…</button>
+                <span class="small muted">${esc(money(b.status === 'cancelled' ? b.amount_paid : c.excess))}
+                  ${b.status === 'cancelled' ? 'is held on this cancelled seva' : 'is more than the contribution'}</span>
+              </div>` : ''}
 
               <div class="section-title" style="margin:0 0 .5rem">Payments</div>
               ${b.payments && b.payments.length ? `<div class="card"><div class="card-body" style="padding:0"><div class="list">
                 ${b.payments.map((p) => `
                   <div class="row-item" style="cursor:default">
                     <div class="row-main">
-                      <div class="row-title">${esc(money(p.amount))}
-                        ${p.payer_type === 'bhuvaji' ? '<span class="badge badge-gold">Bapa</span>' : ''}</div>
+                      ${p.kind === 'refund'
+                        ? `<div class="row-title">− ${esc(money(-p.amount))}
+                            <span class="badge badge-danger">Refund</span>
+                            <span class="small muted">given back to ${p.payer_type === 'bhuvaji' ? 'Bapa' : 'the sevarthi'}</span></div>`
+                        : `<div class="row-title">${esc(money(p.amount))}
+                            ${p.payer_type === 'bhuvaji' ? '<span class="badge badge-gold">Bapa</span>' : ''}</div>`}
                       <div class="row-sub">${esc(fmtDate(p.payment_date))}
                         ${p.receipt_no ? ` · <span class="rcpt">${esc(p.receipt_no)}</span>` : ''}
                         · by ${esc(p.recorded_by || '—')}</div>
@@ -1767,8 +1911,8 @@
                           meets that refusal at a counter with someone
                           waiting. */''}
                     ${UI.can('accountant') ? `<div class="row-actions">
-                      <button class="icon-btn" data-pedit="${attr(p.id)}" title="Correct this entry"
-                              style="color:var(--ink-soft)">${icon('edit','ico-sm')}</button>
+                      ${p.kind === 'refund' ? '' : `<button class="icon-btn" data-pedit="${attr(p.id)}" title="Correct this entry"
+                              style="color:var(--ink-soft)">${icon('edit','ico-sm')}</button>`}
                       <button class="icon-btn" data-pdel="${attr(p.id)}" title="Remove this entry"
                               style="color:var(--ink-soft)">${icon('trash','ico-sm')}</button>
                     </div>` : ''}
@@ -1789,6 +1933,12 @@
 
             const refresh = async () => { await paint(); if (typeof onChanged === 'function') onChanged(); };
 
+            const rf = box.querySelector('[data-refund]');
+            if (rf) rf.addEventListener('click', () => settleExcess(bookingId, {
+              reason: b.status === 'cancelled' ? 'Seva cancelled' : '',
+              onDone: () => bookingLedger(bookingId, onChanged),
+            }));
+
             box.querySelectorAll('[data-pedit]').forEach((el) =>
               el.addEventListener('click', () => {
                 const p = b.payments.find((x) => String(x.id) === el.getAttribute('data-pedit'));
@@ -1800,14 +1950,15 @@
 
             box.querySelectorAll('[data-pdel]').forEach((el) =>
               el.addEventListener('click', () => {
+                const pr = b.payments.find((x) => String(x.id) === el.getAttribute('data-pdel')) || {};
                 UI.confirmSheet({
-                  title: 'Remove this payment?',
+                  title: pr.kind === 'refund' ? 'Remove this refund?' : 'Remove this payment?',
                   message: 'The entry is deleted and the sevarthi status recalculated from what remains. ' +
                            'The removal is written to the audit trail.',
                   confirmLabel: 'Remove', danger: true,
                   onConfirm: async () => {
                     await API.del('/payments/' + el.getAttribute('data-pdel'));
-                    toast('Payment entry removed', 'ok');
+                    toast(pr.kind === 'refund' ? 'Refund entry removed' : 'Payment entry removed', 'ok');
                     bookingLedger(bookingId, onChanged);
                   },
                 });
