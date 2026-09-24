@@ -151,6 +151,9 @@ app.use(errorHandler);
 
 async function start() {
   console.log(`▶ Shri Vihat Meldi Dham — ${config.nodeEnv} — ${db.where()}`);
+  /* TEMPORARY one-time Phase 1 cutover — a no-op unless the database still
+     holds the old portal schema. Remove with db/cutover.js afterwards. */
+  await require('./db/cutover').cutoverIfLegacy();
   await runMigrations();
   await bootRepairs();
   /* Receipt numbers are issued, not typed: fill any blanks and lift each

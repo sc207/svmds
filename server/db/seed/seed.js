@@ -122,6 +122,13 @@ async function addYagnaPatla(p, { start, end }) {
 async function main() {
   await runMigrations();
   await bootRepairs();
+  await seedLists();
+  await db.close();
+}
+
+/** The seva + samaj lists alone, on an already-migrated database. Idempotent.
+    Used by main() and by the one-time Phase 1 cutover (db/cutover.js). */
+async function seedLists() {
 
   for (let i = 0; i < SAMAJ.length; i++) {
     await db.run(`INSERT OR IGNORE INTO lookups (type, value, sort_order) VALUES (?, ?, ?)`, 'samaj', SAMAJ[i], i + 1);
@@ -187,11 +194,10 @@ async function main() {
   console.log(`Mandir ni Pooja: ${added} added, ${skipped} already present (1 seat each, date & amount to be set)`);
 
   console.log('\nSeed complete.\n');
-  await db.close();
 }
 
 if (require.main === module) {
   main().catch(async (e) => { console.error(e.message || e); await db.close(); process.exit(1); });
 }
 
-module.exports = { main, CATS, SAMAJ };
+module.exports = { main, seedLists, CATS, SAMAJ };
