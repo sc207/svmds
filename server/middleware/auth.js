@@ -6,7 +6,12 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { queryOne, run } = require('../db/connection');
 
-const COOKIE = 'token';
+/* In production the cookie is __Host-token: browsers accept a __Host-
+   cookie only if it is Secure, has Path=/ and no Domain, and was set by this
+   exact host — so no other site or subdomain can plant or overwrite a
+   session. Plain http (local development) cannot carry one, so it keeps the
+   old name there. The old production cookie is simply no longer read. */
+const COOKIE = config.isProd ? '__Host-token' : 'token';
 
 function signToken(user, jti, extra = {}) {
   return jwt.sign(
@@ -20,6 +25,7 @@ function cookieOptions() {
   return {
     httpOnly: true,
     secure: config.isProd,
+    path: '/',                             // required by the __Host- prefix
     sameSite: 'lax',                       // survives the top-level return from Google
     maxAge: config.sessionDays * 24 * 60 * 60 * 1000,
   };

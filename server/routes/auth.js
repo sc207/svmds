@@ -68,6 +68,9 @@ async function authenticateGoogleCredential(credential, req, res) {
 
   const jti = await createSession(user, req);
   res.cookie(COOKIE, signToken(user, jti), cookieOptions());
+  /* The session used to live in a plain "token" cookie; clear it so the
+     browser stops sending a value nothing reads any more. */
+  if (COOKIE !== 'token') res.clearCookie('token', clearCookieOptions());
   await logAudit({ userId: user.id, userEmail: user.email, userName: user.name, module: 'Auth', action: 'LOGIN', entityType: 'session' });
 
   return user;
