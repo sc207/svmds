@@ -114,6 +114,8 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/donations', require('./routes/donations'));
 app.use('/api/visits', require('./routes/visits'));
 app.use('/api/import', require('./routes/import'));         // mounts its own express.raw
+app.use('/api/annual-events', require('./routes/annualEvents'));
+app.use('/api/reminders', require('./routes/reminders'));   // opening announcements
 app.use('/api', require('./routes/misc'));                  // /dashboard /calendar /settings /audit
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such API route' }));
 

@@ -1,12 +1,15 @@
 /* Universal Calendar — sk's own grid + legend + agenda + "Up Next" table,
-   fed from this app's poojas / visits / donations / payments. */
+   fed from this app's poojas / visits / donations / payments, and the
+   mandir's annual temple events (tithi dates resolved per year on the
+   server — util/annual.js). */
 (function (global) {
   'use strict';
   const { esc, attr, icon, money, num, fmtDate, fmtDateLong, monthISO, todayISO, MONTHS } = UI;
 
-  const state = { month: monthISO(), filters: { pooja: true, visit: true, donation: true, payment: true } };
+  const state = { month: monthISO(), filters: { annual: true, pooja: true, visit: true, donation: true, payment: true } };
 
   const TYPE_META = {
+    annual:   { key: 'Temple Event', badge: 'badge-gold',   color: '#D9771F' },
     pooja:    { key: 'Pooja',    badge: 'badge-maroon',    color: '#6B1F2A' },
     visit:    { key: 'Padhramni', badge: 'badge-confirmed', color: '#4C8B5A' },
     donation: { key: 'Donation', badge: 'badge-pending',   color: '#C9A24A' },
@@ -22,8 +25,13 @@
     const body = document.getElementById('calBody');
     try {
       const { entries: raw } = await API.calendar(state.month);
+      /* Annual events carry their Gujarati names too; show them in ગુ. */
+      const gu = global.Lang && Lang.lang() === 'gu';
       const entries = raw.filter((e) => state.filters[e.type] !== false)
-        .map((e) => ({ ...e, color: (TYPE_META[e.type] || {}).color || '#6B1F2A' }));
+        .map((e) => ({ ...e,
+          title: (gu && e.title_gu) || e.title,
+          sub: (gu && e.sub_gu) || e.sub,
+          color: (TYPE_META[e.type] || {}).color || '#6B1F2A' }));
 
       const [y, mo0] = state.month.split('-').map(Number);
       const mo = mo0 - 1;
@@ -97,7 +105,7 @@
       <div class="flex justify-between items-center mg-page-head">
         <div>
           <h1 class="banner-title mg-page-title">Universal Calendar</h1>
-          <p class="mg-page-sub">Poojas, padhramni, donations and payments — all in one place</p>
+          <p class="mg-page-sub">Temple events, poojas, padhramni, donations and payments — all in one place</p>
         </div>
         <div class="flex gap-2 items-center">
           <button class="icon-btn" data-nav="-1" aria-label="Previous month">${icon('chevron-left','ico-sm')}</button>
@@ -175,10 +183,69 @@
 
   function goto(entry) {
     if (!entry) return;
-    if (entry.type === 'pooja') navigate('mahotsav', 'pooja', entry.ref_id);
+    if (entry.type === 'annual') annualSheet(entry);
+    else if (entry.type === 'pooja') navigate('mahotsav', 'pooja', entry.ref_id);
     else if (entry.type === 'visit') navigate('visits');
     else if (entry.type === 'donation') navigate('donations');
     else if (entry.type === 'payment') navigate('payments');
+  }
+
+  /* An annual temple event: what it is, when it falls this year and why
+     (calculated from the tithi, a fixed date, or pinned by an admin), and —
+     for an administrator — the date to use this year when the temple's
+     panchang says otherwise. The calculation takes the tithi at ~06:00 IST;
+     observances decided by another rule, or an adhik-maas year, can differ. */
+  const MASA_GU = { Chaitra: 'ચૈત્ર', Vaishakha: 'વૈશાખ', Jyeshtha: 'જેઠ', Ashadha: 'અષાઢ', Shravana: 'શ્રાવણ',
+    Bhadrapada: 'ભાદરવો', Ashwin: 'આસો', Kartik: 'કારતક', Margashirsha: 'માગશર', Pausha: 'પોષ', Magha: 'મહા', Phalguna: 'ફાગણ' };
+  async function annualSheet(entry) {
+    let ev;
+    try {
+      ev = (await API.get('/annual-events', { year: entry.year })).find((x) => x.id === entry.ref_id);
+    } catch (e) { UI.toast(e.message, 'err'); return; }
+    if (!ev) return;
+    const gu = global.Lang && Lang.lang() === 'gu';
+    const when = ev.type === 'FIXED_DATE'
+      ? `Every year on ${ev.fixed_day} ${MONTHS[ev.fixed_month - 1]}`
+      : `${gu ? (MASA_GU[ev.masa] || ev.masa) : ev.masa} ${ev.paksha === 'shukla' ? (gu ? 'સુદ' : 'Sud') : (gu ? 'વદ' : 'Vad')} ${ev.tithi}`;
+    const source = { pinned: 'Set by the temple for ' + ev.year, fixed: 'Fixed date',
+      calculated: 'Calculated from the tithi' }[ev.source] || ev.source;
+    const admin = UI.can('admin');
+    UI.openSheet({
+      title: (gu && ev.name_gu) || ev.name,
+      body: `${UI.contextCard({
+          title: (gu && ev.activity_gu) || ev.activity || ev.name,
+          sub: gu ? ev.name : ev.name_gu,
+          rows: [['Date in ' + ev.year, fmtDateLong(ev.date)], ['Tithi', when], ['Date from', source]],
+        })}
+        ${admin && ev.type === 'TITHI' ? `
+        <form id="annualForm" novalidate style="margin-top:1rem">
+          <div class="form-group"><label class="form-label" for="f_adate">Date to use in ${esc(ev.year)}</label>
+            <input class="form-input" id="f_adate" name="date" type="date" value="${attr(ev.date)}"
+                   min="${attr(ev.year + '-01-01')}" max="${attr(ev.year + '-12-31')}">
+            <div class="form-hint">The date is calculated from the tithi. If the temple's panchang gives a different
+              day this year, set it here — it is used on the calendar and in the announcements.</div></div>
+        </form>` : ''}`,
+      footer: `<button class="btn btn-outline" data-sheet-close>Close</button>
+        ${admin && ev.source === 'pinned' ? '<button class="btn btn-outline" id="annualReset">Use calculated date</button>' : ''}
+        ${admin && ev.type === 'TITHI' ? '<button class="btn btn-primary" id="annualSave">Save date</button>' : ''}`,
+      onMount(sheet) {
+        const save = sheet.querySelector('#annualSave');
+        const reset = sheet.querySelector('#annualReset');
+        const put = async (btn, date) => {
+          btn.disabled = true;
+          try {
+            await API.put(`/annual-events/${ev.id}/date`, { year: ev.year, date });
+            UI.closeSheet(); UI.toast('Date saved', 'ok'); refreshPage();
+          } catch (err) { btn.disabled = false; UI.toast(err.message, 'err'); }
+        };
+        if (save) save.addEventListener('click', () => {
+          const v = sheet.querySelector('#f_adate').value;
+          if (!v) return UI.toast('Pick a date', 'err');
+          put(save, v);
+        });
+        if (reset) reset.addEventListener('click', () => put(reset, null));
+      },
+    });
   }
 
   global.Pages = global.Pages || {};

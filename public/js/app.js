@@ -218,5 +218,6 @@
     window.addEventListener('hashchange', render);
     if (!location.hash) location.hash = '#/dashboard';
     render();
+    if (window.Announce) window.Announce.run();   // annual events, 3 days ahead — once a day
   })();
 })();

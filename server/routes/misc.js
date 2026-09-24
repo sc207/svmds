@@ -6,6 +6,7 @@ const roles = require('../middleware/roles');
 const { log } = require('../middleware/audit');
 const { CATEGORIES } = require('./poojas');
 const { todayLocal, monthLocal } = require('../util/dates');
+const { occurrencesIn } = require('../util/annual');
 
 const router = express.Router();
 
@@ -157,7 +158,7 @@ router.get('/calendar', async (req, res) => {
 
   /* The five reads are independent — fetched in parallel, then turned into
      entries in the same order as before (the final sort is stable). */
-  const [perDay, whole, visits, donations, payments] = await Promise.all([
+  const [perDay, whole, visits, donations, payments, annual] = await Promise.all([
     db.all(`
     SELECT ps.slot_date, ps.capacity, ps.booked_count, pe.name, pe.category, pe.id AS pooja_id
       FROM pooja_slots ps JOIN pooja_events pe ON pe.id = ps.pooja_id
@@ -182,6 +183,7 @@ router.get('/calendar', async (req, res) => {
     SELECT p.payment_date, COUNT(*) AS n, SUM(p.amount) AS total
       FROM payments p WHERE substr(p.payment_date,1,7) = ? GROUP BY p.payment_date
   `, month),
+    occurrencesIn([Number(month.slice(0, 4))]),
   ]);
 
   /* per_day poojas put one entry on each day that has a slot. */
@@ -235,6 +237,16 @@ router.get('/calendar', async (req, res) => {
       date: p.payment_date, type: 'payment',
       title: `${p.n} payment${p.n > 1 ? 's' : ''} received`,
       sub: `₹${Number(p.total).toLocaleString('en-IN')}`,
+    });
+  });
+
+  /* Annual temple events — tithi dates resolved for this year (util/annual). */
+  annual.filter((o) => o.date.slice(0, 7) === month).forEach((o) => {
+    entries.push({
+      date: o.date, type: 'annual', ref_id: o.id,
+      title: o.name, title_gu: o.name_gu,
+      sub: o.activity, sub_gu: o.activity_gu,
+      source: o.source, year: o.year,
     });
   });
 

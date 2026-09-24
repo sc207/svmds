@@ -16,6 +16,13 @@
     /* chrome */
     'Dashboard': 'ડેશબોર્ડ',
     'Universal Calendar': 'સંકલિત કેલેન્ડર',
+    'Temple Event': 'મંદિર ઉત્સવ',
+    "Today's Temple Updates": 'આજની મંદિર જાણકારી',
+    'Coming up at the mandir': 'મંદિરમાં આવનારા ઉત્સવ',
+    'Continue': 'આગળ વધો',
+    'View in calendar': 'કેલેન્ડરમાં જુઓ',
+    'Save date': 'તારીખ સાચવો',
+    'Use calculated date': 'ગણતરીની તારીખ વાપરો',
     'Overview': 'ઝાંખી',
     'Mahotsav': 'મહોત્સવ',
     'Pran Pratishtha': 'પ્રાણ પ્રતિષ્ઠા',
