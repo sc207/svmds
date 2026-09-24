@@ -43,8 +43,9 @@ async function readSession(req) {
     return null;
   }
   if (!payload.jti) return null;
-  const s = await queryOne('SELECT revoked FROM sessions WHERE id = ?', [payload.jti]);
-  if (!s || s.revoked) return null;
+  const s = await queryOne(`SELECT revoked, (last_seen < datetime('now', ?)) AS idle FROM sessions WHERE id = ?`,
+    [`-${config.sessionIdleHours} hours`, payload.jti]);
+  if (!s || s.revoked || s.idle) return null;           // the same idle rule as authRequired
   return payload;
 }
 
@@ -55,6 +56,7 @@ async function readSession(req) {
 const SESSION_ACCOUNT = `
   SELECT s.revoked, s.user_id,
          (s.last_seen < datetime('now', '-5 minutes')) AS stale,
+         (s.last_seen < datetime('now', ?)) AS idle,
          u.id, u.email, u.name, u.active, u.is_deleted,
          (SELECT group_concat(role) FROM user_roles WHERE user_id = u.id) AS roles
     FROM sessions s JOIN users u ON u.id = s.user_id
@@ -71,12 +73,20 @@ async function authRequired(req, res, next) {
     /* The JWT's roles are a snapshot from sign-in. Read the live account
        instead, so a role granted (or an account disabled) takes effect on
        the next request rather than at the next sign-in. */
-    const row = await queryOne(SESSION_ACCOUNT, [payload.jti]);
+    const row = await queryOne(SESSION_ACCOUNT, [`-${config.sessionIdleHours} hours`, payload.jti]);
     if (!row || row.revoked || row.id !== payload.id || !row.active || row.is_deleted) {
       return res.status(401).json({ error: 'Please sign in' });
     }
     /* last_seen is "roughly when" — refresh it at most every 5 minutes, so
        reads do not each queue a write behind the real ones. */
+    /* Unused for sessionIdleHours: end it for good (not just refuse this
+       request), so the same cookie cannot come back later. last_seen is
+       refreshed at most every 5 minutes, which is precise enough for a
+       12-hour rule. */
+    if (row.idle) {
+      run('UPDATE sessions SET revoked = 1 WHERE id = ?', [payload.jti]).catch(() => {});
+      return res.status(401).json({ error: 'Signed out after a long time without use — please sign in again', idle: true });
+    }
     if (row.stale) {
       run("UPDATE sessions SET last_seen = datetime('now') WHERE id = ?", [payload.jti]).catch(() => {});
     }
