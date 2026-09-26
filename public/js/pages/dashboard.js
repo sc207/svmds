@@ -1,6 +1,6 @@
 (function (global) {
   'use strict';
-  const { esc, attr, money, num, icon, fmtDate, fmtDateLong, progressBar } = UI;
+  const { esc, attr, money, num, icon, fmtDateLong } = UI;
 
   /* The audit log's action, shown as a mark so the feed can be scanned
      down the left edge rather than read line by line. */
@@ -160,32 +160,17 @@
 
       <div class="section-title">Mahotsav Progress</div>
       <div class="seva-grid">
-      ${d.categories.map((c) => {
-        const seatText = c.seats === null
-          ? `${num(c.registered)} registered` +
-            (c.not_decided ? ` · ${num(c.not_decided)} awaiting a capacity decision` : ' · open seating')
-          : `${num(c.booked)} / ${num(c.seats)} patla booked`;
-        return `
+      ${d.categories.map((c) => `
         <button class="card cat-card" data-cat="${attr(c.key)}">
           <div class="card-body">
             <div class="cat-top">
               <span class="cat-ico">${icon(c.icon)}</span>
-              <span style="flex:1;min-width:0">
-                <span class="cat-name">${esc(c.label)}</span>
-                <span class="cat-meta" style="display:block">${esc(seatText)}</span>
-              </span>
+              <span style="flex:1;min-width:0"><span class="cat-name">${esc(c.label)}</span></span>
               ${icon('chevron-right', 'ico-sm')}
             </div>
-            <div class="progress-row">
-              <span>${esc(money(c.received))} received</span>
-              <span>${c.target ? 'target ' + esc(money(c.target)) : ''}</span>
-            </div>
-            ${/* No target means nothing to measure against — a full bar
-                  there would read as "done" when nobody set a goal. */
-              c.target > 0 ? progressBar(c.received, c.target, true) : ''}
+            ${UI.sevaMoneyCard(c.target, c.received, UI.sevarthiCountText(c.booked ?? c.registered, c.seats))}
           </div>
-        </button>`;
-      }).join('')}
+        </button>`).join('')}
       </div>
 
       ${d.todaySlots.length ? `

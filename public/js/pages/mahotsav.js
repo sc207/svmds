@@ -2,7 +2,7 @@
    with its day-wise seating and its FIFO sevarthi ledger. */
 (function (global) {
   'use strict';
-  const { esc, attr, money, num, icon, fmtDate, fmtRange, TBD, progressBar, statusBadge,
+  const { esc, attr, money, num, icon, fmtDate, fmtRange, statusBadge,
           openSheet, closeSheet, readForm, clearFieldErrors, showFieldError, toast } = UI;
 
   const CAT_LABEL = {
@@ -40,18 +40,6 @@
       }));
   }
 
-  /* "Not decided" and "unlimited" both take sevarthi without limit, but
-     the app must not claim the trust chose unlimited when it simply has
-     not decided — so they read differently even though they behave the
-     same. Only 'limited' ever shows an x / y. */
-  function capacityText(p) {
-    if (p.capacity_mode === 'limited' && p.total_seats !== null) {
-      return `${num(p.booked_seats)} / ${num(p.total_seats)} registered`;
-    }
-    const n = `${num(p.booked_seats)} registered`;
-    return p.capacity_mode === 'unlimited' ? `${n} · unlimited` : `${n} · capacity not decided`;
-  }
-
   async function render(host, params) {
     const [a, b] = params || [];
     if (a === 'pooja' && b) return renderPooja(host, b);
@@ -72,33 +60,18 @@
       </div>
 
       <div class="seva-grid">
-      ${cats.map((c) => {
-        const seatText = c.seats_left === null
-          ? `${num(c.booked_seats)} registered` +
-            (c.not_decided_count ? ` · ${num(c.not_decided_count)} awaiting a capacity decision` : ' · open seating')
-          : `${num(c.booked_seats)} of ${num(c.total_seats)} patla booked · ${num(c.seats_left)} still open`;
-        return `
+      ${cats.map((c) => `
         <button class="card cat-card" data-cat="${attr(c.key)}">
           <div class="card-body">
             <div class="cat-top">
               <span class="cat-ico">${icon(c.icon)}</span>
-              <span style="flex:1;min-width:0">
-                <span class="cat-name">${esc(c.label)}</span>
-                <span class="cat-meta" style="display:block">${esc(c.pooja_count)} pooja${c.pooja_count === 1 ? '' : 's'}</span>
-              </span>
-              ${icon('chevron-right','ico-sm')}
+              <span style="flex:1;min-width:0"><span class="cat-name">${esc(c.label)}</span></span>
+              ${icon('chevron-right', 'ico-sm')}
             </div>
-            <div class="progress-row"><span>${esc(seatText)}</span></div>
-            ${progressBar(c.booked_seats, c.total_seats)}
-            <div class="progress-row" style="margin-top:.5rem">
-              <span>${esc(money(c.received))} received</span>
-              <span>${c.target_amount ? 'target ' + esc(money(c.target_amount)) : ''}</span>
-            </div>
-            ${/* Same rule as the dashboard: no target, no bar. */
-              c.target_amount > 0 ? progressBar(c.received, c.target_amount, true) : ''}
+            ${UI.sevaMoneyCard(c.target_amount, c.received,
+              UI.sevarthiCountText(c.booked_seats, c.total_seats))}
           </div>
-        </button>`;
-      }).join('')}
+        </button>`).join('')}
       </div>`;
 
     host.querySelector('[data-add-sevarthi]').addEventListener('click', () => Forms.addSevarthi());
@@ -149,17 +122,13 @@
         ${sorted.length ? `<div class="seva-grid">${sorted.map((p) => `
           <button class="card cat-card" data-pooja="${attr(p.id)}">
             <div class="card-body">
-              <div class="seva-head">
-                <span class="item-name">${esc(p.name)}</span>
-                ${icon('chevron-right','ico-sm')}
+              <div class="cat-top">
+                <span class="cat-ico">${icon('temple')}</span>
+                <span style="flex:1;min-width:0"><span class="item-name">${esc(p.name)}</span></span>
+                ${icon('chevron-right', 'ico-sm')}
               </div>
-              <div class="seva-card-meta">${p.start_date
-                ? esc(fmtRange(p.start_date, p.end_date)) + ' · ' + esc(p.day_count) + ' day' + (p.day_count === 1 ? '' : 's')
-                : esc(TBD)}${p.amount ? ' · ' + esc(money(p.amount)) + ' per sevarthi' : ''}</div>
-              <div class="seva-card-state ${p.is_full ? 'is-full' : ''}">${p.is_full
-                ? 'Full · ' + esc(capacityText(p))
-                : esc(p.status === 'closed' ? 'Closed' : 'Open') + ' · ' + esc(capacityText(p))}</div>
-              ${progressBar(p.booked_seats, p.total_seats)}
+              ${UI.sevaMoneyCard(p.target_amount, p.received,
+                UI.sevarthiCountText(p.booked_seats, p.capacity_mode === 'limited' ? p.total_seats : null))}
             </div>
           </button>`).join('')}</div>`
           : UI.empty('No pooja added yet', 'Add the first one to start taking sevarthi.', 'temple')}`;

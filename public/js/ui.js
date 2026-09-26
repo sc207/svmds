@@ -39,8 +39,19 @@
   const todayISO = () => new Date().toLocaleDateString('en-CA');   // YYYY-MM-DD, local
   const monthISO = () => todayISO().slice(0, 7);
 
+  /* Chromium (and Firefox) keep a resource cache for cross-document SVG
+     <use> that's separate from the ordinary HTTP cache — confirmed by
+     directly fetch()ing icons.svg (always the current, correct bytes)
+     while a <use href="/assets/icons.svg#wallet"> still resolved to
+     nothing until a hard reload. A plain page refresh does not reliably
+     bust it, so the sprite URL carries an explicit version: bump
+     ICONS_VERSION whenever icons.svg's content changes (an added,
+     renamed or redrawn symbol) so every browser that has ever loaded an
+     older sprite is forced to refetch it instead of quietly keeping
+     blank icons for whatever it cached first. */
+  const ICONS_VERSION = 2;
   function icon(name, cls) {
-    return `<svg class="ico ${cls || ''}" aria-hidden="true"><use href="/assets/icons.svg#${attr(name)}"/></svg>`;
+    return `<svg class="ico ${cls || ''}" aria-hidden="true"><use href="/assets/icons.svg?v=${ICONS_VERSION}#${attr(name)}"/></svg>`;
   }
 
   /* ---------- state blocks ---------- */
@@ -280,6 +291,46 @@
     const pct = Math.min(100, Math.round((done / total) * 100));
     const full = okWhenFull && pct >= 100;
     return `<div class="progress ${full ? 'ok' : ''}"><span style="width:${pct}%"></span></div>`;
+  }
+
+  /* Total / Received / Pending money strip + a sevarthi count line — the
+     per-pooja card in a seva's list and the Mahotsav Progress cards on the
+     dashboard show the same shape at two different levels (one pooja vs a
+     whole category), so it's built once here rather than twice. Pending
+     is the plain target-minus-received figure (never below zero), which is
+     a different number from a pooja detail page's "Outstanding" (that one
+     sums each sevarthi's own shortfall against what they individually
+     committed — see poojas.js statsFor's comment on why those never net
+     against each other). `sevarthiText` is the caller's job because the
+     two callers spell "N" vs "N / M" from different field names. */
+  /* money(), not user input, so it's safe to splice in break points — a
+     bare `overflow-wrap: break-word` on a lakh/crore figure in a narrow
+     column (the dashboard's 3-across cards) breaks wherever it runs out of
+     room, including mid digit-group (e.g. "...00,0" / "00"); <wbr> after
+     each comma restricts wrapping to the same digit-group boundaries the
+     number itself already reads by. */
+  const moneyWrap = (n) => money(n).replace(/,/g, ',<wbr>');
+
+  function sevaMoneyCard(total, received, sevarthiText) {
+    const pending = Math.max(0, (total || 0) - (received || 0));
+    return `
+      <div class="seva-money-row">
+        <div class="seva-money-col"><span class="seva-money-label">Total</span>
+          <span class="seva-money-val">${moneyWrap(total)}</span></div>
+        <div class="seva-money-col"><span class="seva-money-label">Received</span>
+          <span class="seva-money-val seva-money-received">${moneyWrap(received)}</span></div>
+        <div class="seva-money-col"><span class="seva-money-label">Pending</span>
+          <span class="seva-money-val seva-money-pending">${moneyWrap(pending)}</span></div>
+      </div>
+      <div class="seva-sevarthi-row">${icon('users', 'ico-sm')}
+        <span>Sevarthi: <strong>${esc(sevarthiText)}</strong></span></div>`;
+  }
+
+  /** "8" when there's no hard cap, "16 / 16" when there is one — the same
+      distinction `capacityText` on the Mahotsav pooja page draws, just
+      compact. Pass total = null (or omit) for the uncapped form. */
+  function sevarthiCountText(booked, total) {
+    return total == null ? String(booked || 0) : `${num(booked || 0)} / ${num(total)}`;
   }
 
   /* sk's badge vocabulary: confirmed / pending / cancelled / maroon. */
@@ -894,7 +945,7 @@
   global.UI = {
     esc, attr, money, num, fmtDate, fmtDateLong, fmtRange, TBD,
     todayISO, monthISO, MONTHS, bindTranslate,
-    icon, loading, empty, errorState, progressBar, statusBadge,
+    icon, loading, empty, errorState, progressBar, statusBadge, sevaMoneyCard, sevarthiCountText,
     mobileError, coverage, coverageBadges, ago, whenDay,
     PAGE_SIZE, paginate, pager, bindPager,
     expandableRow, bindExpanders, dataTable, bindDataTable,

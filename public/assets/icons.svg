@@ -1,6 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
-  <!-- Icon sprite. Use as: <svg class="ico"><use href="/assets/icons.svg#name"/></svg>
-       All strokes inherit currentColor; 24x24 grid. -->
+  <!-- Icon sprite. Use as: <svg class="ico"><use href="/assets/icons.svg?v=N#name"/></svg>
+       All strokes inherit currentColor; 24x24 grid.
+       The ?v=N is load-bearing, not decorative: browsers cache a
+       cross-document <use>'s resolved symbols separately from the normal
+       HTTP cache, and don't reliably re-resolve it on a plain reload once
+       a symbol has been missing from what they first fetched — editing
+       this file without bumping the version leaves already-visited
+       browsers with permanently blank icons for anything added or
+       changed. Any edit here — a new symbol, a redrawn path, a rename —
+       must bump ICONS_VERSION in ui.js's icon() AND every hardcoded
+       ?v= in index.html's static nav <use> tags, together. -->
 
   <symbol id="home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.8V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.8"/><path d="M9.5 21v-6h5v6"/>

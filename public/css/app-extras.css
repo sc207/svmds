@@ -678,6 +678,49 @@ dialog#sheet::backdrop { background: transparent; }
 .seva-card-state { font-size: .84rem; color: var(--dark-brown); margin: .75rem 0 .5rem; }
 .seva-card-state.is-full { color: var(--danger); font-weight: 600; }
 
+/* Total / Received / Pending strip + the sevarthi count line underneath —
+   the per-pooja card in a seva list and the dashboard's Mahotsav Progress
+   cards (built by UI.sevaMoneyCard). Three equal columns, a hairline
+   between them rather than a boxed table, so it reads as one figure with
+   three facets, not a data grid. */
+.seva-money-row {
+  display: flex; margin: .85rem 0 .7rem;
+  padding-top: .85rem; border-top: 1px solid var(--warm-border);
+}
+.seva-money-col {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .2rem;
+  padding: 0 .6rem; text-align: center;
+}
+.seva-money-col + .seva-money-col { border-left: 1px solid var(--warm-border); }
+.seva-money-col:first-child { padding-left: 0; }
+.seva-money-col:last-child { padding-right: 0; }
+.seva-money-label {
+  font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted-brown); font-weight: 600;
+}
+.seva-money-val {
+  font-family: var(--font-heading); font-weight: 800; font-size: .98rem;
+  color: var(--dark-brown); font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+.seva-sevarthi-row {
+  display: flex; align-items: center; gap: .4rem;
+  font-size: .82rem; color: var(--muted-brown); margin-top: auto; padding-top: .5rem;
+}
+.seva-sevarthi-row .ico { width: 15px; height: 15px; color: var(--antique-gold); }
+.seva-sevarthi-row strong { color: var(--dark-brown); font-variant-numeric: tabular-nums; }
+/* A phone-width column still fits three digit-group lines under a label
+   at the base size, but the label's uppercase tracking and the card's own
+   padding start to crowd it — both come down a notch together. Tablet
+   (2-up in .seva-grid's auto-fill) already has the room the base size
+   assumes, so it needs no override. */
+@media (max-width: 560px) {
+  .seva-grid .cat-card .card-body { padding: 1rem; }
+  .seva-money-col { padding: 0 .4rem; }
+  .seva-money-label { font-size: .62rem; letter-spacing: .02em; }
+  .seva-money-val { font-size: .88rem; }
+}
+
 /* ---------- Breadcrumbs ---------------------------------------------
    Three levels deep (Mahotsav → category → pooja) needs a trail, not
    just a back button — the operator should see where they are. */
